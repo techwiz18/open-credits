@@ -1,0 +1,1 @@
+{"active": true, "callback_class": "OpenCredits\\Credits\\Listener", "callback_method": "reactionContentEntityPostSave", "description": "Awards content author when their content is reacted to (counted only)", "event_id": "entity_post_save", "execute_order": 10, "hint": "XF\\Entity\\ReactionContent"}

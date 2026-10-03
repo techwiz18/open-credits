@@ -1,8 +1,8 @@
 {
     "legacy_addon_id": "OpenCredits_Credits",
     "title": "OpenCredits",
-    "version_string": "0.2.0",
-    "version_id": 200,
+    "version_string": "0.3.0",
+    "version_id": 300,
     "dev": "OpenCredits",
     "faq_url": "",
     "support_url": "https://github.com/OpenCredits/xenforo-open-credits",

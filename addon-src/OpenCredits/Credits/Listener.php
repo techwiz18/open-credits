@@ -45,6 +45,34 @@ class Listener
         $structure->columns['oc_credits'] = ['type' => Entity::FLOAT, 'default' => 0.0];
     }
 
+    public static function reactionContentEntityPostSave(Entity $entity)
+    {
+        if (!$entity->isInsert() || !$entity->get('is_counted')) {
+            return;
+        }
+        $authorId = (int)$entity->get('content_user_id');
+        $reactorId = (int)$entity->get('reaction_user_id');
+        if ($authorId <= 0 || $authorId === $reactorId) {
+            return;
+        }
+        self::applyTrigger('reaction_received', $authorId, (int)$entity->get('content_id'));
+    }
+
+    public static function visitorSetup(\XF\Entity\User &$user = null)
+    {
+        if (!$user || $user->user_id <= 0 || $user->get('user_state') !== 'valid') {
+            return;
+        }
+        try {
+            $app = \XF::app();
+            /** @var Service\Transact $svc */
+            $svc = $app->service('OpenCredits\Credits:Transact');
+            $svc->awardDailyLoginIfNeeded((int)$user->user_id);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits daily_login failed: ');
+        }
+    }
+
     protected static function applyTrigger(string $trigger, int $userId, int $contentId = 0): void
     {
         if ($userId <= 0) {

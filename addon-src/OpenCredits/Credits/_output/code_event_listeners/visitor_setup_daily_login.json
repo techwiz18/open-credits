@@ -1,0 +1,1 @@
+{"active": true, "callback_class": "OpenCredits\\Credits\\Listener", "callback_method": "visitorSetup", "description": "Awards daily_login once per calendar day", "event_id": "visitor_setup", "execute_order": 10, "hint": ""}

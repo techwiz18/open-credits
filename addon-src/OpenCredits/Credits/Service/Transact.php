@@ -101,4 +101,24 @@ class Transact extends AbstractService
         );
         return $count < $maxPerDay;
     }
+
+    /**
+     * Daily login: exactly once per calendar day, regardless of event config.
+     * Called from the visitor_setup listener (every request for logged-in users).
+     */
+    public function awardDailyLoginIfNeeded(int $userId): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+        $start = strtotime('today midnight');
+        $already = (int)$this->db()->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
+            [$userId, 'daily_login', $start]
+        );
+        if ($already > 0) {
+            return false;
+        }
+        return $this->awardByTrigger('daily_login', $userId, $userId);
+    }
 }
