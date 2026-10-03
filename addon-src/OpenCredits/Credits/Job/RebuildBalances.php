@@ -9,8 +9,9 @@ class RebuildBalances extends AbstractJob
 {
     public function run($maxRunTime): int
     {
-        $db = $this->app->db();
-        $db->query('UPDATE xf_user u LEFT JOIN (SELECT user_id, SUM(amount) AS total FROM xf_oc_transaction GROUP BY user_id) t ON t.user_id = u.user_id SET u.oc_credits = COALESCE(t.total, 0)');
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->app->service('OpenCredits\Credits:Transact');
+        $svc->rebuildAllBalances();
         return $this->complete();
     }
 

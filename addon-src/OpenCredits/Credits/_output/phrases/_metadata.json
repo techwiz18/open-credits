@@ -1,0 +1,26 @@
+{
+    "oc_credits.txt": {
+        "global_cache": false,
+        "version_id": 300,
+        "version_string": "0.3.0",
+        "hash": "948a2e3548aaf7f9941a3192fa607d51"
+    },
+    "oc_credits_history.txt": {
+        "global_cache": false,
+        "version_id": 300,
+        "version_string": "0.3.0",
+        "hash": "1efd78e901da84e22618617e32116648"
+    },
+    "oc_transfer.txt": {
+        "global_cache": false,
+        "version_id": 300,
+        "version_string": "0.3.0",
+        "hash": "6950810f0d2bba97a6f710c7b965b84e"
+    },
+    "oc_transfer_to.txt": {
+        "global_cache": false,
+        "version_id": 300,
+        "version_string": "0.3.0",
+        "hash": "643e7eb45d35ba3662fbf6daed9daa97"
+    }
+}

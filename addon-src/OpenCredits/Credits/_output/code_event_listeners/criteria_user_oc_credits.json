@@ -1,0 +1,1 @@
+{"active": true, "callback_class": "OpenCredits\\Credits\\Listener", "callback_method": "userCriteria", "description": "Trophy/promotion criteria: more than / fewer than X credits", "event_id": "criteria_user", "execute_order": 10, "hint": ""}

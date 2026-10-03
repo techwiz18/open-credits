@@ -73,6 +73,15 @@ class Listener
         }
     }
 
+    public static function userCriteria($rule, array $data, \XF\Entity\User $user, &$return): void
+    {
+        if ($rule === 'oc_credits_more') {
+            $return = ((float)$user->get('oc_credits') >= (float)($data['credits'] ?? 0));
+        } elseif ($rule === 'oc_credits_fewer') {
+            $return = ((float)$user->get('oc_credits') < (float)($data['credits'] ?? 0));
+        }
+    }
+
     protected static function applyTrigger(string $trigger, int $userId, int $contentId = 0): void
     {
         if ($userId <= 0) {

@@ -121,4 +121,18 @@ class Transact extends AbstractService
         }
         return $this->awardByTrigger('daily_login', $userId, $userId);
     }
+
+    /**
+     * Recomputes every user's balance from the transaction log.
+     * Returns number of affected user rows.
+     */
+    public function rebuildAllBalances(): int
+    {
+        $db = $this->db();
+        $stmt = $db->query(
+            'UPDATE xf_user u LEFT JOIN (SELECT user_id, SUM(amount) AS total FROM xf_oc_transaction GROUP BY user_id) t'
+            . ' ON t.user_id = u.user_id SET u.oc_credits = COALESCE(t.total, 0)'
+        );
+        return (int)$stmt->rowsAffected();
+    }
 }

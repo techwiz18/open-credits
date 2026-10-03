@@ -1,0 +1,12 @@
+{
+    "public/credits_index.html": {
+        "version_id": 300,
+        "version_string": "0.3.0",
+        "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "public/credits_transfer.html": {
+        "version_id": 300,
+        "version_string": "0.3.0",
+        "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+}
