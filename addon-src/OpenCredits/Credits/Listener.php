@@ -4,6 +4,7 @@ namespace OpenCredits\Credits;
 
 use XF\Mvc\Entity\Entity;
 use XF\Mvc\Entity\Manager as EntityManager;
+use XF\Mvc\Entity\Structure;
 
 /**
  * MVP listeners — wired via AdminCP code event listeners (exported to _output/).
@@ -37,6 +38,11 @@ class Listener
         if ($entity->isInsert()) {
             self::applyTrigger('register', (int)$entity->user_id, (int)$entity->user_id);
         }
+    }
+
+    public static function userEntityStructure(EntityManager $em, Structure &$structure)
+    {
+        $structure->columns['oc_credits'] = ['type' => Entity::FLOAT, 'default' => 0.0];
     }
 
     protected static function applyTrigger(string $trigger, int $userId, int $contentId = 0): void

@@ -1,0 +1,1 @@
+{"active": true, "callback_class": "OpenCredits\\Credits\\Listener", "callback_method": "userEntityStructure", "description": "Exposes xf_user.oc_credits on the User entity", "event_id": "entity_structure", "execute_order": 10, "hint": "XF\\Entity\\User"}

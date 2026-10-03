@@ -1,0 +1,1 @@
+{"active": true, "callback_class": "OpenCredits\\Credits\\Listener", "callback_method": "postEntityPostSave", "description": "Awards credits on visible reply (skips first post)", "event_id": "entity_post_save", "execute_order": 10, "hint": "XF\\Entity\\Post"}

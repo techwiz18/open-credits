@@ -13,10 +13,6 @@ class Transact extends AbstractService
 {
     public function awardByTrigger(string $trigger, int $userId, int $contentId = 0): bool
     {
-        $event = $this->finder('OpenCredits\Credits:Event')
-            ?? null;
-
-        // Until Event entity exists, fall back to direct DB lookup (keeps MVP unblocked)
         $db = $this->db();
         $row = $db->fetchRow('SELECT * FROM xf_oc_event WHERE `trigger` = ? AND active = 1 LIMIT 1', $trigger);
         if (!$row) {

@@ -79,6 +79,11 @@ class Setup extends AbstractSetup
         ], false, 'currency_id = VALUES(currency_id)');
     }
 
+    public function installStep6()
+    {
+        $this->seedDefaultEvents();
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -92,5 +97,37 @@ class Setup extends AbstractSetup
         $this->schemaManager()->alterTable('xf_user', function (Alter $table) {
             $table->dropColumns('oc_credits');
         });
+    }
+
+    public function upgrade200Step1()
+    {
+        $this->seedDefaultEvents();
+    }
+
+    protected function seedDefaultEvents(): void
+    {
+        // Seed default MVP events (idempotent)
+        $defaults = [
+            ['trigger' => 'thread', 'amount' => '5.00'],
+            ['trigger' => 'post', 'amount' => '1.00'],
+            ['trigger' => 'reaction_received', 'amount' => '2.00'],
+            ['trigger' => 'register', 'amount' => '10.00'],
+            ['trigger' => 'daily_login', 'amount' => '5.00'],
+        ];
+        foreach ($defaults as $row) {
+            $exists = $this->db()->fetchOne(
+                'SELECT event_id FROM xf_oc_event WHERE `trigger` = ? AND currency_id = 1',
+                $row['trigger']
+            );
+            if (!$exists) {
+                $this->db()->insert('xf_oc_event', [
+                    'currency_id' => 1,
+                    'trigger' => $row['trigger'],
+                    'amount' => $row['amount'],
+                    'max_per_day' => 0,
+                    'active' => 1,
+                ]);
+            }
+        }
     }
 }

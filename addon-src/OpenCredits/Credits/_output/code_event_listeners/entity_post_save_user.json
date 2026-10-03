@@ -1,0 +1,1 @@
+{"active": true, "callback_class": "OpenCredits\\Credits\\Listener", "callback_method": "userEntityPostSave", "description": "Awards credits on registration", "event_id": "entity_post_save", "execute_order": 10, "hint": "XF\\Entity\\User"}
