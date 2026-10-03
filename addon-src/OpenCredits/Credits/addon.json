@@ -1,0 +1,15 @@
+{
+    "legacy_addon_id": "OpenCredits_Credits",
+    "title": "OpenCredits",
+    "version_string": "0.1.0",
+    "version_id": 100,
+    "dev": "OpenCredits",
+    "faq_url": "",
+    "support_url": "https://github.com/OpenCredits/xenforo-open-credits",
+    "extra_urls": [],
+    "require": {
+        "XF": [2030000, "XenForo 2.3.0+"],
+        "php": ["8.2.0", "PHP 8.2.0+"]
+    },
+    "icon": "fa-coins"
+}

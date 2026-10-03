@@ -1,0 +1,12 @@
+# XenForo runtime (licensed, dev-only) — never commit
+src/
+# Docker data
+db_data/
+# Env
+.env
+# OS
+.DS_Store
+Thumbs.db
+# PHP
+vendor/
+*.log
