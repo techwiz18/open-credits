@@ -21,10 +21,10 @@ activity, show balances, let members transfer credits, gate trophies on wealth.
 * XenForo 2.3.0+ (any 2.3.x, e.g. 2.3.10), PHP 8.2+, MySQL 8.0+
 * No other add-ons required.
 
-## Install on your forum (shared host friendly — HawkHost, etc.)
+## Install on your forum
 
-No SSH or Docker needed. Use the release zip from the
-[releases page](../../releases):
+Use the release zip from the [releases page](../../releases).
+Install it like any XenForo add-on — upload the files, then finish in AdminCP:
 
 1. Download `OpenCredits-Credits-x.y.z.zip` and unzip it on your computer.
    Inside you'll find an `upload/` folder.
@@ -55,9 +55,7 @@ event manager is on the roadmap — see [Issues](../../issues).
 
 ## Troubleshooting
 
-* **"Transfer failed due to a server error"** — you have a pre-0.6.0 install:
-  upgrade; early versions created unsigned `amount` columns that reject debits.
-* **Balances look wrong** — ask your admin to run the rebuild (CLI:
+* **Balances look wrong** — run the rebuild (CLI:
   `php cmd.php oc-credits:rebuild`), which recomputes every balance from the
   append-only transaction log.
 * **No permission errors on `/credits/`** — the two `general` permissions above
