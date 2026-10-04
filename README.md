@@ -78,7 +78,7 @@ The **Credits** AdminCP section (currencies, earning events) is gated by the
 | Daily visit (once/day) | $5.00 |
 
 Change amounts, add triggers, or add currencies any time in AdminCP →
-Credits (Earning events / Currencies) — no database edits needed.
+Credits (Earning events / Currencies).
 
 ## Troubleshooting
 
