@@ -16,7 +16,8 @@
 
 			<xf:checkboxrow>
 				<xf:option name="allow_negative" selected="$currency.allow_negative"
-					label="Allow negative balances" />
+					label="Allow negative balances"
+					hint="Applies to admin adjustments and charges. Member-to-member transfers can never overdraw, regardless of this setting." />
 				<xf:option name="active" selected="$currency.active"
 					label="Active" hint="Inactive currencies earn nothing." />
 				<xf:option name="visible" selected="$currency.visible"

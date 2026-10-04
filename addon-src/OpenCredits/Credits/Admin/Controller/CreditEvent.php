@@ -31,6 +31,7 @@ class CreditEvent extends AbstractController
                 ->with('Currency')
                 ->order(['currency_id', 'trigger'])
                 ->fetch(),
+            'triggers' => self::TRIGGERS,
         ];
         return $this->view('OpenCredits\Credits:Event\Listing', 'oc_event_list', $viewParams);
     }
