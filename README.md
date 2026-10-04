@@ -55,8 +55,10 @@ The **Credits** AdminCP section (currencies, earning events) is gated by the
 `Manage credits` admin permission:
 
 * Super admins (the forum owner account is one by default) always have access.
-* Other admins need it explicitly: AdminCP → Users → **Administrators** →
-  select the admin → **Permissions** tab → check
+* Other admins need the toggle, and it only appears for the right account type:
+  AdminCP → Users → **Administrators** → click the admin's name → set
+  **Administrator type** to **Regular administrator** (the Permissions checkbox
+  list is hidden for super admins, who already hold everything) → check
   **Manage credits (currencies and earning events)** → Save.
 
 To upgrade later: upload the newer release the same way, then AdminCP →
