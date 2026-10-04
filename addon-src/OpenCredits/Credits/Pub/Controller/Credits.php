@@ -45,7 +45,7 @@ class Credits extends AbstractController
                 ->order('currency_id')
                 ->fetch(),
             'balance' => $balance,
-            'transactions' => $transactions,
+            'entries' => $this->buildHistoryEntries($transactions),
             'page' => $page,
             'perPage' => $perPage,
             'total' => $total,
@@ -56,6 +56,87 @@ class Credits extends AbstractController
             'credits_index',
             $viewParams
         );
+    }
+
+    protected const HISTORY_LABELS = [
+        'thread' => 'New thread',
+        'post' => 'Reply',
+        'reaction_received' => 'Reaction received',
+        'register' => 'Welcome bonus',
+        'daily_login' => 'Daily visit',
+    ];
+
+    /**
+     * Turns transaction entities into display rows, resolving counterparties
+     * and content links in bulk (no per-row queries).
+     */
+    protected function buildHistoryEntries(\XF\Mvc\Entity\ArrayCollection $transactions): array
+    {
+        $userIds = [];
+        $threadIds = [];
+        $postIds = [];
+        foreach ($transactions as $txn) {
+            if ($txn->trigger === 'transfer') {
+                $userIds[] = (int)$txn->content_id;
+            } elseif ($txn->trigger === 'thread') {
+                $threadIds[] = (int)$txn->content_id;
+            } elseif ($txn->trigger === 'post') {
+                $postIds[] = (int)$txn->content_id;
+            }
+        }
+
+        $users = $userIds
+            ? $this->finder('XF:User')->where('user_id', $userIds)->fetch()->toArray()
+            : [];
+        $threads = $threadIds
+            ? $this->finder('XF:Thread')->where('thread_id', $threadIds)->fetch()->toArray()
+            : [];
+        $posts = $postIds
+            ? $this->finder('XF:Post')->where('post_id', $postIds)->fetch()->toArray()
+            : [];
+        $postThreadIds = [];
+        foreach ($posts as $postId => $post) {
+            $postThreadIds[] = (int)$post->thread_id;
+        }
+        $postThreads = $postThreadIds
+            ? $this->finder('XF:Thread')->where('thread_id', array_unique($postThreadIds))->fetch()->toArray()
+            : [];
+
+        $entries = [];
+        foreach ($transactions as $txn) {
+            $amount = (float)$txn->amount;
+            $entry = [
+                'label' => self::HISTORY_LABELS[$txn->trigger] ?? ucwords(str_replace('_', ' ', $txn->trigger)),
+                'detail' => '',
+                'detailUser' => null,
+                'detailThread' => null,
+                'amount' => $amount,
+                'logDate' => (int)$txn->log_date,
+            ];
+            if ($txn->trigger === 'transfer') {
+                $entry['label'] = $amount < 0 ? 'Transfer sent' : 'Transfer received';
+                $otherId = (int)$txn->content_id;
+                if (isset($users[$otherId])) {
+                    $entry['detailUser'] = $users[$otherId];
+                }
+            } elseif ($txn->trigger === 'thread') {
+                $threadId = (int)$txn->content_id;
+                if (isset($threads[$threadId])) {
+                    $entry['detailThread'] = $threads[$threadId];
+                }
+            } elseif ($txn->trigger === 'post') {
+                $postId = (int)$txn->content_id;
+                if (isset($posts[$postId])) {
+                    $threadId = (int)$posts[$postId]->thread_id;
+                    if (isset($postThreads[$threadId])) {
+                        $entry['detailThread'] = $postThreads[$threadId];
+                        $entry['detail'] = 'in reply to';
+                    }
+                }
+            }
+            $entries[] = $entry;
+        }
+        return $entries;
     }
 
     public function actionMember(ParameterBag $params): AbstractReply
