@@ -8,11 +8,14 @@ let members transfer credits, gate trophies on wealth.
 ## What members get
 
 * **Earn credits** for posting threads/replies, receiving reactions, registering,
-  and daily visits (amounts configurable in the DB seed; AdminCP UI roadmap).
-* **Wallet everywhere** — balance in postbit, in the account menu, full history
-  at `/credits/`.
+  and daily visits — amounts managed in AdminCP → Credits → Earning events.
+* **Multiple currencies** with a primary and per-currency visibility, all
+  managed in AdminCP → Credits → Currencies.
+* **Wallet everywhere** — balances in postbit, in the account menu, and on
+  member profiles (primary stat plus a full currencies tab); per-currency
+  history at `/credits/`.
 * **Transfers** — send credits to another member at `/credits/transfer`
-  (username autocomplete included).
+  (username autocomplete included; transfers can never overdraw).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
   trophies, notices, and user-group promotions.
 
@@ -74,16 +77,19 @@ The **Credits** AdminCP section (currencies, earning events) is gated by the
 | Registration | $10.00 |
 | Daily visit (once/day) | $5.00 |
 
-Changing these amounts currently requires editing the database directly —
-a point-and-click settings screen is planned for a future release.
+Change amounts, add triggers, or add currencies any time in AdminCP →
+Credits (Earning events / Currencies) — no database edits needed.
 
 ## Troubleshooting
 
-* **Balances look wrong** — run the rebuild (CLI:
-  `php cmd.php oc-credits:rebuild`), which recomputes every balance from the
-  append-only transaction log.
-* **No permission errors on `/credits/`** — the two `general` permissions above
-  default to deny; grant them per group.
+* **Balances look wrong** — run the rebuild (CLI, via SSH/terminal if available:
+  `php cmd.php oc-credits:rebuild`; an AdminCP button is planned), which
+  recomputes every balance from the append-only transaction log.
+* **No permission errors on `/credits/`** — the two Credits permissions default
+  to deny except on fresh installs, which auto-allow them for Registered;
+  check the **Credits** tab if access fails.
+* **Uninstalling deletes everything** — balances, ledger, events, and
+  currencies are wiped (disabling is not offered; re-install starts from zero).
 
 ## For developers
 
@@ -96,8 +102,8 @@ a point-and-click settings screen is planned for a future release.
 
 ## Roadmap / out of scope for v1
 
-AdminCP currency/event manager, alerts, redeem codes, `[CHARGE]` BBCode,
-interest/tax/paycheck schedules, payment profiles, shop integration.
+Alerts, redeem codes, `[CHARGE]` BBCode, interest/tax/paycheck schedules,
+payment profiles, shop integration.
 
 ## License
 

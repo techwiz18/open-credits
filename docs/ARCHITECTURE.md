@@ -21,9 +21,12 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 
 ## Database
 
-* `xf_oc_currency(currency_id, title, prefix, suffix, decimals, allow_negative, active)`
-  Seed: `(1, 'Credits', '$', '', 2, 1, 1)`. Schema supports N currencies; v1 code
-  assumes currency 1.
+* `xf_oc_currency(currency_id, title, prefix, suffix, decimals, allow_negative, active, is_primary, visible)`
+  Seed: `(1, 'Credits', '$', '', 2, 1, 1, 1, 1)`. Exactly one primary (profile
+  main stat + `xf_user.oc_credits` mirror); `visible` currencies list in
+  postbit/menu; the profile tab lists all active ones.
+* `xf_oc_balance(user_id, currency_id, balance)` — cached per-currency balances
+  maintained by `Transact` on every write; missing row means 0.
 * `xf_oc_event(event_id, currency_id, trigger, amount, forum_ids, usergroup_ids, max_per_day, active)`
   Seeded triggers: `thread 5.00`, `post 1.00`, `reaction_received 2.00`,
   `register 10.00`, `daily_login 5.00`.
@@ -44,9 +47,12 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 | `entity_structure` (`XF\Entity\User`) | `userEntityStructure` | exposes `oc_credits` on the User entity |
 | `criteria_user` (no hint) | `userCriteria` | rules `oc_credits_more` (>=) / `oc_credits_fewer` (<) |
 
-All earning paths funnel into `Transact::awardByTrigger()` → `adjust()`.
-Transfers use `Transact::transfer()` (double-entry: `-X` sender / `+X` receiver).
-Rebuilds use `Transact::rebuildAllBalances()` (single UPDATE from ledger).
+All earning paths funnel into `Transact::awardByTrigger()` (awards EVERY active
+event for the trigger, so overlapping per-currency events stack) → `adjust()`.
+Transfers floor at zero and never overdraw; `adjust()` stays unrestricted for
+admin tooling. Registration day skips the daily bonus (`register_date` check).
+Rebuilds use `Transact::rebuildAllBalances()` (ledger → `xf_oc_balance` rows +
+primary mirror in `xf_user.oc_credits`).
 
 ## Frontend
 
@@ -56,9 +62,9 @@ Rebuilds use `Transact::rebuildAllBalances()` (single UPDATE from ledger).
 * Template mods: `oc_credits_postbit` (`message_macros`, after reaction score),
   `oc_credits_account_menu` (`account_visitor_menu`, visitor stats),
   `oc_credits_criteria` (`helper_criteria`, admin trophy/promotion form).
-* Permissions (group `general`, interface `generalPermissions`):
-  `ocView` (history), `ocTransfer` (transfer form + save). Default deny; grant per
-  group in AdminCP. Dev grants + cache rebuild are documented in README.
+* Permissions (namespace `general`, own interface tab `ocCredits`):
+  `ocView` (history), `ocTransfer` (transfer form + save). Default deny;
+  install/upgrade auto-allows both for the group titled `Registered`.
 
 ## Conventions for new work
 
