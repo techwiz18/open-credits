@@ -19,8 +19,8 @@
 			<xf:textboxrow name="amount" value="{$event.amount}" label="Amount" type="number" step="0.01"
 				hint="Positive earns, negative charges. Two decimals." />
 
-			<xf:numberboxrow name="max_per_day" value="{$event.max_per_day}" label="Max per day"
-				min="0" hint="0 = unlimited. Daily visits are always once per day." />
+			<xf:numberboxrow name="max_per_day" value="{$event.max_per_day}" label="Max awards per day"
+				min="0" hint="How many times this event can pay out per member per day. 0 = unlimited. Daily visits always pay once per day regardless." />
 
 			<xf:checkboxrow>
 				<xf:option name="active" selected="$event.active" label="Active" />
