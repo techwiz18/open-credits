@@ -10,7 +10,7 @@
                         <dd>{$currency.prefix}{$balance|number($currency.decimals)}{$currency.suffix}</dd>
                     </dl>
                 </div>
-                <a href="{{ link('credits/transfer') }}" class="button">{{ phrase('oc_transfer_to') }}</a>
+                <a href="{{ link('credits/transfer', '', {'currency_id': $currency.currency_id}) }}" class="button">{{ phrase('oc_transfer_to') }}</a>
             </div>
             <xf:if is="$currencies|count > 1">
                 <div class="block-row block-row--separated">

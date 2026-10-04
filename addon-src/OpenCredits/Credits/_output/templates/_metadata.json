@@ -20,9 +20,9 @@
         "hash": "dd8aaa8a7f2a721a431e6399e2ba904f"
     },
     "public/credits_index.html": {
-        "version_id": 800,
-        "version_string": "0.8.0",
-        "hash": "6232e927534c2e7e5f6a19da418a2071"
+        "version_id": 901,
+        "version_string": "0.9.1",
+        "hash": "ea13904de8d69113581672fd5107f230"
     },
     "public/credits_member.html": {
         "version_id": 800,
@@ -30,8 +30,8 @@
         "hash": "c0c8b23aee5d4a64993b9740c408f46d"
     },
     "public/credits_transfer.html": {
-        "version_id": 600,
-        "version_string": "0.6.0",
-        "hash": "47ecdabac755d1a4ff170221d7bc52db"
+        "version_id": 901,
+        "version_string": "0.9.1",
+        "hash": "e126dd4fe485f2d2f36676e94593d041"
     }
 }

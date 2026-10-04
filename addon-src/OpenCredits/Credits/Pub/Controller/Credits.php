@@ -99,11 +99,19 @@ class Credits extends AbstractController
             return $this->noPermission();
         }
 
-        $currency = $this->finder('OpenCredits\Credits:Currency')->fetchOne();
+        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
+
+        $balance = 0.0;
+        foreach ($visitor->oc_all_balances as $row) {
+            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
+                $balance = (float)$row['balance'];
+                break;
+            }
+        }
 
         $viewParams = [
             'currency' => $currency,
-            'balance' => (float)$visitor->oc_credits,
+            'balance' => $balance,
             'to' => $this->filter('to', 'str'),
         ];
 
@@ -125,6 +133,7 @@ class Credits extends AbstractController
 
         $to = $this->filter('to', 'str');
         $amount = round($this->filter('amount', 'float'), 2);
+        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
 
         if (!strlen($to)) {
             return $this->error('Please enter a username to send credits to.');
@@ -144,7 +153,7 @@ class Credits extends AbstractController
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
         try {
-            $ok = $svc->transfer((int)$visitor->user_id, (int)$target->user_id, $amount, 1);
+            $ok = $svc->transfer((int)$visitor->user_id, (int)$target->user_id, $amount, (int)$currency->currency_id);
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits transfer failed: ');
             return $this->error('Transfer failed due to a server error. Please try again.');
@@ -154,6 +163,6 @@ class Credits extends AbstractController
             return $this->error('Insufficient credits for this transfer.');
         }
 
-        return $this->redirect($this->buildLink('credits'));
+        return $this->redirect($this->buildLink('credits', null, ['currency_id' => $currency->currency_id]));
     }
 }
