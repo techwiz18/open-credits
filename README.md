@@ -19,7 +19,7 @@ activity, show balances, let members transfer credits, gate trophies on wealth.
 ## Requirements
 
 * XenForo 2.3.0+ (any 2.3.x, e.g. 2.3.10), PHP 8.2+, MySQL 8.0+
-* No other add-ons required. No real-money/payment features (by design, v1).
+* No other add-ons required.
 
 ## Install on your forum (shared host friendly — HawkHost, etc.)
 
