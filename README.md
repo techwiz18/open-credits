@@ -1,6 +1,6 @@
 # OpenCredits — open-source credits for XenForo 2.3+
 
-![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-blue) ![XenForo 2.3+](https://img.shields.io/badge/XenForo-2.3%2B-orange) ![License: MIT](https://img.shields.io/badge/License-MIT-green)
+[![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-blue)](https://www.php.net/releases/8.2/) [![XenForo 2.3+](https://img.shields.io/badge/XenForo-2.3%2B-orange)](https://xenforo.com/) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 A free (MIT) credits system for XenForo 2.3+: reward activity, show balances,
 let members transfer credits, gate trophies on wealth.
