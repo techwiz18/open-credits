@@ -15,9 +15,9 @@
         "hash": "cf44ea6b4631167bb2711d974d4d1b64"
     },
     "admin/oc_event_list.html": {
-        "version_id": 908,
-        "version_string": "0.9.8",
-        "hash": "bdb73a384aa943691cb7fe60781c16fb"
+        "version_id": 909,
+        "version_string": "0.9.9",
+        "hash": "6c93bc4f202abdde7f7753478a1d51c7"
     },
     "admin/oc_tools_rebuild.html": {
         "version_id": 903,
