@@ -1,0 +1,65 @@
+[SIZE=5][B]OpenCredits — open-source credits for XenForo 2.3+[/B][/SIZE]
+
+A free (MIT) credits system for XenForo 2.3+: reward activity, show balances,
+let members transfer credits, gate trophies on wealth.
+
+[B]What members get[/B]
+[LIST]
+[*] [B]Earn credits[/B] for posting threads/replies, receiving reactions, registering, and daily visits — amounts managed in AdminCP → Credits → Earning events.
+[*] [B]Multiple currencies[/B] with a primary and per-currency visibility, all managed in AdminCP → Credits → Currencies.
+[*] [B]Wallet everywhere[/B] — balances in postbit, in the account menu, and on member profiles (primary stat plus a full currencies tab); per-currency history page.
+[*] [B]Transfers[/B] — send credits to another member, with username autocomplete. Transfers can never overdraw.
+[*] [B]Trophies[/B] — "has at least / fewer than X credits" criteria work with trophies, notices, and user-group promotions.
+[/LIST]
+
+[B]Requirements[/B]
+[LIST]
+[*] XenForo 2.3.0+, PHP 8.2+, MySQL 8.0+
+[*] No other add-ons required.
+[/LIST]
+
+[B]Install[/B]
+
+Grab the release zip from the [URL=https://github.com/techwiz18/open-credits/releases]releases page[/URL]. Two ways, pick one:
+
+[B]A — from AdminCP (fastest).[/B] Add one line to your forum's [ICODE]src/config.php[/ICODE]:
+[CODE] $config['enableAddOnArchiveInstaller'] = true; [/CODE]
+Then AdminCP → Add-ons → [B]Install from archive[/B], upload the release zip, and click [B]Install[/B].
+
+[B]B — manual upload.[/B] Unzip the release on your computer. Inside you'll find an [ICODE]upload/[/ICODE] folder. Upload the [B]contents[/B] of [ICODE]upload/[/ICODE] into your forum root (the folder with [ICODE]index.php[/ICODE], [ICODE]src/[/ICODE], [ICODE]data/[/ICODE]) via FTP/File Manager, merging folders. Then AdminCP → Add-ons, find [B]OpenCredits[/B] and click [B]Install[/B].
+
+Then, either way:
+[LIST=1]
+[*] Grant permissions: AdminCP → Groups & permissions → User groups → Registered → Credits tab → allow [B]View own credit wallet and history[/B] and [B]Transfer credits to other users[/B]. Repeat for any other groups.
+[*] Members start earning on the next post/reaction/visit. Balances appear in postbit automatically.
+[/LIST]
+
+To upgrade later: upload the newer release the same way, then AdminCP → Add-ons → OpenCredits → [B]Upgrade[/B].
+
+[B]AdminCP access[/B]
+
+The [B]Credits[/B] AdminCP section (currencies, earning events, rebuild) is gated by the [I]Manage credits[/I] admin permission. Super admins always have access; for other admins go to Groups & permissions → Administrators → click the name → set type to Regular administrator (the permission list is hidden for super admins) → check [B]Manage credits[/B] → Save.
+
+[B]Earning defaults[/B]
+[TABLE]
+[TR][TH]Action[/TH][TH]Default[/TH][/TR]
+[TR][TD]New thread[/TD][TD]$5.00[/TD][/TR]
+[TR][TD]Reply[/TD][TD]$1.00[/TD][/TR]
+[TR][TD]Content reacted to[/TD][TD]$2.00[/TD][/TR]
+[TR][TD]Registration[/TD][TD]$10.00[/TD][/TR]
+[TR][TD]Daily visit (once/day)[/TD][TD]$5.00[/TD][/TR]
+[/TABLE]
+Change amounts, add triggers, or add currencies any time in AdminCP → Credits.
+
+[B]Troubleshooting[/B]
+[LIST]
+[*] [B]Balances look wrong[/B] — AdminCP → Credits → Rebuild balances (or CLI: [ICODE]php cmd.php oc-credits:rebuild[/ICODE]).
+[*] [B]Permission errors[/B] — check the Credits permission tab per user group.
+[*] [B]Uninstalling deletes everything[/B] — balances, ledger, events, currencies.
+[/LIST]
+
+[B]Roadmap & support[/B]
+[LIST]
+[*] Future ideas live as [URL=https://github.com/techwiz18/open-credits/milestones]milestones[/URL] — vote and comment on [URL=https://github.com/techwiz18/open-credits/issues]issues[/URL].
+[*] Source: [URL=https://github.com/techwiz18/open-credits]github.com/techwiz18/open-credits[/URL] (MIT). This project is vibe-coded with AI assistance — review security-sensitive changes before deploying.
+[/LIST]
