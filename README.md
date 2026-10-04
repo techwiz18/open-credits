@@ -1,80 +1,82 @@
-# xenforo-open-credits
+# OpenCredits — open-source credits for XenForo 2.3+
 
-Open-source alternative to DragonByte Credits for XenForo 2.3+ (MVP).
+A free (MIT) alternative to paid credits mods like DragonByte Credits: reward
+activity, show balances, let members transfer credits, gate trophies on wealth.
 
-MIT licensed. Vibe-coded, community owned.
+![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-blue) ![XenForo 2.3+](https://img.shields.io/badge/XenForo-2.3%2B-orange) ![License: MIT](https://img.shields.io/badge/License-MIT-green)
 
-## Scope — v0.1 MVP
+## What members get
 
-* 1 currency to start (schema supports N): `Credits`, prefix `$`, 2 decimals, negatives allowed. Prefix/suffix configurable per currency.
-* Wallet column on `xf_user.oc_credits`, transaction log, admin adjust.
-* 6 event triggers only: `thread`, `post`, `reaction_received`, `register`, `daily_login`, `admin_adjust` + user-to-user `transfer`.
-* No payments / shop / redeem codes / `[CHARGE]` BBCode in v1.
+* **Earn credits** for posting threads/replies, receiving reactions, registering,
+  and daily visits (amounts configurable in the DB seed; AdminCP UI roadmap).
+* **Wallet everywhere** — balance in postbit, in the account menu, full history
+  at `/credits/`.
+* **Transfers** — send credits to another member at `/credits/transfer`
+  (username autocomplete included).
+* **Trophies** — "has at least / fewer than X credits" criteria work with
+  trophies, notices, and user-group promotions.
 
-## Dev setup (Linux Mint, Docker)
+## Requirements
 
-Requirements: Docker 29+ + Compose 2.40+ (already verified on host).
-XenForo 2.3.10 Patch 2 zip is dev-only and gitignored — never committed.
+* XenForo 2.3.0+ (any 2.3.x, e.g. 2.3.10), PHP 8.2+, MySQL 8.0+
+* No other add-ons required. No real-money/payment features (by design, v1).
 
-```bash
-cd open-credits
-cp .env.example .env
-./scripts/dev.sh up        # builds web, starts db + phpmyadmin
-./scripts/dev.sh unpack    # unzips ../xenforo_*.zip into src/
-# then open http://localhost:8080/install and install XF
-# DB host: db, name: xf_dev, user: xf, pass: opencredits
-./scripts/dev.sh enable-debug
-./scripts/dev.sh link-addon  # symlinks addon-src into src/src/addons
-```
+## Install on your forum (shared host friendly — HawkHost, etc.)
 
-* Forum: http://localhost:8080
-* phpMyAdmin: http://localhost:8081
+No SSH or Docker needed. Use the release zip from the
+[releases page](../../releases):
 
-## Addon source of truth
+1. Download `OpenCredits-Credits-x.y.z.zip` and unzip it on your computer.
+   Inside you'll find an `upload/` folder.
+2. Upload the **contents** of `upload/` into your forum root (the folder with
+   `index.php`, `src/`, `data/`) via FTP/cPanel File Manager, merging folders.
+3. In AdminCP → Add-ons, find **OpenCredits** and click **Install**.
+4. Grant permissions: AdminCP → Users → Groups & permissions →
+   **Registered** → General → allow **View own credit wallet and history**
+   and **Transfer credits to other users**. Repeat for any other groups.
+5. Members start earning on the next post/reaction/visit. Balances appear in
+   postbit automatically.
 
-`addon-src/OpenCredits/Credits/` is the canonical addon. It gets symlinked to
-`src/src/addons/OpenCredits/Credits/` for live dev. Build releases with:
+To upgrade later: upload the newer release the same way, then AdminCP →
+Add-ons → OpenCredits → **Upgrade**.
 
-```bash
-docker compose exec web php /var/www/html/cmd.php xf-addon:build-release OpenCredits/Credits
-```
+## Earning defaults
 
-## Permissions (grant after install)
+| Action | Default |
+|---|---|
+| New thread | $5.00 |
+| Reply | $1.00 |
+| Content reacted to | $2.00 |
+| Registration | $10.00 |
+| Daily visit (once/day) | $5.00 |
 
-The wallet is gated by two flags in the `general` group (default: deny):
+Defaults live in `xf_oc_event` (one row per trigger, per currency). A point-and-click
+event manager is on the roadmap — see [Issues](../../issues).
 
-* `general / ocView` — view `/credits/` history
-* `general / ocTransfer` — use `/credits/transfer`
+## Troubleshooting
 
-Grant them at AdminCP → Users → Groups & permissions → [group] → General,
-or via CLI + rebuild:
+* **"Transfer failed due to a server error"** — you have a pre-0.6.0 install:
+  upgrade; early versions created unsigned `amount` columns that reject debits.
+* **Balances look wrong** — ask your admin to run the rebuild (CLI:
+  `php cmd.php oc-credits:rebuild`), which recomputes every balance from the
+  append-only transaction log.
+* **No permission errors on `/credits/`** — the two `general` permissions above
+  default to deny; grant them per group.
 
-```bash
-docker compose exec db mysql -uxf -popencredits xf_dev -e \
-  "INSERT INTO xf_permission_entry (user_group_id, user_id, permission_group_id, permission_id, permission_value, permission_value_int) VALUES (2, 0, 'general', 'ocView', 'allow', 0), (2, 0, 'general', 'ocTransfer', 'allow', 0);"
-docker compose exec -T web php /var/www/html/cmd.php xf-rebuild:users
-```
+## For developers
 
-Currency prefix/suffix/decimals live in `xf_oc_currency` (per-currency,
-unlimited currencies supported by schema; AdminCP manager UI is on the roadmap).
+* [docs/DEV.md](docs/DEV.md) — Docker dev environment in 5 minutes.
+* [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — code map, schema, trigger matrix
+  (written as an LLM/contributor reference).
+* [docs/XF-DEV-GOTCHAS.md](docs/XF-DEV-GOTCHAS.md) — hard-won XF 2.3 dev-output
+  and API conventions.
+* CI lints PHP + validates `_output` JSON on every push.
 
-## Project layout
+## Roadmap / out of scope for v1
 
-```
-open-credits/
-  docker-compose.yml Dockerfile .env.example
-  src/                 # XF runtime (gitignored, licensed)
-  addon-src/OpenCredits/Credits/
-    addon.json Setup.php Listener.php
-    Service/Transact.php Cron/DailyLogin.php Job/RebuildBalances.php
-  scripts/dev.sh
-```
+AdminCP currency/event manager, alerts, redeem codes, `[CHARGE]` BBCode,
+interest/tax/paycheck schedules, payment profiles, shop integration.
 
-## Roadmap
+## License
 
-* Phase 0: env ✅ (this scaffold)
-* Phase 1: skeleton install + tables
-* Phase 2: Transact service + adjust + log viewer
-* Phase 3: 6 event triggers
-* Phase 4: frontend wallet + transfer + trophy criteria + rebuild job
-* Phase 5: release zip + CI lint
+MIT — see [LICENSE](LICENSE).
