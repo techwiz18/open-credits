@@ -2,6 +2,7 @@
 src/
 # Build artifacts (rebuilt via xf-addon:build-release)
 addon-src/OpenCredits/Credits/_releases/
+addon-src/OpenCredits/Credits/_data/
 # Docker data
 db_data/
 # Env
