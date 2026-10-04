@@ -17,6 +17,12 @@
         "version_string": "0.7.0",
         "hash": "4edafe49e9ff0aca5796e6db9d7f1ed4"
     },
+    "admin_navigation.ocTools.txt": {
+        "global_cache": false,
+        "version_id": 903,
+        "version_string": "0.9.3",
+        "hash": "a169bf9c479901c47c6fc12916752487"
+    },
     "admin_permission.ocCredits.txt": {
         "global_cache": false,
         "version_id": 700,

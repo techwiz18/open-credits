@@ -19,6 +19,11 @@
         "version_string": "0.9.0",
         "hash": "dd8aaa8a7f2a721a431e6399e2ba904f"
     },
+    "admin/oc_tools_rebuild.html": {
+        "version_id": 903,
+        "version_string": "0.9.3",
+        "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
     "public/credits_index.html": {
         "version_id": 901,
         "version_string": "0.9.1",

@@ -1,0 +1,28 @@
+<xf:title>Rebuild balances</xf:title>
+
+<div class="block">
+	<div class="block-container">
+		<xf:if is="$ran">
+			<div class="block-body">
+				<div class="block-row block-row--separated">
+					Rebuilt {$rows|number} balance rows from the transaction log.
+					All wallet, postbit, and profile displays now reflect the ledger.
+				</div>
+			</div>
+			<div class="block-footer">
+				<a href="{{ link('oc-currencies') }}" class="button">Back to currencies</a>
+			</div>
+		<xf:else />
+			<xf:form action="{{ link('oc-tools/rebuild') }}" class="block" ajax="true">
+				<div class="block-body">
+					<div class="block-row block-row--separated">
+						Recomputes every member's balance in every currency from the
+						append-only transaction log. Use this if balances ever look
+						wrong. Safe to run any time; takes seconds on most forums.
+					</div>
+				</div>
+				<xf:submitrow submit="Rebuild now" />
+			</xf:form>
+		</xf:if>
+	</div>
+</div>
