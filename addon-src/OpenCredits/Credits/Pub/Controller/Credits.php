@@ -78,9 +78,13 @@ class Credits extends AbstractController
         foreach ($transactions as $txn) {
             if ($txn->trigger === 'transfer') {
                 $userIds[] = (int)$txn->content_id;
-            } elseif ($txn->trigger === 'thread') {
+            } elseif ($txn->trigger === 'thread'
+                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'thread')
+            ) {
                 $threadIds[] = (int)$txn->content_id;
-            } elseif ($txn->trigger === 'post') {
+            } elseif ($txn->trigger === 'post'
+                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'post')
+            ) {
                 $postIds[] = (int)$txn->content_id;
             }
         }
@@ -119,18 +123,25 @@ class Credits extends AbstractController
                 if (isset($users[$otherId])) {
                     $entry['detailUser'] = $users[$otherId];
                 }
-            } elseif ($txn->trigger === 'thread') {
+            } elseif ($txn->trigger === 'thread'
+                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'thread')
+            ) {
                 $threadId = (int)$txn->content_id;
                 if (isset($threads[$threadId])) {
                     $entry['detailThread'] = $threads[$threadId];
+                    if ($txn->trigger === 'reaction_received') {
+                        $entry['detail'] = 'on';
+                    }
                 }
-            } elseif ($txn->trigger === 'post') {
+            } elseif ($txn->trigger === 'post'
+                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'post')
+            ) {
                 $postId = (int)$txn->content_id;
                 if (isset($posts[$postId])) {
                     $threadId = (int)$posts[$postId]->thread_id;
                     if (isset($postThreads[$threadId])) {
                         $entry['detailThread'] = $postThreads[$threadId];
-                        $entry['detail'] = 'in reply to';
+                        $entry['detail'] = $txn->trigger === 'reaction_received' ? 'on your reply in' : 'in reply to';
                     }
                 }
             }

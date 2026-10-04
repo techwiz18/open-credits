@@ -32,7 +32,7 @@ class Transact extends AbstractService
      * Awards EVERY active event registered for the trigger (e.g. a thread
      * event in each currency). Returns true if at least one applied.
      */
-    public function awardByTrigger(string $trigger, int $userId, int $contentId = 0): bool
+    public function awardByTrigger(string $trigger, int $userId, int $contentId = 0, string $contentType = ''): bool
     {
         $db = $this->db();
         $rows = $db->fetchAll(
@@ -48,14 +48,14 @@ class Transact extends AbstractService
             if (!$this->passesDailyLimit((int)$row['event_id'], $userId, (int)$row['max_per_day'])) {
                 continue;
             }
-            if ($this->adjust($userId, (int)$row['currency_id'], (float)$row['amount'], $trigger, $contentId, '')) {
+            if ($this->adjust($userId, (int)$row['currency_id'], (float)$row['amount'], $trigger, $contentId, '', $contentType)) {
                 $applied = true;
             }
         }
         return $applied;
     }
 
-    public function adjust(int $userId, int $currencyId, float $amount, string $trigger, int $contentId = 0, string $note = ''): bool
+    public function adjust(int $userId, int $currencyId, float $amount, string $trigger, int $contentId = 0, string $note = '', string $contentType = ''): bool
     {
         if ($userId <= 0 || $amount == 0.0) {
             return false;
@@ -71,6 +71,7 @@ class Transact extends AbstractService
                 'currency_id' => $currencyId,
                 'amount' => $amount,
                 'trigger' => $trigger,
+                'content_type' => substr($contentType, 0, 25),
                 'content_id' => $contentId,
                 'note' => substr($note, 0, 255),
                 'log_date' => \XF::$time,

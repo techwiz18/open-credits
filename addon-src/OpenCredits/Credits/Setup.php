@@ -53,6 +53,7 @@ class Setup extends AbstractSetup
             $table->addColumn('currency_id', 'int')->setDefault(1);
             $table->addColumn('amount', 'decimal', '10,2')->unsigned(false);
             $table->addColumn('trigger', 'varchar', 50);
+            $table->addColumn('content_type', 'varchar', 25)->setDefault('');
             $table->addColumn('content_id', 'int')->setDefault(0);
             $table->addColumn('note', 'varchar', 255)->setDefault('');
             $table->addColumn('log_date', 'int');
@@ -180,6 +181,13 @@ class Setup extends AbstractSetup
     public function upgrade200Step1()
     {
         $this->seedDefaultEvents();
+    }
+
+    public function upgrade907Step1()
+    {
+        $this->schemaManager()->alterTable('xf_oc_transaction', function (Alter $table) {
+            $table->addColumn('content_type', 'varchar', 25)->setDefault('');
+        });
     }
 
     public function upgrade600Step1()

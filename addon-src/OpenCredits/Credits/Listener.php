@@ -18,7 +18,7 @@ class Listener
         if (!$entity->isInsert() || $entity->get('discussion_state') !== 'visible') {
             return;
         }
-        self::applyTrigger('thread', (int)$entity->user_id, (int)$entity->thread_id);
+        self::applyTrigger('thread', (int)$entity->user_id, (int)$entity->thread_id, 'thread');
     }
 
     public static function postEntityPostSave(Entity $entity)
@@ -30,13 +30,13 @@ class Listener
         if ((int)$entity->position === 0) {
             return;
         }
-        self::applyTrigger('post', (int)$entity->user_id, (int)$entity->post_id);
+        self::applyTrigger('post', (int)$entity->user_id, (int)$entity->post_id, 'post');
     }
 
     public static function userEntityPostSave(Entity $entity)
     {
         if ($entity->isInsert()) {
-            self::applyTrigger('register', (int)$entity->user_id, (int)$entity->user_id);
+            self::applyTrigger('register', (int)$entity->user_id, (int)$entity->user_id, 'user');
         }
     }
 
@@ -58,7 +58,7 @@ class Listener
         if ($authorId <= 0 || $authorId === $reactorId) {
             return;
         }
-        self::applyTrigger('reaction_received', $authorId, (int)$entity->get('content_id'));
+        self::applyTrigger('reaction_received', $authorId, (int)$entity->get('content_id'), (string)$entity->get('content_type'));
     }
 
     public static function visitorSetup(\XF\Entity\User &$user = null)
@@ -89,7 +89,7 @@ class Listener
         }
     }
 
-    protected static function applyTrigger(string $trigger, int $userId, int $contentId = 0): void
+    protected static function applyTrigger(string $trigger, int $userId, int $contentId = 0, string $contentType = ''): void
     {
         if ($userId <= 0) {
             return;
@@ -98,7 +98,7 @@ class Listener
             $app = \XF::app();
             /** @var Service\Transact $svc */
             $svc = $app->service('OpenCredits\Credits:Transact');
-            $svc->awardByTrigger($trigger, $userId, $contentId);
+            $svc->awardByTrigger($trigger, $userId, $contentId, $contentType);
         } catch (\Throwable $e) {
             \XF::logException($e, false, "OpenCredits trigger {$trigger} failed: ");
         }

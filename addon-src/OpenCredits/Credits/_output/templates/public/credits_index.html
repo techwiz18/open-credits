@@ -63,7 +63,7 @@
         </div>
         <xf:if is="$total > $perPage">
             <div class="block-footer">
-                <xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="credits" />
+                <xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="credits" params="{{ {'currency_id': $currency.currency_id} }}" />
             </div>
         </xf:if>
     </div>

@@ -12,7 +12,8 @@
 			<xf:textboxrow name="suffix" value="{$currency.suffix}" label="Suffix"
 				hint="Shown after the amount. Can be blank." />
 
-			<xf:numberboxrow name="decimals" value="{$currency.decimals}" label="Decimals" min="0" max="4" />
+			<xf:numberboxrow name="decimals" value="{$currency.decimals}" label="Decimals" min="0" max="2"
+				hint="Balances are stored to 2 decimal places." />
 
 			<xf:checkboxrow>
 				<xf:option name="allow_negative" selected="$currency.allow_negative"

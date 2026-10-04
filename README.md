@@ -105,6 +105,12 @@ Credits (Earning events / Currencies).
 Alerts, redeem codes, `[CHARGE]` BBCode, interest/tax/paycheck schedules,
 payment profiles, shop integration.
 
+## Built with AI
+
+This project is vibe-coded: the code, docs, and much of the testing plan were
+produced with AI assistance and reviewed by a human. If you deploy it, treat it
+like any community add-on — review security-sensitive changes and keep backups.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

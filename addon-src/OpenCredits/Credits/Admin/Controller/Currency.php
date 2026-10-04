@@ -89,8 +89,8 @@ class Currency extends AbstractController
     {
         $currency = $this->assertCurrencyExists($params->currency_id);
 
-        if ($currency->currency_id == 1) {
-            return $this->error('The default currency cannot be deleted. Deactivate it instead.');
+        if ($currency->is_primary) {
+            return $this->error('The primary currency cannot be deleted. Make another currency primary first, or deactivate it instead.');
         }
 
         $eventCount = $this->finder('OpenCredits\Credits:CreditEvent')

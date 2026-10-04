@@ -8,13 +8,13 @@
 						<dt>{$ocBalance.title}</dt>
 						<dd>{$ocBalance.prefix}{$ocBalance.balance|number($ocBalance.decimals)}{$ocBalance.suffix}</dd>
 					</div>
+					<xf:if is="$isSelf">
+						<div class="contentRow-minor">
+							<a href="{{ link('credits', '', {'currency_id': $ocBalance.currency_id}) }}">View full history</a>
+						</div>
+					</xf:if>
 				</div>
 			</xf:foreach>
 		</div>
-		<xf:if is="$isSelf">
-			<div class="block-footer">
-				<a href="{{ link('credits') }}">View full history</a>
-			</div>
-		</xf:if>
 	</div>
 </div>
