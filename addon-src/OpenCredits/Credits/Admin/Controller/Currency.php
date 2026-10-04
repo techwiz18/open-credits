@@ -71,7 +71,7 @@ class Currency extends AbstractController
             if ($input['is_primary']) {
                 // Exactly one primary: clear the flag everywhere else and
                 // resync the legacy balance column to the new primary.
-                $this->db()->query(
+                $this->app->db()->query(
                     'UPDATE xf_oc_currency SET is_primary = 0 WHERE currency_id != ?',
                     $currency->currency_id
                 );

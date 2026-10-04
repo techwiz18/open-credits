@@ -28,19 +28,31 @@ class Transact extends AbstractService
         return self::$primaryCurrencyId;
     }
 
+    /**
+     * Awards EVERY active event registered for the trigger (e.g. a thread
+     * event in each currency). Returns true if at least one applied.
+     */
     public function awardByTrigger(string $trigger, int $userId, int $contentId = 0): bool
     {
         $db = $this->db();
-        $row = $db->fetchRow('SELECT * FROM xf_oc_event WHERE `trigger` = ? AND active = 1 LIMIT 1', $trigger);
-        if (!$row) {
+        $rows = $db->fetchAll(
+            'SELECT * FROM xf_oc_event WHERE `trigger` = ? AND active = 1 ORDER BY event_id',
+            $trigger
+        );
+        if (!$rows) {
             return false;
         }
 
-        if (!$this->passesDailyLimit((int)$row['event_id'], $userId, (int)$row['max_per_day'])) {
-            return false;
+        $applied = false;
+        foreach ($rows as $row) {
+            if (!$this->passesDailyLimit((int)$row['event_id'], $userId, (int)$row['max_per_day'])) {
+                continue;
+            }
+            if ($this->adjust($userId, (int)$row['currency_id'], (float)$row['amount'], $trigger, $contentId, '')) {
+                $applied = true;
+            }
         }
-
-        return $this->adjust($userId, (int)$row['currency_id'], (float)$row['amount'], $trigger, $contentId, '');
+        return $applied;
     }
 
     public function adjust(int $userId, int $currencyId, float $amount, string $trigger, int $contentId = 0, string $note = ''): bool
@@ -103,6 +115,16 @@ class Transact extends AbstractService
             $first = min($fromUserId, $toUserId);
             $second = max($fromUserId, $toUserId);
             $db->query('SELECT user_id FROM xf_user WHERE user_id IN (?, ?) FOR UPDATE', [$first, $second]);
+            // Transfers never overdraw: the sender must cover the amount.
+            // (Admin adjustments via adjust() stay unrestricted by design.)
+            $senderBalance = (float)$db->fetchOne(
+                'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
+                [$fromUserId, $currencyId]
+            );
+            if ($senderBalance < $amount) {
+                $db->rollBack();
+                return false;
+            }
             $this->applyBalanceDelta($fromUserId, $currencyId, -$amount);
             $this->applyBalanceDelta($toUserId, $currencyId, $amount);
             $now = \XF::$time;

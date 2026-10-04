@@ -151,7 +151,7 @@ class Credits extends AbstractController
         }
 
         if (!$ok) {
-            return $this->error('Transfer could not be completed.');
+            return $this->error('Insufficient credits for this transfer.');
         }
 
         return $this->redirect($this->buildLink('credits'));

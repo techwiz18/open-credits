@@ -66,6 +66,10 @@ class Listener
         if (!$user || $user->user_id <= 0 || $user->get('user_state') !== 'valid') {
             return;
         }
+        // Registration day is covered by the register bonus, not the daily one.
+        if ((int)$user->get('register_date') >= strtotime('today midnight')) {
+            return;
+        }
         try {
             $app = \XF::app();
             /** @var Service\Transact $svc */
