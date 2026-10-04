@@ -1,0 +1,39 @@
+<xf:title>Currencies</xf:title>
+
+<div class="block">
+	<div class="block-container">
+		<div class="block-body">
+			<div class="block-row">
+				<a href="{{ link('oc-currencies/add') }}" class="button button--primary">Add currency</a>
+			</div>
+		</div>
+		<div class="block-body">
+			<table class="dataTable">
+				<thead>
+					<tr>
+						<th>Title</th>
+						<th>Display</th>
+						<th>Decimals</th>
+						<th>Negative</th>
+						<th>Active</th>
+						<td></td>
+					</tr>
+				</thead>
+				<tbody>
+					<xf:foreach loop="$currencies" value="$currency">
+						<tr>
+							<td><a href="{{ link('oc-currencies/edit', $currency) }}">{$currency.title}</a></td>
+							<td>{$currency.prefix}1.00{$currency.suffix}</td>
+							<td>{$currency.decimals}</td>
+							<td><xf:if is="$currency.allow_negative">Yes<xf:else />No</xf:if></td>
+							<td><xf:if is="$currency.active">Yes<xf:else />No</xf:if></td>
+							<td class="dataTable-cell--actions">
+								<a href="{{ link('oc-currencies/delete', $currency) }}" class="button button--small">Delete</a>
+							</td>
+						</tr>
+					</xf:foreach>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>

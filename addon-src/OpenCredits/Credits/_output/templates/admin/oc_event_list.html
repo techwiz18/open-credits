@@ -1,0 +1,42 @@
+<xf:title>Earning events</xf:title>
+
+<div class="block">
+	<div class="block-container">
+		<div class="block-body">
+			<div class="block-row">
+				<a href="{{ link('oc-events/add') }}" class="button button--primary">Add event</a>
+			</div>
+		</div>
+		<div class="block-body">
+			<table class="dataTable">
+				<thead>
+					<tr>
+						<th>Trigger</th>
+						<th>Currency</th>
+						<th>Amount</th>
+						<th>Max / day</th>
+						<th>Active</th>
+						<td></td>
+					</tr>
+				</thead>
+				<tbody>
+					<xf:foreach loop="$events" value="$event">
+						<tr>
+							<td><a href="{{ link('oc-events/edit', $event) }}">{$event.trigger}</a></td>
+							<td>{$event.Currency.title}</td>
+							<td>{$event.amount|number(2)}</td>
+							<td><xf:if is="$event.max_per_day">{$event.max_per_day}<xf:else />Unlimited</xf:if></td>
+							<td><xf:if is="$event.active">Yes<xf:else />No</xf:if></td>
+							<td class="dataTable-cell--actions">
+								<a href="{{ link('oc-events/delete', $event) }}" class="button button--small">Delete</a>
+							</td>
+						</tr>
+					</xf:foreach>
+				</tbody>
+			</table>
+		</div>
+		<div class="block-footer block-footer--split">
+			<span class="block-footer-counter">Daily visits are always awarded once per day; per-day limits apply to the other triggers.</span>
+		</div>
+	</div>
+</div>

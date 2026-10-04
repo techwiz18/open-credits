@@ -1,4 +1,28 @@
 {
+    "admin_navigation.ocCredits.txt": {
+        "global_cache": false,
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "948a2e3548aaf7f9941a3192fa607d51"
+    },
+    "admin_navigation.ocCurrencies.txt": {
+        "global_cache": false,
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "dfcfc43722eef1eab1e4a12e50a068b1"
+    },
+    "admin_navigation.ocEvents.txt": {
+        "global_cache": false,
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "4edafe49e9ff0aca5796e6db9d7f1ed4"
+    },
+    "admin_permission.ocCredits.txt": {
+        "global_cache": false,
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "64ee5dc0ba5b84b0945d05f9d7a96688"
+    },
     "oc_credits.txt": {
         "global_cache": false,
         "version_id": 300,

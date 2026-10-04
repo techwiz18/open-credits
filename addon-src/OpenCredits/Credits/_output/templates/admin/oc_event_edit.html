@@ -1,0 +1,31 @@
+<xf:title><xf:if is="$event.isInsert()">Add event<xf:else />Edit event: {$event.trigger}</xf:if></xf:title>
+
+<xf:form action="{{ $event.isInsert() ? link('oc-events/save') : link('oc-events/save', $event) }}" class="block" ajax="true">
+	<div class="block-container">
+		<div class="block-body">
+			<xf:selectrow name="currency_id" value="{$event.currency_id}" label="Currency">
+				<xf:foreach loop="$currencies" value="$currency">
+					<xf:option value="{$currency.currency_id}">{$currency.title}</xf:option>
+				</xf:foreach>
+			</xf:selectrow>
+
+			<xf:selectrow name="trigger" value="{$event.trigger}" label="Trigger"
+				hint="What member action earns this event.">
+				<xf:foreach loop="$triggers" key="$key" value="$label">
+					<xf:option value="{$key}">{$label}</xf:option>
+				</xf:foreach>
+			</xf:selectrow>
+
+			<xf:textboxrow name="amount" value="{$event.amount}" label="Amount" type="number" step="0.01"
+				hint="Positive earns, negative charges. Two decimals." />
+
+			<xf:numberboxrow name="max_per_day" value="{$event.max_per_day}" label="Max per day"
+				min="0" hint="0 = unlimited. Daily visits are always once per day." />
+
+			<xf:checkboxrow>
+				<xf:option name="active" selected="$event.active" label="Active" />
+			</xf:checkboxrow>
+		</div>
+		<xf:submitrow submit="Save" />
+	</div>
+</xf:form>

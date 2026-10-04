@@ -1,4 +1,24 @@
 {
+    "admin/oc_currency_edit.html": {
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "5c0180390ef21da36d57a6fead087b5e"
+    },
+    "admin/oc_currency_list.html": {
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "dcccc1c140e36ddd452f33b968841e0b"
+    },
+    "admin/oc_event_edit.html": {
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "f48404dbf6ab869d571e745433b38bd9"
+    },
+    "admin/oc_event_list.html": {
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "290b564b263af6c2a302f48d92a776f5"
+    },
     "public/credits_index.html": {
         "version_id": 300,
         "version_string": "0.3.0",
