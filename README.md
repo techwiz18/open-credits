@@ -100,10 +100,12 @@ Credits (Earning events / Currencies).
   and API conventions.
 * CI lints PHP + validates `_output` JSON on every push.
 
-## Roadmap / out of scope for v1
+## Roadmap
 
-Alerts, redeem codes, `[CHARGE]` BBCode, interest/tax/paycheck schedules,
-payment profiles, shop integration.
+Tracked as [issues and milestones](../../milestones): v0.10 candidates are
+alerts on earn, redeem codes, and admin adjust/take tools; bigger epics
+(charge BBCode, interest/tax/paychecks, payments/shop) sit in Future. File or
+vote on issues to shape what lands next.
 
 ## Built with AI
 
