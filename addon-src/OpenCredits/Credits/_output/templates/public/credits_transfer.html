@@ -4,13 +4,14 @@
     <div class="block-container">
         <div class="block-body">
             <div class="block-row">
-                {{ phrase('oc_credits') }}: <strong>{$currency.prefix}{$balance|number(2)}{$currency.suffix}</strong>
+                {$currency.title}: <strong>{$currency.prefix}{$balance|number($currency.decimals)}{$currency.suffix}</strong>
             </div>
         </div>
     </div>
 </div>
 
 <xf:form action="{{ link('credits/transfer-save') }}" class="block" ajax="true">
+    <input type="hidden" name="currency_id" value="{$currency.currency_id}" />
     <div class="block-container">
         <div class="block-body">
             <xf:textboxrow name="to" value="{$to}" label="To user"

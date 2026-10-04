@@ -1,0 +1,32 @@
+<xf:title><xf:if is="$currency.isInsert()">Add currency<xf:else />Edit currency: {$currency.title}</xf:if></xf:title>
+
+<xf:form action="{{ $currency.isInsert() ? link('oc-currencies/save') : link('oc-currencies/save', $currency) }}" class="block" ajax="true">
+	<div class="block-container">
+		<div class="block-body">
+			<xf:textboxrow name="title" value="{$currency.title}" label="Title" required="true"
+				hint="Shown wherever the currency is named." />
+
+			<xf:textboxrow name="prefix" value="{$currency.prefix}" label="Prefix"
+				hint="Shown before the amount, e.g. $ or B$. Can be blank." />
+
+			<xf:textboxrow name="suffix" value="{$currency.suffix}" label="Suffix"
+				hint="Shown after the amount. Can be blank." />
+
+			<xf:numberboxrow name="decimals" value="{$currency.decimals}" label="Decimals" min="0" max="2"
+				hint="Balances are stored to 2 decimal places." />
+
+			<xf:checkboxrow>
+				<xf:option name="allow_negative" selected="$currency.allow_negative"
+					label="Allow negative balances"
+					hint="Applies to admin adjustments and charges. Member-to-member transfers can never overdraw, regardless of this setting." />
+				<xf:option name="active" selected="$currency.active"
+					label="Active" hint="Inactive currencies earn nothing." />
+				<xf:option name="visible" selected="$currency.visible"
+					label="Visible" hint="Shown in postbit, menus and profile lists." />
+				<xf:option name="is_primary" selected="$currency.is_primary"
+					label="Primary currency" hint="Shown on the profile page. Exactly one currency is primary." />
+			</xf:checkboxrow>
+		</div>
+		<xf:submitrow submit="Save" />
+	</div>
+</xf:form>

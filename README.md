@@ -8,11 +8,14 @@ let members transfer credits, gate trophies on wealth.
 ## What members get
 
 * **Earn credits** for posting threads/replies, receiving reactions, registering,
-  and daily visits (amounts configurable in the DB seed; AdminCP UI roadmap).
-* **Wallet everywhere** — balance in postbit, in the account menu, full history
-  at `/credits/`.
+  and daily visits — amounts managed in AdminCP → Credits → Earning events.
+* **Multiple currencies** with a primary and per-currency visibility, all
+  managed in AdminCP → Credits → Currencies.
+* **Wallet everywhere** — balances in postbit, in the account menu, and on
+  member profiles (primary stat plus a full currencies tab); per-currency
+  history at `/credits/`.
 * **Transfers** — send credits to another member at `/credits/transfer`
-  (username autocomplete included).
+  (username autocomplete included; transfers can never overdraw).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
   trophies, notices, and user-group promotions.
 
@@ -43,14 +46,26 @@ FTP/cPanel File Manager, merging folders. Then AdminCP → Add-ons, find
 
 Then, either way:
 
-1. Grant permissions: AdminCP → Users → Groups & permissions →
-   **Registered** → General → allow **View own credit wallet and history**
+1. Grant permissions: AdminCP → **Groups & permissions** → **User groups** →
+   **Registered** → **Credits** tab → allow **View own credit wallet and history**
    and **Transfer credits to other users**. Repeat for any other groups.
 2. Members start earning on the next post/reaction/visit. Balances appear in
    postbit automatically.
 
 To upgrade later: upload the newer release the same way, then AdminCP →
 Add-ons → OpenCredits → **Upgrade**.
+
+## AdminCP access
+
+The **Credits** AdminCP section (currencies, earning events) is gated by the
+`Manage credits` admin permission:
+
+* Super admins (the forum owner account is one by default) always have access.
+* Other admins need the toggle, and it only appears for the right account type:
+  AdminCP → **Groups & permissions** → **Administrators** → click the admin's
+  name → set **Administrator type** to **Regular administrator** (the Permissions
+  checkbox list is hidden for super admins, who already hold everything) →
+  check **Manage credits (currencies and earning events)** → Save.
 
 ## Earning defaults
 
@@ -62,16 +77,19 @@ Add-ons → OpenCredits → **Upgrade**.
 | Registration | $10.00 |
 | Daily visit (once/day) | $5.00 |
 
-Changing these amounts currently requires editing the database directly —
-a point-and-click settings screen is planned for a future release.
+Change amounts, add triggers, or add currencies any time in AdminCP →
+Credits (Earning events / Currencies).
 
 ## Troubleshooting
 
-* **Balances look wrong** — run the rebuild (CLI:
-  `php cmd.php oc-credits:rebuild`), which recomputes every balance from the
+* **Balances look wrong** — AdminCP → Credits → **Rebuild balances**, or CLI
+  (`php cmd.php oc-credits:rebuild`); both recompute every balance from the
   append-only transaction log.
-* **No permission errors on `/credits/`** — the two `general` permissions above
-  default to deny; grant them per group.
+* **No permission errors on `/credits/`** — the two Credits permissions default
+  to deny except on fresh installs, which auto-allow them for Registered;
+  check the **Credits** tab if access fails.
+* **Uninstalling deletes everything** — balances, ledger, events, and
+  currencies are wiped (disabling is not offered; re-install starts from zero).
 
 ## For developers
 
@@ -84,8 +102,14 @@ a point-and-click settings screen is planned for a future release.
 
 ## Roadmap / out of scope for v1
 
-AdminCP currency/event manager, alerts, redeem codes, `[CHARGE]` BBCode,
-interest/tax/paycheck schedules, payment profiles, shop integration.
+Alerts, redeem codes, `[CHARGE]` BBCode, interest/tax/paycheck schedules,
+payment profiles, shop integration.
+
+## Built with AI
+
+This project is vibe-coded: the code, docs, and much of the testing plan were
+produced with AI assistance and reviewed by a human. If you deploy it, treat it
+like any community add-on — review security-sensitive changes and keep backups.
 
 ## License
 

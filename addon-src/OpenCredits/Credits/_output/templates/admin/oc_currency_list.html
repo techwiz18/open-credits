@@ -1,0 +1,28 @@
+<xf:title>Currencies</xf:title>
+
+<xf:pageaction>
+	<xf:button href="{{ link('oc-currencies/add') }}" icon="add">Add currency</xf:button>
+</xf:pageaction>
+
+<xf:if is="$currencies is not empty">
+	<div class="block">
+		<div class="block-container">
+			<div class="block-body">
+				<xf:datalist>
+					<xf:foreach loop="$currencies" value="$currency">
+						<xf:datarow
+							label="{$currency.title}"
+							hint="{$currency.prefix}1.00{$currency.suffix} - {$currency.decimals} decimals"
+							href="{{ link('oc-currencies/edit', $currency) }}"
+							delete="{{ link('oc-currencies/delete', $currency) }}" />
+					</xf:foreach>
+				</xf:datalist>
+			</div>
+			<div class="block-footer">
+				<span class="block-footer-counter">{{ display_totals($currencies) }}</span>
+			</div>
+		</div>
+	</div>
+<xf:else />
+	<div class="blockMessage">No currencies yet.</div>
+</xf:if>

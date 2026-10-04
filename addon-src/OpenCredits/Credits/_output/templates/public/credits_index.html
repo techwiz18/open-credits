@@ -6,12 +6,28 @@
             <div class="block-row block-row--separated">
                 <div class="pairs pairs--columns pairs--fluid">
                     <dl class="pairs pairs--justified">
-                        <dt>{{ phrase('oc_credits') }}</dt>
-                        <dd>{$currency.prefix}{$balance|number(2)}{$currency.suffix}</dd>
+                        <dt>{$currency.title}</dt>
+                        <dd>{$currency.prefix}{$balance|number($currency.decimals)}{$currency.suffix}</dd>
                     </dl>
                 </div>
-                <a href="{{ link('credits/transfer') }}" class="button">{{ phrase('oc_transfer_to') }}</a>
+                <a href="{{ link('credits/transfer', '', {'currency_id': $currency.currency_id}) }}" class="button">{{ phrase('oc_transfer_to') }}</a>
             </div>
+            <xf:if is="$currencies|count > 1">
+                <div class="block-row block-row--separated">
+                    <dl class="pairs pairs--justified">
+                        <dt>Viewing history for</dt>
+                        <dd>
+                            <strong>{$currency.title}</strong>
+                            <span class="u-muted">— switch currency:</span>
+                            <xf:foreach loop="$currencies" value="$c">
+                                <xf:if is="$c.currency_id != $currency.currency_id">
+                                    <a href="{{ link('credits', '', {'currency_id': $c.currency_id}) }}" class="button button--small">{$c.title}</a>
+                                </xf:if>
+                            </xf:foreach>
+                        </dd>
+                    </dl>
+                </div>
+            </xf:if>
         </div>
     </div>
 </div>
@@ -20,12 +36,24 @@
     <div class="block-container">
         <h3 class="block-header">{{ phrase('oc_credits_history') }}</h3>
         <div class="block-body">
-            <xf:if is="$transactions is not empty">
-                <xf:foreach loop="$transactions" value="$txn">
+            <xf:if is="$entries is not empty">
+                <xf:foreach loop="$entries" value="$entry">
                     <div class="block-row">
-                        <div class="pairs pairs--justified">
-                            <dt>{$txn.trigger}</dt>
-                            <dd><xf:if is="$txn.amount > 0">+</xf:if>{$txn.amount|number(2)} &middot; {{ date($txn.log_date) }}</dd>
+                        <div class="contentRow">
+                            <div class="contentRow-main">
+                                <div class="contentRow-title">{$entry.label}</div>
+                                <div class="contentRow-minor">
+                                    <xf:if is="$entry.detailUser">
+                                        <xf:username user="$entry.detailUser" />
+                                    <xf:elseif is="$entry.detailThread" />
+                                        {$entry.detail} <a href="{{ link('threads', $entry.detailThread) }}">{$entry.detailThread.title}</a>
+                                    </xf:if>
+                                    {{ date($entry.logDate) }}
+                                </div>
+                            </div>
+                            <div class="contentRow-extra">
+                                <xf:if is="$entry.amount > 0">+</xf:if>{$entry.amount|number($currency.decimals)}
+                            </div>
                         </div>
                     </div>
                 </xf:foreach>
@@ -35,7 +63,7 @@
         </div>
         <xf:if is="$total > $perPage">
             <div class="block-footer">
-                <xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="credits" />
+                <xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="credits" params="{{ {'currency_id': $currency.currency_id} }}" />
             </div>
         </xf:if>
     </div>

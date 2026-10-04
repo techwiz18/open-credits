@@ -1,0 +1,1 @@
+{"display_order": 700, "enabled": true, "navigation_type_id": "basic", "parent_navigation_id": "", "type_config": {"display_condition": "$xf.visitor.hasPermission('general', 'ocView')", "extra_attributes": [], "link": "{{ link('credits') }}"}}

@@ -4,7 +4,7 @@ namespace OpenCredits\Credits\Job;
 
 use XF\Job\AbstractJob;
 
-/** Rebuilds xf_user.oc_credits from xf_oc_transaction (recovery tool). */
+/** Rebuilds xf_oc_balance rows (and the primary xf_user.oc_credits mirror) from xf_oc_transaction. */
 class RebuildBalances extends AbstractJob
 {
     public function run($maxRunTime): int

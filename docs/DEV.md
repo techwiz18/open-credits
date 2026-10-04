@@ -37,6 +37,8 @@ container; edits apply on next page load (templates recompile automatically).
 
 ## Granting the credit permissions (dev shortcut)
 
+Fresh installs auto-allow both for Registered. To re-grant manually:
+
 ```bash
 docker compose exec db mysql -uxf -popencredits xf_dev -e \
   "INSERT INTO xf_permission_entry (user_group_id, user_id, permission_group_id, permission_id, permission_value, permission_value_int) VALUES (2, 0, 'general', 'ocView', 'allow', 0), (2, 0, 'general', 'ocTransfer', 'allow', 0), (3, 0, 'general', 'ocView', 'allow', 0), (3, 0, 'general', 'ocTransfer', 'allow', 0);"

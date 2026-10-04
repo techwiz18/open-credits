@@ -1,0 +1,11 @@
+{
+    "route_type": "admin",
+    "route_prefix": "oc-events",
+    "sub_name": "",
+    "format": ":int<event_id>",
+    "build_class": "",
+    "build_method": "",
+    "controller": "OpenCredits\\Credits\\Admin\\Controller\\CreditEvent",
+    "context": "",
+    "action_prefix": ""
+}

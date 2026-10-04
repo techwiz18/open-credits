@@ -1,4 +1,40 @@
 {
+    "admin_navigation.ocCredits.txt": {
+        "global_cache": false,
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "948a2e3548aaf7f9941a3192fa607d51"
+    },
+    "admin_navigation.ocCurrencies.txt": {
+        "global_cache": false,
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "dfcfc43722eef1eab1e4a12e50a068b1"
+    },
+    "admin_navigation.ocEvents.txt": {
+        "global_cache": false,
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "4edafe49e9ff0aca5796e6db9d7f1ed4"
+    },
+    "admin_navigation.ocTools.txt": {
+        "global_cache": false,
+        "version_id": 903,
+        "version_string": "0.9.3",
+        "hash": "a169bf9c479901c47c6fc12916752487"
+    },
+    "admin_permission.ocCredits.txt": {
+        "global_cache": false,
+        "version_id": 700,
+        "version_string": "0.7.0",
+        "hash": "64ee5dc0ba5b84b0945d05f9d7a96688"
+    },
+    "nav.ocCredits.txt": {
+        "global_cache": false,
+        "version_id": 904,
+        "version_string": "0.9.4",
+        "hash": "948a2e3548aaf7f9941a3192fa607d51"
+    },
     "oc_credits.txt": {
         "global_cache": false,
         "version_id": 300,
@@ -34,5 +70,11 @@
         "version_id": 600,
         "version_string": "0.6.0",
         "hash": "4d992e34775090d58fc70702070c38a8"
+    },
+    "permission_interface.ocCredits.txt": {
+        "global_cache": false,
+        "version_id": 800,
+        "version_string": "0.8.0",
+        "hash": "948a2e3548aaf7f9941a3192fa607d51"
     }
 }

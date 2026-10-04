@@ -17,14 +17,22 @@ class Credits extends AbstractController
             return $this->noPermission();
         }
 
-        $currency = $this->finder('OpenCredits\Credits:Currency')->fetchOne();
-        $balance = (float)$visitor->oc_credits;
+        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
+
+        $balance = 0.0;
+        foreach ($visitor->oc_all_balances as $row) {
+            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
+                $balance = (float)$row['balance'];
+                break;
+            }
+        }
 
         $page = $this->filter('page', 'uint');
         $perPage = 20;
 
         $finder = $this->finder('OpenCredits\Credits:Transaction')
             ->where('user_id', $visitor->user_id)
+            ->where('currency_id', $currency->currency_id)
             ->order('log_date', 'DESC');
 
         $total = $finder->total();
@@ -32,8 +40,12 @@ class Credits extends AbstractController
 
         $viewParams = [
             'currency' => $currency,
+            'currencies' => $this->finder('OpenCredits\Credits:Currency')
+                ->where('active', 1)
+                ->order('currency_id')
+                ->fetch(),
             'balance' => $balance,
-            'transactions' => $transactions,
+            'entries' => $this->buildHistoryEntries($transactions),
             'page' => $page,
             'perPage' => $perPage,
             'total' => $total,
@@ -46,6 +58,132 @@ class Credits extends AbstractController
         );
     }
 
+    protected const HISTORY_LABELS = [
+        'thread' => 'New thread',
+        'post' => 'Reply',
+        'reaction_received' => 'Reaction received',
+        'register' => 'Welcome bonus',
+        'daily_login' => 'Daily visit',
+    ];
+
+    /**
+     * Turns transaction entities into display rows, resolving counterparties
+     * and content links in bulk (no per-row queries).
+     */
+    protected function buildHistoryEntries(\XF\Mvc\Entity\ArrayCollection $transactions): array
+    {
+        $userIds = [];
+        $threadIds = [];
+        $postIds = [];
+        foreach ($transactions as $txn) {
+            if ($txn->trigger === 'transfer') {
+                $userIds[] = (int)$txn->content_id;
+            } elseif ($txn->trigger === 'thread'
+                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'thread')
+            ) {
+                $threadIds[] = (int)$txn->content_id;
+            } elseif ($txn->trigger === 'post'
+                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'post')
+            ) {
+                $postIds[] = (int)$txn->content_id;
+            }
+        }
+
+        $users = $userIds
+            ? $this->finder('XF:User')->where('user_id', $userIds)->fetch()->toArray()
+            : [];
+        $threads = $threadIds
+            ? $this->finder('XF:Thread')->where('thread_id', $threadIds)->fetch()->toArray()
+            : [];
+        $posts = $postIds
+            ? $this->finder('XF:Post')->where('post_id', $postIds)->fetch()->toArray()
+            : [];
+        $postThreadIds = [];
+        foreach ($posts as $postId => $post) {
+            $postThreadIds[] = (int)$post->thread_id;
+        }
+        $postThreads = $postThreadIds
+            ? $this->finder('XF:Thread')->where('thread_id', array_unique($postThreadIds))->fetch()->toArray()
+            : [];
+
+        $entries = [];
+        foreach ($transactions as $txn) {
+            $amount = (float)$txn->amount;
+            $entry = [
+                'label' => self::HISTORY_LABELS[$txn->trigger] ?? ucwords(str_replace('_', ' ', $txn->trigger)),
+                'detail' => '',
+                'detailUser' => null,
+                'detailThread' => null,
+                'amount' => $amount,
+                'logDate' => (int)$txn->log_date,
+            ];
+            if ($txn->trigger === 'transfer') {
+                $entry['label'] = $amount < 0 ? 'Transfer sent' : 'Transfer received';
+                $otherId = (int)$txn->content_id;
+                if (isset($users[$otherId])) {
+                    $entry['detailUser'] = $users[$otherId];
+                }
+            } elseif ($txn->trigger === 'thread'
+                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'thread')
+            ) {
+                $threadId = (int)$txn->content_id;
+                if (isset($threads[$threadId])) {
+                    $entry['detailThread'] = $threads[$threadId];
+                    if ($txn->trigger === 'reaction_received') {
+                        $entry['detail'] = 'on';
+                    }
+                }
+            } elseif ($txn->trigger === 'post'
+                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'post')
+            ) {
+                $postId = (int)$txn->content_id;
+                if (isset($posts[$postId])) {
+                    $threadId = (int)$posts[$postId]->thread_id;
+                    if (isset($postThreads[$threadId])) {
+                        $entry['detailThread'] = $postThreads[$threadId];
+                        $entry['detail'] = $txn->trigger === 'reaction_received' ? 'on your reply in' : 'in reply to';
+                    }
+                }
+            }
+            $entries[] = $entry;
+        }
+        return $entries;
+    }
+
+    public function actionMember(ParameterBag $params): AbstractReply
+    {
+        $user = $this->em()->find('XF:User', $this->filter('user_id', 'uint'));
+        if (!$user || !$user->canViewBasicProfile($error)) {
+            throw $this->exception($this->notFound($error));
+        }
+
+        return $this->view(
+            'OpenCredits\Credits:Credits\Member',
+            'credits_member',
+            ['user' => $user, 'isSelf' => $user->user_id == \XF::visitor()->user_id]
+        );
+    }
+
+    protected function assertViewableCurrency(int $currencyId): \XF\Mvc\Entity\Entity
+    {
+        $finder = $this->finder('OpenCredits\Credits:Currency')->where('active', 1);
+        if ($currencyId) {
+            $currency = (clone $finder)->where('currency_id', $currencyId)->fetchOne();
+            if ($currency) {
+                return $currency;
+            }
+        }
+        $primary = (clone $finder)->where('is_primary', 1)->fetchOne();
+        if ($primary) {
+            return $primary;
+        }
+        $fallback = $finder->order('currency_id')->fetchOne();
+        if (!$fallback) {
+            throw $this->exception($this->notFound('No active currencies.'));
+        }
+        return $fallback;
+    }
+
     public function actionTransfer(ParameterBag $params): AbstractReply
     {
         $visitor = \XF::visitor();
@@ -53,11 +191,19 @@ class Credits extends AbstractController
             return $this->noPermission();
         }
 
-        $currency = $this->finder('OpenCredits\Credits:Currency')->fetchOne();
+        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
+
+        $balance = 0.0;
+        foreach ($visitor->oc_all_balances as $row) {
+            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
+                $balance = (float)$row['balance'];
+                break;
+            }
+        }
 
         $viewParams = [
             'currency' => $currency,
-            'balance' => (float)$visitor->oc_credits,
+            'balance' => $balance,
             'to' => $this->filter('to', 'str'),
         ];
 
@@ -79,6 +225,7 @@ class Credits extends AbstractController
 
         $to = $this->filter('to', 'str');
         $amount = round($this->filter('amount', 'float'), 2);
+        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
 
         if (!strlen($to)) {
             return $this->error('Please enter a username to send credits to.');
@@ -98,16 +245,16 @@ class Credits extends AbstractController
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
         try {
-            $ok = $svc->transfer((int)$visitor->user_id, (int)$target->user_id, $amount, 1);
+            $ok = $svc->transfer((int)$visitor->user_id, (int)$target->user_id, $amount, (int)$currency->currency_id);
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits transfer failed: ');
             return $this->error('Transfer failed due to a server error. Please try again.');
         }
 
         if (!$ok) {
-            return $this->error('Transfer could not be completed.');
+            return $this->error('Insufficient credits for this transfer.');
         }
 
-        return $this->redirect($this->buildLink('credits'));
+        return $this->redirect($this->buildLink('credits', null, ['currency_id' => $currency->currency_id]));
     }
 }
