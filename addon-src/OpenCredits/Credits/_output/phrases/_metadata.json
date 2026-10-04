@@ -29,6 +29,12 @@
         "version_string": "0.7.0",
         "hash": "64ee5dc0ba5b84b0945d05f9d7a96688"
     },
+    "nav.ocCredits.txt": {
+        "global_cache": false,
+        "version_id": 904,
+        "version_string": "0.9.4",
+        "hash": "948a2e3548aaf7f9941a3192fa607d51"
+    },
     "oc_credits.txt": {
         "global_cache": false,
         "version_id": 300,
