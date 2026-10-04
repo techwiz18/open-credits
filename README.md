@@ -50,8 +50,8 @@ Add-ons → OpenCredits → **Upgrade**.
 | Registration | $10.00 |
 | Daily visit (once/day) | $5.00 |
 
-Defaults live in `xf_oc_event` (one row per trigger, per currency). A point-and-click
-event manager is on the roadmap — see [Issues](../../issues).
+Changing these amounts currently requires editing the database directly —
+a point-and-click settings screen is planned for a future release.
 
 ## Troubleshooting
 
