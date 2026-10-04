@@ -82,9 +82,9 @@ Credits (Earning events / Currencies).
 
 ## Troubleshooting
 
-* **Balances look wrong** — run the rebuild (CLI, via SSH/terminal if available:
-  `php cmd.php oc-credits:rebuild`; an AdminCP button is planned), which
-  recomputes every balance from the append-only transaction log.
+* **Balances look wrong** — AdminCP → Credits → **Rebuild balances**, or CLI
+  (`php cmd.php oc-credits:rebuild`); both recompute every balance from the
+  append-only transaction log.
 * **No permission errors on `/credits/`** — the two Credits permissions default
   to deny except on fresh installs, which auto-allow them for Registered;
   check the **Credits** tab if access fails.
