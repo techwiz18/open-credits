@@ -13,7 +13,7 @@ let members transfer credits, gate trophies on wealth.
   managed in AdminCP → Credits → Currencies.
 * **Wallet everywhere** — balances in postbit, in the account menu, and on
   member profiles (primary stat plus a full currencies tab); per-currency
-  history at `/credits/`.
+  history at `/credits/`, reachable from the Credits nav tab.
 * **Transfers** — send credits to another member at `/credits/transfer`
   (username autocomplete included; transfers can never overdraw).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
