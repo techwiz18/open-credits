@@ -43,11 +43,14 @@ FTP/cPanel File Manager, merging folders. Then AdminCP → Add-ons, find
 
 Then, either way:
 
-1. Grant permissions: AdminCP → Users → Groups & permissions →
+1. Grant permissions: AdminCP → **Groups & permissions** → **User groups** →
    **Registered** → **Credits** tab → allow **View own credit wallet and history**
    and **Transfer credits to other users**. Repeat for any other groups.
 2. Members start earning on the next post/reaction/visit. Balances appear in
    postbit automatically.
+
+To upgrade later: upload the newer release the same way, then AdminCP →
+Add-ons → OpenCredits → **Upgrade**.
 
 ## AdminCP access
 
@@ -60,9 +63,6 @@ The **Credits** AdminCP section (currencies, earning events) is gated by the
   name → set **Administrator type** to **Regular administrator** (the Permissions
   checkbox list is hidden for super admins, who already hold everything) →
   check **Manage credits (currencies and earning events)** → Save.
-
-To upgrade later: upload the newer release the same way, then AdminCP →
-Add-ons → OpenCredits → **Upgrade**.
 
 ## Earning defaults
 
