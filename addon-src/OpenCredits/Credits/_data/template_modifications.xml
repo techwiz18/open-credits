@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<template_modifications>
+  <modification type="public" template="account_visitor_menu" modification_key="oc_credits_account_menu" description="Adds credit balance row to the account visitor menu" execution_order="10" enabled="1" action="str_replace">
+    <find><![CDATA[					<!--[XF:stats_pairs:above_points]-->]]></find>
+    <replace><![CDATA[					<xf:if is="$xf.visitor.hasPermission('general', 'ocView')">
+						<dl class="pairs pairs--justified fauxBlockLink">
+							<dt>{{ phrase('oc_credits') }}</dt>
+							<dd>
+								<a href="{{ link('credits') }}" class="fauxBlockLink-linkRow u-concealed">
+									{$xf.visitor.oc_credits|number(2)}
+								</a>
+							</dd>
+						</dl>
+					</xf:if>
+					<!--[XF:stats_pairs:above_points]-->]]></replace>
+  </modification>
+  <modification type="admin" template="helper_criteria" modification_key="oc_credits_criteria" description="Adds more/fewer than X credits options to user criteria form" execution_order="10" enabled="1" action="str_replace">
+    <find><![CDATA[				<!--[XF:user:content_after_trophies]-->]]></find>
+    <replace><![CDATA[				<!--[XF:user:content_after_trophies]-->
+
+				<xf:option name="user_criteria[oc_credits_more][rule]" value="oc_credits_more" selected="{$criteria.oc_credits_more}"
+					label="User has at least X credits:">
+					<xf:numberbox name="user_criteria[oc_credits_more][data][credits]" value="{$criteria.oc_credits_more.credits}"
+						size="8" min="0" step="0.01" />
+				</xf:option>
+
+				<xf:option name="user_criteria[oc_credits_fewer][rule]" value="oc_credits_fewer" selected="{$criteria.oc_credits_fewer}"
+					label="User has fewer than X credits:">
+					<xf:numberbox name="user_criteria[oc_credits_fewer][data][credits]" value="{$criteria.oc_credits_fewer.credits}"
+						size="8" min="0" step="0.01" />
+				</xf:option>]]></replace>
+  </modification>
+  <modification type="public" template="message_macros" modification_key="oc_credits_postbit" description="Shows credit balance in postbit user extras" execution_order="10" enabled="1" action="str_replace">
+    <find><![CDATA[					<xf:if is="$extras.reaction_score">
+						<dl class="pairs pairs--justified">
+							<dt>{{ phrase('reaction_score') }}</dt>
+							<dd>{$user.reaction_score|number}</dd>
+						</dl>
+					</xf:if>]]></find>
+    <replace><![CDATA[					<xf:if is="$extras.reaction_score">
+						<dl class="pairs pairs--justified">
+							<dt>{{ phrase('reaction_score') }}</dt>
+							<dd>{$user.reaction_score|number}</dd>
+						</dl>
+					</xf:if>
+					<xf:if is="$user.oc_credits !== null">
+						<dl class="pairs pairs--justified">
+							<dt>{{ phrase('oc_credits') }}</dt>
+							<dd><a href="{{ link('credits') }}" class="u-concealed">{$user.oc_credits|number(2)}</a></dd>
+						</dl>
+					</xf:if>]]></replace>
+  </modification>
+</template_modifications>

@@ -39,6 +39,25 @@ cp .env.example .env
 docker compose exec web php /var/www/html/cmd.php xf-addon:build-release OpenCredits/Credits
 ```
 
+## Permissions (grant after install)
+
+The wallet is gated by two flags in the `general` group (default: deny):
+
+* `general / ocView` — view `/credits/` history
+* `general / ocTransfer` — use `/credits/transfer`
+
+Grant them at AdminCP → Users → Groups & permissions → [group] → General,
+or via CLI + rebuild:
+
+```bash
+docker compose exec db mysql -uxf -popencredits xf_dev -e \
+  "INSERT INTO xf_permission_entry (user_group_id, user_id, permission_group_id, permission_id, permission_value, permission_value_int) VALUES (2, 0, 'general', 'ocView', 'allow', 0), (2, 0, 'general', 'ocTransfer', 'allow', 0);"
+docker compose exec -T web php /var/www/html/cmd.php xf-rebuild:users
+```
+
+Currency prefix/suffix/decimals live in `xf_oc_currency` (per-currency,
+unlimited currencies supported by schema; AdminCP manager UI is on the roadmap).
+
 ## Project layout
 
 ```

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<code_event_listeners>
+  <listener event_id="criteria_user" execute_order="10" callback_class="OpenCredits\Credits\Listener" callback_method="userCriteria" active="1" description="Trophy/promotion criteria: more than / fewer than X credits"/>
+  <listener event_id="entity_post_save" execute_order="10" callback_class="OpenCredits\Credits\Listener" callback_method="postEntityPostSave" active="1" hint="XF\Entity\Post" description="Awards credits on visible reply (skips first post)"/>
+  <listener event_id="entity_post_save" execute_order="10" callback_class="OpenCredits\Credits\Listener" callback_method="reactionContentEntityPostSave" active="1" hint="XF\Entity\ReactionContent" description="Awards content author when their content is reacted to (counted only)"/>
+  <listener event_id="entity_post_save" execute_order="10" callback_class="OpenCredits\Credits\Listener" callback_method="threadEntityPostSave" active="1" hint="XF\Entity\Thread" description="Awards credits on visible thread create"/>
+  <listener event_id="entity_post_save" execute_order="10" callback_class="OpenCredits\Credits\Listener" callback_method="userEntityPostSave" active="1" hint="XF\Entity\User" description="Awards credits on registration"/>
+  <listener event_id="entity_structure" execute_order="10" callback_class="OpenCredits\Credits\Listener" callback_method="userEntityStructure" active="1" hint="XF\Entity\User" description="Exposes xf_user.oc_credits on the User entity"/>
+  <listener event_id="visitor_setup" execute_order="10" callback_class="OpenCredits\Credits\Listener" callback_method="visitorSetup" active="1" description="Awards daily_login once per calendar day"/>
+</code_event_listeners>

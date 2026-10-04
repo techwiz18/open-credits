@@ -1,5 +1,7 @@
 # XenForo runtime (licensed, dev-only) — never commit
 src/
+# Build artifacts (rebuilt via xf-addon:build-release)
+addon-src/OpenCredits/Credits/_releases/
 # Docker data
 db_data/
 # Env

@@ -13,7 +13,7 @@ class Credits extends AbstractController
     public function actionIndex(ParameterBag $params): AbstractReply
     {
         $visitor = \XF::visitor();
-        if (!$visitor->user_id) {
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
             return $this->noPermission();
         }
 
@@ -49,7 +49,7 @@ class Credits extends AbstractController
     public function actionTransfer(ParameterBag $params): AbstractReply
     {
         $visitor = \XF::visitor();
-        if (!$visitor->user_id) {
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocTransfer')) {
             return $this->noPermission();
         }
 
@@ -73,7 +73,7 @@ class Credits extends AbstractController
         $this->assertPostOnly();
 
         $visitor = \XF::visitor();
-        if (!$visitor->user_id) {
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocTransfer')) {
             return $this->noPermission();
         }
 

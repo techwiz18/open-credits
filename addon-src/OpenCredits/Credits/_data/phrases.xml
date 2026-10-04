@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<phrases>
+  <phrase title="oc_credits" version_id="300" version_string="0.3.0"><![CDATA[Credits]]></phrase>
+  <phrase title="oc_credits_history" version_id="300" version_string="0.3.0"><![CDATA[Credit history]]></phrase>
+  <phrase title="oc_transfer" version_id="300" version_string="0.3.0"><![CDATA[Transfer]]></phrase>
+  <phrase title="oc_transfer_to" version_id="300" version_string="0.3.0"><![CDATA[Transfer credits]]></phrase>
+  <phrase title="permission.general_ocTransfer" version_id="600" version_string="0.6.0"><![CDATA[Transfer credits to other users]]></phrase>
+  <phrase title="permission.general_ocView" version_id="600" version_string="0.6.0"><![CDATA[View own credit wallet and history]]></phrase>
+</phrases>

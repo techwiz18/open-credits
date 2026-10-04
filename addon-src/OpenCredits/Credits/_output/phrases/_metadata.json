@@ -22,5 +22,17 @@
         "version_id": 300,
         "version_string": "0.3.0",
         "hash": "643e7eb45d35ba3662fbf6daed9daa97"
+    },
+    "permission.general_ocTransfer.txt": {
+        "global_cache": false,
+        "version_id": 600,
+        "version_string": "0.6.0",
+        "hash": "6df36a36dfefd8fdf7fcb8beacb5e603"
+    },
+    "permission.general_ocView.txt": {
+        "global_cache": false,
+        "version_id": 600,
+        "version_string": "0.6.0",
+        "hash": "4d992e34775090d58fc70702070c38a8"
     }
 }

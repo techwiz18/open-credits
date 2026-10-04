@@ -1,0 +1,37 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: PHP syntax check
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            php -l "$f" || fail=1
+          done < <(find addon-src -name '*.php')
+          exit $fail
+      - name: JSON validation
+        run: |
+          python3 - <<'EOF'
+          import glob, json, sys
+          bad = 0
+          for f in glob.glob('addon-src/**/_output/**/*.json', recursive=True):
+              try:
+                  json.load(open(f))
+              except Exception as e:
+                  print(f'{f}: {e}')
+                  bad = 1
+          sys.exit(bad)
+          EOF
+      - name: addon.json sanity
+        run: |
+          python3 -c "import json; d=json.load(open('addon-src/OpenCredits/Credits/addon.json')); assert d['version_id'] and d['version_string'], 'version missing'; print(d['version_string'], d['version_id'])"
