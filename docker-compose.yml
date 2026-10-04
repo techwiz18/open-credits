@@ -5,7 +5,8 @@ services:
       - "8080:80"
     volumes:
       - ./src:/var/www/html
-      - ./addon-src/OpenCredits:/var/www/html/src/addons/OpenCredits
+      # Dev bind-mount disabled for fresh-install testing (re-enable afterwards):
+      # - ./addon-src/OpenCredits:/var/www/html/src/addons/OpenCredits
     depends_on:
       db:
         condition: service_healthy

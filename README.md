@@ -24,17 +24,29 @@ let members transfer credits, gate trophies on wealth.
 ## Install on your forum
 
 Use the release zip from the [releases page](../../releases).
-Install it like any XenForo add-on — upload the files, then finish in AdminCP:
+Two ways to install, pick one:
 
-1. Download `OpenCredits-Credits-x.y.z.zip` and unzip it on your computer.
-   Inside you'll find an `upload/` folder.
-2. Upload the **contents** of `upload/` into your forum root (the folder with
-   `index.php`, `src/`, `data/`) via FTP/cPanel File Manager, merging folders.
-3. In AdminCP → Add-ons, find **OpenCredits** and click **Install**.
-4. Grant permissions: AdminCP → Users → Groups & permissions →
+**A — from AdminCP (fastest).** Add one line to your forum's `src/config.php`:
+
+```php
+$config['enableAddOnArchiveInstaller'] = true;
+```
+
+Then AdminCP → Add-ons → **Install from archive**, upload the release zip,
+and click **Install**.
+
+**B — manual upload.** Download the release zip and unzip it on your computer.
+Inside you'll find an `upload/` folder. Upload the **contents** of `upload/`
+into your forum root (the folder with `index.php`, `src/`, `data/`) via
+FTP/cPanel File Manager, merging folders. Then AdminCP → Add-ons, find
+**OpenCredits** and click **Install**.
+
+Then, either way:
+
+1. Grant permissions: AdminCP → Users → Groups & permissions →
    **Registered** → General → allow **View own credit wallet and history**
    and **Transfer credits to other users**. Repeat for any other groups.
-5. Members start earning on the next post/reaction/visit. Balances appear in
+2. Members start earning on the next post/reaction/visit. Balances appear in
    postbit automatically.
 
 To upgrade later: upload the newer release the same way, then AdminCP →
