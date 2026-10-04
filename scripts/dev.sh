@@ -36,14 +36,19 @@ PHP
     echo "debug enabled in $CFG"
     ;;
   link-addon)
-    # addon-src is bind-mounted ro into the web container (see docker-compose.yml).
+    # addon-src is bind-mounted into the web container (see docker-compose.yml).
     docker compose exec web ls -la /var/www/html/src/addons/OpenCredits/Credits/
     docker compose exec web php /var/www/html/cmd.php xf-addon:rebuild OpenCredits/Credits || true
+    ;;
+  fix-perms)
+    # CLI generators run as root in the container; Apache needs www-data-writable
+    # _output so dev-mode template/phrase sync doesn't throw permission errors.
+    docker compose exec web bash -c "chmod -R 0777 /var/www/html/src/addons/OpenCredits/Credits/_output"
     ;;
   logs)
     docker compose logs -f "${2:-web}"
     ;;
   *)
-    echo "usage: dev.sh {up|down|unpack|enable-debug|link-addon|logs}"
+    echo "usage: dev.sh {up|down|unpack|enable-debug|link-addon|fix-perms|logs}"
     ;;
 esac

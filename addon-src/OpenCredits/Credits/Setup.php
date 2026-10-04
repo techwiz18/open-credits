@@ -34,7 +34,7 @@ class Setup extends AbstractSetup
             $table->addColumn('event_id', 'int')->autoIncrement();
             $table->addColumn('currency_id', 'int')->setDefault(1);
             $table->addColumn('trigger', 'varchar', 50);
-            $table->addColumn('amount', 'decimal', '10,2')->setDefault('0.00');
+            $table->addColumn('amount', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
             $table->addColumn('forum_ids', 'blob')->nullable();
             $table->addColumn('usergroup_ids', 'blob')->nullable();
             $table->addColumn('max_per_day', 'int')->setDefault(0);
@@ -49,7 +49,7 @@ class Setup extends AbstractSetup
             $table->addColumn('transaction_id', 'int')->autoIncrement();
             $table->addColumn('user_id', 'int');
             $table->addColumn('currency_id', 'int')->setDefault(1);
-            $table->addColumn('amount', 'decimal', '10,2');
+            $table->addColumn('amount', 'decimal', '10,2')->unsigned(false);
             $table->addColumn('trigger', 'varchar', 50);
             $table->addColumn('content_id', 'int')->setDefault(0);
             $table->addColumn('note', 'varchar', 255)->setDefault('');
@@ -102,6 +102,17 @@ class Setup extends AbstractSetup
     public function upgrade200Step1()
     {
         $this->seedDefaultEvents();
+    }
+
+    public function upgrade600Step1()
+    {
+        // Debit rows (transfers, charges) need signed amounts
+        $this->schemaManager()->alterTable('xf_oc_event', function (Alter $table) {
+            $table->changeColumn('amount', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
+        });
+        $this->schemaManager()->alterTable('xf_oc_transaction', function (Alter $table) {
+            $table->changeColumn('amount', 'decimal', '10,2')->unsigned(false);
+        });
     }
 
     protected function seedDefaultEvents(): void

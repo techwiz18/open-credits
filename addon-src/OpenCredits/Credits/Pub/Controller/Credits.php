@@ -87,7 +87,7 @@ class Credits extends AbstractController
             return $this->error('Amount must be greater than zero.');
         }
 
-        $target = $this->em()->findOne('XF:User', ['username' => $to]);
+        $target = $this->finder('XF:User')->where('username', $to)->fetchOne();
         if (!$target) {
             return $this->error('User not found. Check the spelling and try again.');
         }
