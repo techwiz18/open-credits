@@ -61,11 +61,25 @@ class Currency extends AbstractController
             'decimals' => 'uint',
             'allow_negative' => 'bool',
             'active' => 'bool',
+            'is_primary' => 'bool',
+            'visible' => 'bool',
         ]);
-        // Unchecked checkboxes are absent from POST; filter defaults handle that.
 
         $form = $this->formAction();
         $form->basicEntitySave($currency, $input);
+        $form->apply(function () use ($currency, $input) {
+            if ($input['is_primary']) {
+                // Exactly one primary: clear the flag everywhere else and
+                // resync the legacy balance column to the new primary.
+                $this->db()->query(
+                    'UPDATE xf_oc_currency SET is_primary = 0 WHERE currency_id != ?',
+                    $currency->currency_id
+                );
+                /** @var \OpenCredits\Credits\Service\Transact $svc */
+                $svc = $this->service('OpenCredits\Credits:Transact');
+                $svc->rebuildAllBalances();
+            }
+        });
         $form->run();
 
         return $this->redirect($this->buildLink('oc-currencies'));

@@ -6,12 +6,21 @@
             <div class="block-row block-row--separated">
                 <div class="pairs pairs--columns pairs--fluid">
                     <dl class="pairs pairs--justified">
-                        <dt>{{ phrase('oc_credits') }}</dt>
-                        <dd>{$currency.prefix}{$balance|number(2)}{$currency.suffix}</dd>
+                        <dt>{$currency.title}</dt>
+                        <dd>{$currency.prefix}{$balance|number($currency.decimals)}{$currency.suffix}</dd>
                     </dl>
                 </div>
                 <a href="{{ link('credits/transfer') }}" class="button">{{ phrase('oc_transfer_to') }}</a>
             </div>
+            <xf:if is="$currencies|count > 1">
+                <div class="block-row block-row--separated">
+                    <xf:foreach loop="$currencies" value="$c">
+                        <xf:if is="$c.currency_id != $currency.currency_id">
+                            <a href="{{ link('credits', '', {'currency_id': $c.currency_id}) }}" class="button button--small">{$c.title}</a>
+                        </xf:if>
+                    </xf:foreach>
+                </div>
+            </xf:if>
         </div>
     </div>
 </div>

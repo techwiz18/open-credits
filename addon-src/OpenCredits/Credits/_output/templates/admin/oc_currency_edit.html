@@ -19,6 +19,10 @@
 					label="Allow negative balances" />
 				<xf:option name="active" selected="$currency.active"
 					label="Active" hint="Inactive currencies earn nothing." />
+				<xf:option name="visible" selected="$currency.visible"
+					label="Visible" hint="Shown in postbit, menus and profile lists." />
+				<xf:option name="is_primary" selected="$currency.is_primary"
+					label="Primary currency" hint="Shown on the profile page. Exactly one currency is primary." />
 			</xf:checkboxrow>
 		</div>
 		<xf:submitrow submit="Save" />

@@ -43,6 +43,9 @@ class Listener
     public static function userEntityStructure(EntityManager $em, Structure &$structure)
     {
         $structure->columns['oc_credits'] = ['type' => Entity::FLOAT, 'default' => 0.0];
+        $structure->getters['oc_balances'] = true;
+        $structure->getters['oc_all_balances'] = true;
+        $structure->getters['oc_primary'] = true;
     }
 
     public static function reactionContentEntityPostSave(Entity $entity)

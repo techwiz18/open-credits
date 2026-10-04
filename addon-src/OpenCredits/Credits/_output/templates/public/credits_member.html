@@ -1,0 +1,20 @@
+<div class="block">
+	<div class="block-container">
+		<h3 class="block-header">{$user.username}</h3>
+		<div class="block-body">
+			<xf:foreach loop="$user.oc_all_balances" value="$ocBalance">
+				<div class="block-row">
+					<div class="pairs pairs--justified">
+						<dt>{$ocBalance.title}</dt>
+						<dd>{$ocBalance.prefix}{$ocBalance.balance|number($ocBalance.decimals)}{$ocBalance.suffix}</dd>
+					</div>
+				</div>
+			</xf:foreach>
+		</div>
+		<xf:if is="$isSelf">
+			<div class="block-footer">
+				<a href="{{ link('credits') }}">View full history</a>
+			</div>
+		</xf:if>
+	</div>
+</div>

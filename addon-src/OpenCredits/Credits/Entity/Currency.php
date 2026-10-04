@@ -20,6 +20,8 @@ class Currency extends Entity
             'decimals' => ['type' => self::UINT, 'default' => 2],
             'allow_negative' => ['type' => self::BOOL, 'default' => true],
             'active' => ['type' => self::BOOL, 'default' => true],
+            'is_primary' => ['type' => self::BOOL, 'default' => false],
+            'visible' => ['type' => self::BOOL, 'default' => true],
         ];
         $structure->getters = [];
         $structure->relations = [];

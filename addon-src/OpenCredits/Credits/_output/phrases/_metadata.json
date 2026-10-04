@@ -58,5 +58,11 @@
         "version_id": 600,
         "version_string": "0.6.0",
         "hash": "4d992e34775090d58fc70702070c38a8"
+    },
+    "permission_interface.ocCredits.txt": {
+        "global_cache": false,
+        "version_id": 800,
+        "version_string": "0.8.0",
+        "hash": "948a2e3548aaf7f9941a3192fa607d51"
     }
 }

@@ -17,14 +17,22 @@ class Credits extends AbstractController
             return $this->noPermission();
         }
 
-        $currency = $this->finder('OpenCredits\Credits:Currency')->fetchOne();
-        $balance = (float)$visitor->oc_credits;
+        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
+
+        $balance = 0.0;
+        foreach ($visitor->oc_all_balances as $row) {
+            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
+                $balance = (float)$row['balance'];
+                break;
+            }
+        }
 
         $page = $this->filter('page', 'uint');
         $perPage = 20;
 
         $finder = $this->finder('OpenCredits\Credits:Transaction')
             ->where('user_id', $visitor->user_id)
+            ->where('currency_id', $currency->currency_id)
             ->order('log_date', 'DESC');
 
         $total = $finder->total();
@@ -32,6 +40,10 @@ class Credits extends AbstractController
 
         $viewParams = [
             'currency' => $currency,
+            'currencies' => $this->finder('OpenCredits\Credits:Currency')
+                ->where('active', 1)
+                ->order('currency_id')
+                ->fetch(),
             'balance' => $balance,
             'transactions' => $transactions,
             'page' => $page,
@@ -44,6 +56,40 @@ class Credits extends AbstractController
             'credits_index',
             $viewParams
         );
+    }
+
+    public function actionMember(ParameterBag $params): AbstractReply
+    {
+        $user = $this->em()->find('XF:User', $this->filter('user_id', 'uint'));
+        if (!$user || !$user->canViewBasicProfile($error)) {
+            throw $this->exception($this->notFound($error));
+        }
+
+        return $this->view(
+            'OpenCredits\Credits:Credits\Member',
+            'credits_member',
+            ['user' => $user, 'isSelf' => $user->user_id == \XF::visitor()->user_id]
+        );
+    }
+
+    protected function assertViewableCurrency(int $currencyId): \XF\Mvc\Entity\Entity
+    {
+        $finder = $this->finder('OpenCredits\Credits:Currency')->where('active', 1);
+        if ($currencyId) {
+            $currency = (clone $finder)->where('currency_id', $currencyId)->fetchOne();
+            if ($currency) {
+                return $currency;
+            }
+        }
+        $primary = (clone $finder)->where('is_primary', 1)->fetchOne();
+        if ($primary) {
+            return $primary;
+        }
+        $fallback = $finder->order('currency_id')->fetchOne();
+        if (!$fallback) {
+            throw $this->exception($this->notFound('No active currencies.'));
+        }
+        return $fallback;
     }
 
     public function actionTransfer(ParameterBag $params): AbstractReply

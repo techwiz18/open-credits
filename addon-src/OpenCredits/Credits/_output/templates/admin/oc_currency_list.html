@@ -15,6 +15,8 @@
 						<th>Display</th>
 						<th>Decimals</th>
 						<th>Negative</th>
+						<th>Primary</th>
+						<th>Visible</th>
 						<th>Active</th>
 						<td></td>
 					</tr>
@@ -26,6 +28,8 @@
 							<td>{$currency.prefix}1.00{$currency.suffix}</td>
 							<td>{$currency.decimals}</td>
 							<td><xf:if is="$currency.allow_negative">Yes<xf:else />No</xf:if></td>
+							<td><xf:if is="$currency.is_primary">Yes<xf:else />No</xf:if></td>
+							<td><xf:if is="$currency.visible">Yes<xf:else />No</xf:if></td>
 							<td><xf:if is="$currency.active">Yes<xf:else />No</xf:if></td>
 							<td class="dataTable-cell--actions">
 								<a href="{{ link('oc-currencies/delete', $currency) }}" class="button button--small">Delete</a>

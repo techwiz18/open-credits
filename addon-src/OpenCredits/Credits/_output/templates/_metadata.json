@@ -1,13 +1,13 @@
 {
     "admin/oc_currency_edit.html": {
-        "version_id": 700,
-        "version_string": "0.7.0",
-        "hash": "5c0180390ef21da36d57a6fead087b5e"
+        "version_id": 800,
+        "version_string": "0.8.0",
+        "hash": "5a978758ace9a2f597d5557dfba9291e"
     },
     "admin/oc_currency_list.html": {
-        "version_id": 700,
-        "version_string": "0.7.0",
-        "hash": "dcccc1c140e36ddd452f33b968841e0b"
+        "version_id": 800,
+        "version_string": "0.8.0",
+        "hash": "2ca5d762e8eaea4be4768d024df149a8"
     },
     "admin/oc_event_edit.html": {
         "version_id": 700,
@@ -20,9 +20,14 @@
         "hash": "290b564b263af6c2a302f48d92a776f5"
     },
     "public/credits_index.html": {
-        "version_id": 300,
-        "version_string": "0.3.0",
-        "hash": "45d9c3d195487b118fc260ec6c29f151"
+        "version_id": 800,
+        "version_string": "0.8.0",
+        "hash": "6232e927534c2e7e5f6a19da418a2071"
+    },
+    "public/credits_member.html": {
+        "version_id": 800,
+        "version_string": "0.8.0",
+        "hash": "c0c8b23aee5d4a64993b9740c408f46d"
     },
     "public/credits_transfer.html": {
         "version_id": 600,
