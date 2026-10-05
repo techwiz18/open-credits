@@ -55,6 +55,22 @@ class Transact extends AbstractService
         return $applied;
     }
 
+    /**
+     * Current cached balance for a user/currency. Missing row means 0.
+     * Integrators: check this before charging (adjust() itself is
+     * unrestricted by design — privileged code only).
+     */
+    public function getBalance(int $userId, int $currencyId): float
+    {
+        if ($userId <= 0) {
+            return 0.0;
+        }
+        return (float)$this->db()->fetchOne(
+            'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ?',
+            [$userId, $currencyId]
+        );
+    }
+
     public function adjust(int $userId, int $currencyId, float $amount, string $trigger, int $contentId = 0, string $note = '', string $contentType = ''): bool
     {
         if ($userId <= 0 || $amount == 0.0) {
@@ -78,6 +94,7 @@ class Transact extends AbstractService
             ]);
             $db->commit();
             $this->clearBalanceCache($userId);
+            $this->app->fire('oc_credits_adjust', [$userId, $currencyId, $amount, $trigger, $contentId]);
             return true;
         } catch (\Throwable $e) {
             $db->rollBack();
@@ -142,6 +159,8 @@ class Transact extends AbstractService
             $db->commit();
             $this->clearBalanceCache($fromUserId);
             $this->clearBalanceCache($toUserId);
+            $this->app->fire('oc_credits_adjust', [$fromUserId, $currencyId, -$amount, 'transfer', $toUserId]);
+            $this->app->fire('oc_credits_adjust', [$toUserId, $currencyId, $amount, 'transfer', $fromUserId]);
             return true;
         } catch (\Throwable $e) {
             $db->rollBack();

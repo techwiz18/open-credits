@@ -53,6 +53,9 @@ Transfers floor at zero and never overdraw; `adjust()` stays unrestricted for
 admin tooling. Registration day skips the daily bonus (`register_date` check).
 Rebuilds use `Transact::rebuildAllBalances()` (ledger → `xf_oc_balance` rows +
 primary mirror in `xf_user.oc_credits`).
+`Transact::getBalance()` reads the cached row (missing = 0). Every committed
+change fires the `oc_credits_adjust` code event with
+`($userId, $currencyId, $amount, $trigger, $contentId)` for cross-addon hooks.
 
 ## Frontend
 

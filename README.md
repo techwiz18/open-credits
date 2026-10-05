@@ -91,6 +91,25 @@ Credits (Earning events / Currencies).
 * **Uninstalling deletes everything** — balances, ledger, events, and
   currencies are wiped (disabling is not offered; re-install starts from zero).
 
+## Integrating other add-ons
+
+Award or charge credits from your own add-on through the transaction service
+(positive earns, negative charges — always logged):
+
+```php
+/** @var \OpenCredits\Credits\Service\Transact $credits */
+$credits = \XF::app()->service('OpenCredits\Credits:Transact');
+
+// Check first: adjust() itself never overdraw-blocks (privileged code only).
+if ($credits->getBalance($userId, $currencyId) >= $price) {
+    $credits->adjust($userId, $currencyId, -$price, 'my_addon_purchase', $contentId, 'Entry fee');
+}
+```
+
+React to every balance change by listening to the `oc_credits_adjust` code
+event, which fires with `($userId, $currencyId, $amount, $trigger, $contentId)`
+after each committed change (transfers fire once per leg).
+
 ## For developers
 
 * [docs/DEV.md](docs/DEV.md) — Docker dev environment in 5 minutes.
