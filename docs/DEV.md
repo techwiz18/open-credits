@@ -45,6 +45,14 @@ docker compose exec db mysql -uxf -popencredits xf_dev -e \
 docker compose exec -T web php /var/www/html/cmd.php xf-rebuild:users
 ```
 
+## Git workflow (do not push features straight to main)
+
+* `main` is always release-ready and mirrors the public GitHub repo.
+* All new work happens on `dev/*` branches (e.g. `dev/integrator-hooks`),
+  pushed to origin for backup as you go.
+* Merge to `main` only after the feature is fully tested on dev;
+  cut releases from `main` afterwards.
+
 ## Release
 
 ```bash
