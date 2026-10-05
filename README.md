@@ -29,14 +29,9 @@ let members transfer credits, gate trophies on wealth.
 Use the release zip from the [releases page](../../releases).
 Two ways to install, pick one:
 
-**A — from AdminCP (fastest).** Add one line to your forum's `src/config.php`:
-
-```php
-$config['enableAddOnArchiveInstaller'] = true;
-```
-
-Then AdminCP → Add-ons → **Install from archive**, upload the release zip,
-and click **Install**.
+**A — from AdminCP (fastest).** AdminCP → Add-ons → **Install from archive**,
+upload the release zip, and click **Install**. If that option isn't available
+on your setup, use manual upload below.
 
 **B — manual upload.** Download the release zip and unzip it on your computer.
 Inside you'll find an `upload/` folder. Upload the **contents** of `upload/`
