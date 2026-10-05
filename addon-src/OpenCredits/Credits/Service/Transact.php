@@ -12,6 +12,40 @@ use XF\Service\AbstractService;
 class Transact extends AbstractService
 {
     protected static $primaryCurrencyId = null;
+    protected static $balanceCache = [];
+
+    /**
+     * Balances for a user across currencies, cached per request.
+     * Each row: currency_id, title, prefix, suffix, decimals, is_primary, balance.
+     */
+    public function balancesFor(int $userId, bool $visibleOnly): array
+    {
+        if ($userId <= 0) {
+            return [];
+        }
+        $key = $userId . ':' . ($visibleOnly ? 'v' : 'a');
+        if (!isset(self::$balanceCache[$key])) {
+            self::$balanceCache[$key] = $this->db()->fetchAll(
+                'SELECT c.currency_id, c.title, c.prefix, c.suffix, c.decimals, c.is_primary,'
+                . ' COALESCE(b.balance, 0) AS balance'
+                . ' FROM xf_oc_currency AS c'
+                . ' LEFT JOIN xf_oc_balance AS b ON b.currency_id = c.currency_id AND b.user_id = ?'
+                . ' WHERE c.active = 1' . ($visibleOnly ? ' AND c.visible = 1' : '')
+                . ' ORDER BY c.currency_id',
+                $userId
+            );
+        }
+        return self::$balanceCache[$key];
+    }
+
+    public static function clearBalanceCache(?int $userId = null): void
+    {
+        if ($userId === null) {
+            self::$balanceCache = [];
+        } else {
+            unset(self::$balanceCache[$userId . ':v'], self::$balanceCache[$userId . ':a']);
+        }
+    }
 
     public function primaryCurrencyId(): int
     {
@@ -93,7 +127,7 @@ class Transact extends AbstractService
                 'log_date' => \XF::$time,
             ]);
             $db->commit();
-            $this->clearBalanceCache($userId);
+            self::clearBalanceCache($userId);
             $this->app->fire('oc_credits_adjust', [$userId, $currencyId, $amount, $trigger, $contentId]);
             return true;
         } catch (\Throwable $e) {
@@ -157,22 +191,14 @@ class Transact extends AbstractService
                 'content_id' => $fromUserId, 'note' => '', 'log_date' => $now,
             ]);
             $db->commit();
-            $this->clearBalanceCache($fromUserId);
-            $this->clearBalanceCache($toUserId);
+            self::clearBalanceCache($fromUserId);
+            self::clearBalanceCache($toUserId);
             $this->app->fire('oc_credits_adjust', [$fromUserId, $currencyId, -$amount, 'transfer', $toUserId]);
             $this->app->fire('oc_credits_adjust', [$toUserId, $currencyId, $amount, 'transfer', $fromUserId]);
             return true;
         } catch (\Throwable $e) {
             $db->rollBack();
             throw $e;
-        }
-    }
-
-    protected function clearBalanceCache(int $userId): void
-    {
-        $class = 'OpenCredits\Credits\XF\Entity\User';
-        if (class_exists($class)) {
-            $class::clearOcBalanceCache($userId);
         }
     }
 
@@ -228,10 +254,7 @@ class Transact extends AbstractService
             . ' SET u.oc_credits = COALESCE(b.balance, 0)',
             $primaryId
         );
-        $class = 'OpenCredits\Credits\XF\Entity\User';
-        if (class_exists($class)) {
-            $class::clearOcBalanceCache();
-        }
+        self::clearBalanceCache();
         return $rows;
     }
 }
