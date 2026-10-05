@@ -105,6 +105,9 @@ React to every balance change by listening to the `oc_credits_adjust` code
 event, which fires with `($userId, $currencyId, $amount, $trigger, $contentId)`
 after each committed change (transfers fire once per leg).
 
+Full reference (method signatures, trust rules, criteria, worked examples):
+[docs/API.md](docs/API.md).
+
 ## For developers
 
 * [docs/DEV.md](docs/DEV.md) — Docker dev environment in 5 minutes.
