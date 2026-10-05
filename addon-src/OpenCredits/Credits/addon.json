@@ -2,12 +2,12 @@
     "legacy_addon_id": "OpenCredits_Credits",
     "title": "OpenCredits",
     "description": "",
-    "version_id": 912,
-    "version_string": "0.9.12",
-    "dev": "OpenCredits",
-    "dev_url": "",
+    "version_id": 913,
+    "version_string": "0.9.13",
+    "dev": "techwiz18",
+    "dev_url": "https://github.com/techwiz18/open-credits",
     "faq_url": "",
-    "support_url": "https://github.com/OpenCredits/xenforo-open-credits",
+    "support_url": "https://github.com/techwiz18/open-credits/issues",
     "extra_urls": [],
     "require": {
         "XF": [
