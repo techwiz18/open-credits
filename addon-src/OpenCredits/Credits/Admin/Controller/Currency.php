@@ -14,6 +14,7 @@ class Currency extends AbstractController
     protected function preDispatchController($action, ParameterBag $params)
     {
         $this->assertAdminPermission('ocCredits');
+        $this->setSectionContext('ocCurrencies');
     }
 
     public function actionIndex(): \XF\Mvc\Reply\AbstractReply

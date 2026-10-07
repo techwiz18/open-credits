@@ -11,6 +11,7 @@
 			</div>
 			<div class="block-footer">
 				<a href="{{ link('oc-currencies') }}" class="button">Back to currencies</a>
+				<a href="{{ link('oc-tools/backfill') }}" class="button">Backfill historical content</a>
 			</div>
 		<xf:else />
 			<xf:form action="{{ link('oc-tools/rebuild') }}" class="block" ajax="true">

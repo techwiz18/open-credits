@@ -1,0 +1,1 @@
+Member posts show visible currency balances.

@@ -1,0 +1,41 @@
+<xf:title>Backfill historical content</xf:title>
+
+<div class="block">
+	<div class="block-container">
+		<xf:if is="$ran">
+			<div class="block-body">
+				<div class="block-row block-row--separated">
+					Awarded {$awarded|number} historical transaction rows. Balances have been rebuilt from the full ledger.
+				</div>
+			</div>
+			<div class="block-footer">
+				<a href="{{ link('oc-events') }}" class="button">Back to events</a>
+			</div>
+		<xf:elseif is="$alreadyRan" />
+			<div class="block-body">
+				<div class="block-row block-row--separated">
+					Historical backfill has already run. It is a one-time operation — run Rebuild balances instead if figures look wrong.
+				</div>
+			</div>
+			<div class="block-footer">
+				<a href="{{ link('oc-tools') }}" class="button">Back to tools</a>
+			</div>
+		<xf:else />
+			<xf:form action="{{ link('oc-tools/backfill-save') }}" class="block" ajax="true">
+				<div class="block-body">
+					<div class="block-row block-row--separated">
+						Awards credits for content created <strong>before</strong> OpenCredits was installed,
+						using each active post/thread event's current amount. One lump-sum row per member per event.
+						This can only run once.
+					</div>
+					<xf:foreach loop="$preview" value="$row">
+						<div class="block-row">
+							{$row.trigger} ({$row.amount|number(2)}) — {$row.users|number} members with content
+						</div>
+					</xf:foreach>
+				</div>
+				<xf:submitrow submit="Run backfill" />
+			</xf:form>
+		</xf:if>
+	</div>
+</div>

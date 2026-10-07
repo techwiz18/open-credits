@@ -22,6 +22,7 @@ class CreditEvent extends AbstractController
     protected function preDispatchController($action, ParameterBag $params)
     {
         $this->assertAdminPermission('ocCredits');
+        $this->setSectionContext('ocEvents');
     }
 
     public function actionIndex(): \XF\Mvc\Reply\AbstractReply
