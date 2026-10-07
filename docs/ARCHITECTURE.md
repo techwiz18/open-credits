@@ -57,6 +57,17 @@ primary mirror in `xf_user.oc_credits`).
 change fires the `oc_credits_adjust` code event with
 `($userId, $currencyId, $amount, $trigger, $contentId)` for cross-addon hooks.
 
+## Enforced rules and known limits
+
+* `ocView` gates history, member pane, profile displays, and postbit; `visible`
+  currencies only. Revoking hides the addon completely.
+* Transfers always floor at zero; `adjust()` enforces each currency's
+  `allow_negative` and refuses unknown currencies.
+* Awards skip inactive currencies; registration skips banned/rejected/disabled.
+* No clawback on content delete (by design); backfill counts live content too;
+  `max_per_day` is best-effort under concurrency; no per-day guard races the
+  daily award thanks to the user-row lock.
+
 ## Frontend
 
 * Route prefix `credits` → `Pub\Controller\Credits`: `actionIndex` (history, paged 20),

@@ -70,7 +70,9 @@ class Transact extends AbstractService
     {
         $db = $this->db();
         $rows = $db->fetchAll(
-            'SELECT * FROM xf_oc_event WHERE `trigger` = ? AND active = 1 ORDER BY event_id',
+            'SELECT e.* FROM xf_oc_event AS e'
+            . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id AND c.active = 1'
+            . ' WHERE e.`trigger` = ? AND e.active = 1 ORDER BY e.event_id',
             $trigger
         );
         if (!$rows) {
@@ -115,6 +117,10 @@ class Transact extends AbstractService
         $db->beginTransaction();
         try {
             $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
+            if (!$this->allowsResultingBalance($userId, $currencyId, $amount)) {
+                $db->rollBack();
+                return false;
+            }
             $this->applyBalanceDelta($userId, $currencyId, $amount);
             $db->insert('xf_oc_transaction', [
                 'user_id' => $userId,
@@ -134,6 +140,31 @@ class Transact extends AbstractService
             $db->rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Whether applying $delta keeps the balance legal for the currency.
+     * Currencies with allow_negative off floor at zero. Must run inside a
+     * transaction holding the user's locks.
+     */
+    protected function allowsResultingBalance(int $userId, int $currencyId, float $delta): bool
+    {
+        $db = $this->db();
+        $currency = $db->fetchRow(
+            'SELECT allow_negative FROM xf_oc_currency WHERE currency_id = ?',
+            $currencyId
+        );
+        if (!$currency) {
+            return false;
+        }
+        if ((int)$currency['allow_negative']) {
+            return true;
+        }
+        $balance = (float)$db->fetchOne(
+            'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
+            [$userId, $currencyId]
+        );
+        return ($balance + $delta) >= 0;
     }
 
     /**
@@ -218,21 +249,33 @@ class Transact extends AbstractService
     /**
      * Daily login: exactly once per calendar day, regardless of event config.
      * Called from the visitor_setup listener (every request for logged-in users).
+     * The user-row lock serializes concurrent first-requests of the day.
      */
     public function awardDailyLoginIfNeeded(int $userId): bool
     {
         if ($userId <= 0) {
             return false;
         }
-        $start = strtotime('today midnight');
-        $already = (int)$this->db()->fetchOne(
-            'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
-            [$userId, 'daily_login', $start]
-        );
-        if ($already > 0) {
-            return false;
+        $db = $this->db();
+        $db->beginTransaction();
+        try {
+            $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
+            $start = strtotime('today midnight');
+            $already = (int)$db->fetchOne(
+                'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
+                [$userId, 'daily_login', $start]
+            );
+            if ($already > 0) {
+                $db->commit();
+                return false;
+            }
+            $awarded = $this->awardByTrigger('daily_login', $userId, $userId);
+            $db->commit();
+            return $awarded;
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
         }
-        return $this->awardByTrigger('daily_login', $userId, $userId);
     }
 
     /**
@@ -242,18 +285,25 @@ class Transact extends AbstractService
     public function rebuildAllBalances(): int
     {
         $db = $this->db();
-        $db->query('DELETE FROM xf_oc_balance');
-        $stmt = $db->query(
-            'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
-            . ' SELECT user_id, currency_id, SUM(amount) FROM xf_oc_transaction GROUP BY user_id, currency_id'
-        );
-        $rows = (int)$stmt->rowsAffected();
-        $primaryId = $this->primaryCurrencyId();
-        $db->query(
-            'UPDATE xf_user u LEFT JOIN xf_oc_balance b ON b.user_id = u.user_id AND b.currency_id = ?'
-            . ' SET u.oc_credits = COALESCE(b.balance, 0)',
-            $primaryId
-        );
+        $db->beginTransaction();
+        try {
+            $db->query('DELETE FROM xf_oc_balance');
+            $stmt = $db->query(
+                'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
+                . ' SELECT user_id, currency_id, SUM(amount) FROM xf_oc_transaction GROUP BY user_id, currency_id'
+            );
+            $rows = (int)$stmt->rowsAffected();
+            $primaryId = $this->primaryCurrencyId();
+            $db->query(
+                'UPDATE xf_user u LEFT JOIN xf_oc_balance b ON b.user_id = u.user_id AND b.currency_id = ?'
+                . ' SET u.oc_credits = COALESCE(b.balance, 0)',
+                $primaryId
+            );
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
         self::clearBalanceCache();
         return $rows;
     }

@@ -109,7 +109,7 @@ class Tools extends AbstractController
         $awarded = 0;
         $skipped = [];
         foreach ($events as $event) {
-            if (!$force && $this->backfillEventRan($event)) {
+            if (!$force && $this->backfillEventRan($event, $onlyUserId)) {
                 $skipped[] = (int)$event->event_id;
                 continue;
             }
@@ -132,12 +132,20 @@ class Tools extends AbstractController
         );
     }
 
-    protected function backfillEventRan($event): bool
+    protected function backfillEventRan($event, int $onlyUserId = 0): bool
     {
-        return (bool)$this->app->db()->fetchOne(
-            'SELECT transaction_id FROM xf_oc_transaction WHERE note = ? AND `trigger` = ? AND currency_id = ? LIMIT 1',
-            ['Historical backfill', $event->trigger, $event->currency_id]
-        );
+        $sql = 'SELECT transaction_id FROM xf_oc_transaction WHERE note = ? AND `trigger` = ? AND currency_id = ?';
+        $params = ['Historical backfill', $event->trigger, $event->currency_id];
+        if ($onlyUserId > 0) {
+            // Per-member runs are tracked per member, so one member's backfill
+            // never blocks the site-wide run (or vice versa).
+            $sql .= ' AND (user_id = ? OR content_id = ?)';
+            $params[] = $onlyUserId;
+            $params[] = $onlyUserId;
+        } else {
+            $sql .= ' AND content_id = 0';
+        }
+        return (bool)$this->app->db()->fetchOne($sql . ' LIMIT 1', $params);
     }
 
     protected function backfillPreview(): array
@@ -188,10 +196,12 @@ class Tools extends AbstractController
         } else {
             $sql = "SELECT user_id, COUNT(*) FROM xf_thread WHERE discussion_state = 'visible' AND user_id > 0";
         }
+        $params = [];
         if ($onlyUserId > 0) {
-            $sql .= ' AND user_id = ' . $onlyUserId;
+            $sql .= ' AND user_id = ?';
+            $params[] = $onlyUserId;
         }
-        $counts = $db->fetchPairs($sql . ' GROUP BY user_id');
+        $counts = $db->fetchPairs($sql . ' GROUP BY user_id', $params);
 
         foreach ($counts as $userId => $count) {
             $db->insert('xf_oc_transaction', [
@@ -200,7 +210,7 @@ class Tools extends AbstractController
                 'amount' => round($count * $perItem, 2),
                 'trigger' => $event->trigger,
                 'content_type' => $event->trigger,
-                'content_id' => 0,
+                'content_id' => $onlyUserId > 0 ? $onlyUserId : 0,
                 'note' => 'Historical backfill',
                 'log_date' => $now,
             ]);

@@ -10,7 +10,9 @@
                         <dd>{$currency.prefix}{$balance|number($currency.decimals)}{$currency.suffix}</dd>
                     </dl>
                 </div>
+                <xf:if is="$xf.visitor.hasPermission('general', 'ocTransfer')">
                 <a href="{{ link('credits/transfer', '', {'currency_id': $currency.currency_id}) }}" class="button">{{ phrase('oc_transfer_to') }}</a>
+                </xf:if>
             </div>
             <xf:if is="$currencies|count > 1">
                 <div class="block-row block-row--separated">

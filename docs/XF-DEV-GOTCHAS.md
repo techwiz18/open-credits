@@ -87,3 +87,12 @@ php cmd.php xf-rebuild:users   # rebuildPermissionCombination() per user
 * Account dropdown stats: `account_visitor_menu`, `<!--[XF:stats_pairs:...]-->` comments.
 * Trophy/promotion criteria form: `helper_criteria`, `<!--[XF:user:content_after_trophies]-->`.
 * Username autocomplete endpoint: `members/find?q=` + `data-xf-init="auto-complete"` on a textbox.
+* Template-mod `find` strings are exact-whitespace `str_replace`: any core
+  indentation change silently disables the mod. Keep anchors on XF-provided
+  `<!--[XF:...]-->` comments, which are stable by convention.
+* Never insert `_output` rows via raw SQL: upgrade orphan-cleanup deletes them
+  and the data-registry caches go stale. Use `xf-dev:import-*` or a version bump.
+* CLI runs as root in Docker: re-run `./scripts/dev.sh fix-perms` after every
+  generator and upgrade, or Apache hits permission errors writing `_output`.
+* Never reference XFCP extension classes from services: the alias may not exist
+  in CLI context. Keep shared state (caches) in the service itself.

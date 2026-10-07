@@ -5,9 +5,9 @@
         "hash": "3abf05675f411e887d32c86222698a4f"
     },
     "admin/oc_currency_list.html": {
-        "version_id": 917,
-        "version_string": "0.9.17",
-        "hash": "05a0b5064b616e43cee566bad13093a2"
+        "version_id": 920,
+        "version_string": "0.9.20",
+        "hash": "83ef151bd5cd08535f534e7518299950"
     },
     "admin/oc_event_edit.html": {
         "version_id": 907,
@@ -35,14 +35,14 @@
         "hash": "ef4211072e5c820ca58b01d217eb11e8"
     },
     "public/credits_index.html": {
-        "version_id": 906,
-        "version_string": "0.9.6",
-        "hash": "dfc54a87b22d5d8b13ef42f8dac5ea84"
+        "version_id": 920,
+        "version_string": "0.9.20",
+        "hash": "6260574c47b3c7fef968027f60ada72c"
     },
     "public/credits_member.html": {
-        "version_id": 906,
-        "version_string": "0.9.6",
-        "hash": "9ca118f60819d738d1600c21c52987aa"
+        "version_id": 920,
+        "version_string": "0.9.20",
+        "hash": "dc422d598b270b6519ecc3b79bf62629"
     },
     "public/credits_transfer.html": {
         "version_id": 901,

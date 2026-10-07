@@ -35,9 +35,16 @@ class Listener
 
     public static function userEntityPostSave(Entity $entity)
     {
-        if ($entity->isInsert()) {
-            self::applyTrigger('register', (int)$entity->user_id, (int)$entity->user_id, 'user');
+        if (!$entity->isInsert()) {
+            return;
         }
+        // Award only real accounts: never seed banned/rejected/disabled users.
+        // Unapproved states (moderated, email_confirm) still earn so the bonus
+        // is waiting when the account activates.
+        if (in_array($entity->get('user_state'), ['banned', 'rejected', 'disabled'], true)) {
+            return;
+        }
+        self::applyTrigger('register', (int)$entity->user_id, (int)$entity->user_id, 'user');
     }
 
     public static function userEntityStructure(EntityManager $em, Structure &$structure)

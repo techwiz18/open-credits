@@ -24,11 +24,11 @@ class User extends XFCP_User
     }
 
     /**
-     * @return array|null Primary currency row with balance, or null.
+     * @return array|null Visible primary currency row with balance, or null.
      */
     public function getOcPrimary(): ?array
     {
-        foreach ($this->ocTransact()->balancesFor((int)$this->user_id, false) as $row) {
+        foreach ($this->ocTransact()->balancesFor((int)$this->user_id, true) as $row) {
             if (!empty($row['is_primary'])) {
                 return $row;
             }

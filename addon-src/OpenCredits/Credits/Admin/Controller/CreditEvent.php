@@ -37,7 +37,6 @@ class CreditEvent extends AbstractController
 
         $viewParams = [
             'groups' => $groups,
-            'triggers' => self::TRIGGERS,
             'total' => count($events),
         ];
         return $this->view('OpenCredits\Credits:Event\Listing', 'oc_event_list', $viewParams);
@@ -90,8 +89,15 @@ class CreditEvent extends AbstractController
         if (!isset(self::TRIGGERS[$input['trigger']])) {
             return $this->error('Unknown event trigger.');
         }
-        if (!$input['currency_id']) {
-            return $this->error('Please choose a currency.');
+        $currency = $this->em()->find('OpenCredits\Credits:Currency', $input['currency_id']);
+        if (!$currency) {
+            return $this->error('Please choose an existing currency.');
+        }
+        if (!$currency->active) {
+            return $this->error('Events cannot use an inactive currency. Activate it first.');
+        }
+        if ($input['amount'] == 0.0) {
+            return $this->error('Amount cannot be zero. Deactivate the event instead.');
         }
 
         $form = $this->formAction();
