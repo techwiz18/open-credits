@@ -68,6 +68,12 @@ change fires the `oc_credits_adjust` code event with
 * Permissions (namespace `general`, own interface tab `ocCredits`):
   `ocView` (history), `ocTransfer` (transfer form + save). Default deny;
   install/upgrade auto-allows both for the group titled `Registered`.
+* Display options (`ocCredits` option group): `ocShowPostbit`, `ocShowMenu`,
+  `ocShowProfileStats`, `ocShowProfileTab` — each template mod gates on its
+  option; all default on.
+* Tools (`oc-tools` admin route): rebuild (sync service call + result view),
+  one-shot historical backfill (lump sums per member per post/thread event,
+  guarded by existing `Historical backfill` rows, then rebuild).
 
 ## Conventions for new work
 

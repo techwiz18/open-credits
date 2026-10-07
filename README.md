@@ -18,6 +18,10 @@ let members transfer credits, gate trophies on wealth.
   (username autocomplete included; transfers can never overdraw).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
   trophies, notices, and user-group promotions.
+* **Display control** — per-location toggles in Setup → Options → Credits
+  (postbit, account menu, profile stat, profile tab).
+* **Admin tools** — rebuild balances from the ledger, backfill pre-install
+  content, all under AdminCP → Credits → Tools.
 
 ## Requirements
 
