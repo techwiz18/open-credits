@@ -20,9 +20,9 @@
         "hash": "b52fa60703a2e9f32cff005aa1696ca1"
     },
     "admin/oc_tools_backfill.html": {
-        "version_id": 918,
-        "version_string": "0.9.18",
-        "hash": "5017eeab24a2118215cf2e002c64343a"
+        "version_id": 919,
+        "version_string": "0.9.19",
+        "hash": "02c89429cddc73c433e233ebe8f7223a"
     },
     "admin/oc_tools_index.html": {
         "version_id": 917,
@@ -30,9 +30,9 @@
         "hash": "09eb15b963de795eb66434d83a295363"
     },
     "admin/oc_tools_rebuild.html": {
-        "version_id": 917,
-        "version_string": "0.9.17",
-        "hash": "fcf27a353a0cfba424c717dadfaa0227"
+        "version_id": 919,
+        "version_string": "0.9.19",
+        "hash": "ef4211072e5c820ca58b01d217eb11e8"
     },
     "public/credits_index.html": {
         "version_id": 906,
