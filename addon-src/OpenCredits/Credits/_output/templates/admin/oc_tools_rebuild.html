@@ -2,6 +2,22 @@
 
 <div class="block">
 	<div class="block-container">
+		<h3 class="block-header">At a glance</h3>
+		<div class="block-body">
+			<div class="block-row">
+				<div class="pairs pairs--columns pairs--fluid">
+					<dl class="pairs pairs--justified"><dt>Currencies</dt><dd>{$currencyCount|number}</dd></dl>
+					<dl class="pairs pairs--justified"><dt>Earning events</dt><dd>{$eventCount|number}</dd></dl>
+					<dl class="pairs pairs--justified"><dt>Ledger rows</dt><dd>{$transactionCount|number}</dd></dl>
+					<dl class="pairs pairs--justified"><dt>Balance rows</dt><dd>{$memberCount|number}</dd></dl>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="block">
+	<div class="block-container">
 		<h3 class="block-header">Rebuild balances</h3>
 		<xf:if is="$ran">
 			<div class="block-body">

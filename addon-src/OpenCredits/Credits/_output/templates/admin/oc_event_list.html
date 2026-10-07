@@ -11,8 +11,8 @@
 				<xf:datalist>
 					<xf:foreach loop="$events" value="$event">
 						<xf:datarow
-							label="{$event.trigger}"
-							hint="{$event.Currency.title} - {$event.amount|number($event.Currency.decimals)} each - cap {$event.max_per_day} per day, 0 means unlimited"
+							label="{$event.display_label}"
+							hint="{$event.display_hint}"
 							href="{{ link('oc-events/edit', $event) }}"
 							delete="{{ link('oc-events/delete', $event) }}" />
 					</xf:foreach>

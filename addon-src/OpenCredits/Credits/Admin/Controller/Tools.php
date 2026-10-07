@@ -20,8 +20,18 @@ class Tools extends AbstractController
         return $this->view(
             'OpenCredits\Credits:Tools\Rebuild',
             'oc_tools_rebuild',
-            ['ran' => false, 'rows' => 0]
+            ['ran' => false, 'rows' => 0] + $this->toolsOverview()
         );
+    }
+
+    protected function toolsOverview(): array
+    {
+        return [
+            'currencyCount' => $this->finder('OpenCredits\Credits:Currency')->total(),
+            'eventCount' => $this->finder('OpenCredits\Credits:CreditEvent')->total(),
+            'memberCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(*) FROM xf_oc_balance'),
+            'transactionCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(*) FROM xf_oc_transaction'),
+        ];
     }
 
     public function actionRebuild(): \XF\Mvc\Reply\AbstractReply
@@ -35,7 +45,7 @@ class Tools extends AbstractController
         return $this->view(
             'OpenCredits\Credits:Tools\Rebuild',
             'oc_tools_rebuild',
-            ['ran' => true, 'rows' => $rows]
+            ['ran' => true, 'rows' => $rows] + $this->toolsOverview()
         );
     }
 

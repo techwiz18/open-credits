@@ -11,13 +11,7 @@ use XF\Mvc\ParameterBag;
 
 class CreditEvent extends AbstractController
 {
-    public const TRIGGERS = [
-        'thread' => 'New thread',
-        'post' => 'Reply',
-        'reaction_received' => 'Content reacted to',
-        'register' => 'Registration',
-        'daily_login' => 'Daily visit',
-    ];
+    public const TRIGGERS = EventEntity::TRIGGER_LABELS;
 
     protected function preDispatchController($action, ParameterBag $params)
     {
