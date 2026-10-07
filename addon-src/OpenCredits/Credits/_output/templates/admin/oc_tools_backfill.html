@@ -6,33 +6,35 @@
 			<div class="block-body">
 				<div class="block-row block-row--separated">
 					Awarded {$awarded|number} historical transaction rows. Balances have been rebuilt from the full ledger.
+					<xf:if is="$skipped is not empty">Skipped {$skipped|count} already-completed events.</xf:if>
 				</div>
 			</div>
 			<div class="block-footer">
 				<a href="{{ link('oc-events') }}" class="button">Back to events</a>
-			</div>
-		<xf:elseif is="$alreadyRan" />
-			<div class="block-body">
-				<div class="block-row block-row--separated">
-					Historical backfill has already run. It is a one-time operation — run Rebuild balances instead if figures look wrong.
-				</div>
-			</div>
-			<div class="block-footer">
-				<a href="{{ link('oc-tools') }}" class="button">Back to tools</a>
 			</div>
 		<xf:else />
 			<xf:form action="{{ link('oc-tools/backfill-save') }}" class="block" ajax="true">
 				<div class="block-body">
 					<div class="block-row block-row--separated">
 						Awards credits for content created <strong>before</strong> OpenCredits was installed,
-						using each active post/thread event's current amount. One lump-sum row per member per event.
-						This can only run once.
+						using each event's current amount. One lump-sum row per member per event.
+						Completed events are skipped unless forced.
 					</div>
-					<xf:foreach loop="$preview" value="$row">
-						<div class="block-row">
-							{$row.label} — {$row.amount|number($row.decimals)} {$row.currency} each — {$row.users|number} members with content
-						</div>
-					</xf:foreach>
+					<xf:checkboxrow name="event_ids[]" label="Events to backfill">
+						<xf:foreach loop="$preview" value="$row">
+							<xf:option value="{$row.event_id}" selected="{{ !$row.ran }}"
+								label="{$row.label} — {$row.amount|number($row.decimals)} {$row.currency} each — {$row.users|number} members with content"
+								hint="{{ $row.ran ? 'Already completed' : '' }}" />
+						</xf:foreach>
+					</xf:checkboxrow>
+					<xf:textboxrow name="username" label="Only this member"
+						placeholder="Username — blank means everyone"
+						data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
+						data-single="true" minlength="2" />
+					<xf:checkboxrow>
+						<xf:option name="force" label="Force re-run"
+							hint="Award again even for events that already completed. Use with care — members will be paid twice." />
+					</xf:checkboxrow>
 				</div>
 				<xf:submitrow submit="Run backfill" />
 			</xf:form>

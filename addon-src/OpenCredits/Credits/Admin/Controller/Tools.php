@@ -70,8 +70,8 @@ class Tools extends AbstractController
             [
                 'ran' => false,
                 'awarded' => 0,
+                'skipped' => [],
                 'preview' => $this->backfillPreview(),
-                'alreadyRan' => $this->backfillAlreadyRan(),
             ]
         );
     }
@@ -80,11 +80,42 @@ class Tools extends AbstractController
     {
         $this->assertPostOnly();
 
-        if ($this->backfillAlreadyRan()) {
-            return $this->error('Historical backfill has already run. It is a one-time operation.');
+        $eventIds = $this->filter('event_ids', 'array-uint');
+        $username = trim($this->filter('username', 'str'));
+        $force = $this->filter('force', 'bool');
+
+        if (!$eventIds) {
+            return $this->error('Select at least one event to backfill.');
         }
 
-        $awarded = $this->runBackfill();
+        $onlyUserId = 0;
+        if (strlen($username)) {
+            $target = $this->finder('XF:User')->where('username', $username)->fetchOne();
+            if (!$target) {
+                return $this->error('User not found. Check the spelling and try again.');
+            }
+            $onlyUserId = (int)$target->user_id;
+        }
+
+        $events = $this->finder('OpenCredits\Credits:CreditEvent')
+            ->where('event_id', $eventIds)
+            ->where('active', 1)
+            ->where('trigger', ['post', 'thread'])
+            ->fetch();
+
+        if (!count($events)) {
+            return $this->error('No eligible events selected. Only active post/thread events can be backfilled.');
+        }
+
+        $awarded = 0;
+        $skipped = [];
+        foreach ($events as $event) {
+            if (!$force && $this->backfillEventRan($event)) {
+                $skipped[] = (int)$event->event_id;
+                continue;
+            }
+            $awarded += $this->runBackfillEvent($event, $onlyUserId);
+        }
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
@@ -96,16 +127,17 @@ class Tools extends AbstractController
             [
                 'ran' => true,
                 'awarded' => $awarded,
+                'skipped' => $skipped,
                 'preview' => [],
-                'alreadyRan' => true,
             ]
         );
     }
 
-    protected function backfillAlreadyRan(): bool
+    protected function backfillEventRan($event): bool
     {
         return (bool)$this->app->db()->fetchOne(
-            "SELECT transaction_id FROM xf_oc_transaction WHERE note = 'Historical backfill' LIMIT 1"
+            'SELECT transaction_id FROM xf_oc_transaction WHERE note = ? AND `trigger` = ? AND currency_id = ? LIMIT 1',
+            ['Historical backfill', $event->trigger, $event->currency_id]
         );
     }
 
@@ -129,54 +161,51 @@ class Tools extends AbstractController
             }
             $currency = $event->Currency;
             $preview[] = [
+                'event_id' => (int)$event->event_id,
                 'label' => \OpenCredits\Credits\Entity\CreditEvent::TRIGGER_LABELS[$event->trigger] ?? $event->trigger,
                 'currency' => $currency ? $currency->title : 'Credits',
                 'decimals' => $currency ? (int)$currency->decimals : 2,
                 'amount' => (float)$event->amount,
                 'users' => $users,
+                'ran' => $this->backfillEventRan($event),
             ];
         }
         return $preview;
     }
 
-    protected function runBackfill(): int
+    protected function runBackfillEvent($event, int $onlyUserId = 0): int
     {
         $db = $this->app->db();
         $now = \XF::$time;
         $rows = 0;
 
-        $counts = [
-            'post' => $db->fetchPairs(
-                "SELECT user_id, COUNT(*) FROM xf_post WHERE message_state = 'visible' AND user_id > 0 GROUP BY user_id"
-            ),
-            'thread' => $db->fetchPairs(
-                "SELECT user_id, COUNT(*) FROM xf_thread WHERE discussion_state = 'visible' AND user_id > 0 GROUP BY user_id"
-            ),
-        ];
+        $perItem = (float)$event->amount;
+        if ($perItem == 0.0) {
+            return 0;
+        }
 
-        $events = $this->finder('OpenCredits\Credits:CreditEvent')
-            ->where('active', 1)
-            ->where('trigger', ['post', 'thread'])
-            ->fetch();
+        if ($event->trigger === 'post') {
+            $sql = "SELECT user_id, COUNT(*) FROM xf_post WHERE message_state = 'visible' AND user_id > 0";
+        } else {
+            $sql = "SELECT user_id, COUNT(*) FROM xf_thread WHERE discussion_state = 'visible' AND user_id > 0";
+        }
+        if ($onlyUserId > 0) {
+            $sql .= ' AND user_id = ' . $onlyUserId;
+        }
+        $counts = $db->fetchPairs($sql . ' GROUP BY user_id');
 
-        foreach ($events as $event) {
-            $perItem = (float)$event->amount;
-            if ($perItem == 0.0) {
-                continue;
-            }
-            foreach ($counts[$event->trigger] as $userId => $count) {
-                $db->insert('xf_oc_transaction', [
-                    'user_id' => (int)$userId,
-                    'currency_id' => (int)$event->currency_id,
-                    'amount' => round($count * $perItem, 2),
-                    'trigger' => $event->trigger,
-                    'content_type' => $event->trigger,
-                    'content_id' => 0,
-                    'note' => 'Historical backfill',
-                    'log_date' => $now,
-                ]);
-                $rows++;
-            }
+        foreach ($counts as $userId => $count) {
+            $db->insert('xf_oc_transaction', [
+                'user_id' => (int)$userId,
+                'currency_id' => (int)$event->currency_id,
+                'amount' => round($count * $perItem, 2),
+                'trigger' => $event->trigger,
+                'content_type' => $event->trigger,
+                'content_id' => 0,
+                'note' => 'Historical backfill',
+                'log_date' => $now,
+            ]);
+            $rows++;
         }
         return $rows;
     }
