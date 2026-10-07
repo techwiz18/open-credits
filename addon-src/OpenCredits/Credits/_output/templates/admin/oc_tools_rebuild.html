@@ -1,17 +1,14 @@
-<xf:title>Rebuild balances</xf:title>
+<xf:title>Tools</xf:title>
 
 <div class="block">
 	<div class="block-container">
+		<h3 class="block-header">Rebuild balances</h3>
 		<xf:if is="$ran">
 			<div class="block-body">
 				<div class="block-row block-row--separated">
 					Rebuilt {$rows|number} balance rows from the transaction log.
 					All wallet, postbit, and profile displays now reflect the ledger.
 				</div>
-			</div>
-			<div class="block-footer">
-				<a href="{{ link('oc-currencies') }}" class="button">Back to currencies</a>
-				<a href="{{ link('oc-tools/backfill') }}" class="button">Backfill historical content</a>
 			</div>
 		<xf:else />
 			<xf:form action="{{ link('oc-tools/rebuild') }}" class="block" ajax="true">
@@ -25,5 +22,20 @@
 				<xf:submitrow submit="Rebuild now" />
 			</xf:form>
 		</xf:if>
+	</div>
+</div>
+
+<div class="block">
+	<div class="block-container">
+		<h3 class="block-header">Backfill historical content</h3>
+		<div class="block-body">
+			<div class="block-row block-row--separated">
+				Awards credits for content created before OpenCredits was installed.
+				One-time operation with a preview of what will be awarded.
+			</div>
+		</div>
+		<div class="block-footer">
+			<a href="{{ link('oc-tools/backfill') }}" class="button">Open backfill</a>
+		</div>
 	</div>
 </div>
