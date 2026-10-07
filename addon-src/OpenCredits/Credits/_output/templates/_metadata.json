@@ -5,9 +5,9 @@
         "hash": "3abf05675f411e887d32c86222698a4f"
     },
     "admin/oc_currency_list.html": {
-        "version_id": 900,
-        "version_string": "0.9.0",
-        "hash": "b94fdab969d7a9c117d795994227d989"
+        "version_id": 917,
+        "version_string": "0.9.17",
+        "hash": "05a0b5064b616e43cee566bad13093a2"
     },
     "admin/oc_event_edit.html": {
         "version_id": 907,
@@ -20,19 +20,19 @@
         "hash": "b52fa60703a2e9f32cff005aa1696ca1"
     },
     "admin/oc_tools_backfill.html": {
-        "version_id": 914,
-        "version_string": "0.9.14",
-        "hash": "c101af0e5ae046e2c3f16b29b25a7dcc"
+        "version_id": 917,
+        "version_string": "0.9.17",
+        "hash": "a12e2230ae93f6d5308da9b4b962a12d"
     },
     "admin/oc_tools_index.html": {
-        "version_id": 916,
-        "version_string": "0.9.16",
-        "hash": "f27ef10c5d30f820c01980fd37361c3c"
+        "version_id": 917,
+        "version_string": "0.9.17",
+        "hash": "09eb15b963de795eb66434d83a295363"
     },
     "admin/oc_tools_rebuild.html": {
-        "version_id": 915,
-        "version_string": "0.9.15",
-        "hash": "0ed91438ec6b6b1d1dc017f104ad2696"
+        "version_id": 917,
+        "version_string": "0.9.17",
+        "hash": "fcf27a353a0cfba424c717dadfaa0227"
     },
     "public/credits_index.html": {
         "version_id": 906,

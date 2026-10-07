@@ -30,7 +30,7 @@
 					</div>
 					<xf:foreach loop="$preview" value="$row">
 						<div class="block-row">
-							{$row.trigger} ({$row.amount|number(2)}) — {$row.users|number} members with content
+							{$row.label} — {$row.amount|number($row.decimals)} {$row.currency} each — {$row.users|number} members with content
 						</div>
 					</xf:foreach>
 				</div>

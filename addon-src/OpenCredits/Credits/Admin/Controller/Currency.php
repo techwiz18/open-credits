@@ -23,6 +23,10 @@ class Currency extends AbstractController
             'currencies' => $this->finder('OpenCredits\Credits:Currency')
                 ->order('currency_id')
                 ->fetch(),
+            'currencyCount' => $this->finder('OpenCredits\Credits:Currency')->total(),
+            'eventCount' => $this->finder('OpenCredits\Credits:CreditEvent')->total(),
+            'memberCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(*) FROM xf_oc_balance'),
+            'transactionCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(*) FROM xf_oc_transaction'),
         ];
         return $this->view('OpenCredits\Credits:Currency\Listing', 'oc_currency_list', $viewParams);
     }

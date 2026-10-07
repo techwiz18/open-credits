@@ -34,18 +34,8 @@ class Tools extends AbstractController
         return $this->view(
             'OpenCredits\Credits:Tools\Index',
             'oc_tools_index',
-            ['tools' => $tools] + $this->toolsOverview()
+            ['tools' => $tools]
         );
-    }
-
-    protected function toolsOverview(): array
-    {
-        return [
-            'currencyCount' => $this->finder('OpenCredits\Credits:Currency')->total(),
-            'eventCount' => $this->finder('OpenCredits\Credits:CreditEvent')->total(),
-            'memberCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(*) FROM xf_oc_balance'),
-            'transactionCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(*) FROM xf_oc_transaction'),
-        ];
     }
 
     public function actionRebuildForm(): \XF\Mvc\Reply\AbstractReply
@@ -68,7 +58,7 @@ class Tools extends AbstractController
         return $this->view(
             'OpenCredits\Credits:Tools\Rebuild',
             'oc_tools_rebuild',
-            ['ran' => true, 'rows' => $rows] + $this->toolsOverview()
+            ['ran' => true, 'rows' => $rows]
         );
     }
 
@@ -123,6 +113,7 @@ class Tools extends AbstractController
     {
         $preview = [];
         $events = $this->finder('OpenCredits\Credits:CreditEvent')
+            ->with('Currency')
             ->where('active', 1)
             ->where('trigger', ['post', 'thread'])
             ->fetch();
@@ -136,9 +127,11 @@ class Tools extends AbstractController
                     "SELECT COUNT(DISTINCT user_id) FROM xf_thread WHERE discussion_state = 'visible' AND user_id > 0"
                 );
             }
+            $currency = $event->Currency;
             $preview[] = [
-                'trigger' => $event->trigger,
-                'currency_id' => $event->currency_id,
+                'label' => \OpenCredits\Credits\Entity\CreditEvent::TRIGGER_LABELS[$event->trigger] ?? $event->trigger,
+                'currency' => $currency ? $currency->title : 'Credits',
+                'decimals' => $currency ? (int)$currency->decimals : 2,
                 'amount' => (float)$event->amount,
                 'users' => $users,
             ];
