@@ -1,0 +1,23 @@
+<xf:title>Tools</xf:title>
+
+<xf:if is="$tools is not empty">
+	<div class="block">
+		<div class="block-container">
+			<div class="block-body">
+				<xf:datalist>
+					<xf:foreach loop="$tools" value="$tool">
+						<xf:datarow
+							label="{$tool.label}"
+							hint="{$tool.hint}"
+							href="{$tool.link}" />
+					</xf:foreach>
+				</xf:datalist>
+			</div>
+			<div class="block-footer">
+				<span class="block-footer-counter">{$currencyCount|number} currencies · {$eventCount|number} events · {$transactionCount|number} ledger rows · {$memberCount|number} balance rows</span>
+			</div>
+		</div>
+	</div>
+<xf:else />
+	<div class="blockMessage">No tools available.</div>
+</xf:if>

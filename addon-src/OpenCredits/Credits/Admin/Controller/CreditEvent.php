@@ -21,12 +21,24 @@ class CreditEvent extends AbstractController
 
     public function actionIndex(): \XF\Mvc\Reply\AbstractReply
     {
+        $events = $this->finder('OpenCredits\Credits:CreditEvent')
+            ->with('Currency')
+            ->order(['currency_id', 'trigger'])
+            ->fetch();
+
+        $groups = [];
+        foreach ($events as $event) {
+            $cid = (int)$event->currency_id;
+            if (!isset($groups[$cid])) {
+                $groups[$cid] = ['currency' => $event->Currency, 'events' => []];
+            }
+            $groups[$cid]['events'][] = $event;
+        }
+
         $viewParams = [
-            'events' => $this->finder('OpenCredits\Credits:CreditEvent')
-                ->with('Currency')
-                ->order(['currency_id', 'trigger'])
-                ->fetch(),
+            'groups' => $groups,
             'triggers' => self::TRIGGERS,
+            'total' => count($events),
         ];
         return $this->view('OpenCredits\Credits:Event\Listing', 'oc_event_list', $viewParams);
     }

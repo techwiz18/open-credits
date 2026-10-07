@@ -17,10 +17,24 @@ class Tools extends AbstractController
 
     public function actionIndex(): \XF\Mvc\Reply\AbstractReply
     {
+        $tools = [
+            [
+                'label' => 'Rebuild balances',
+                'hint' => 'Recompute every balance from the transaction log. Safe to run any time.',
+                'link' => $this->buildLink('oc-tools/rebuild-form'),
+            ],
+            [
+                'label' => 'Backfill historical content',
+                'hint' => 'Award credits for pre-install posts and threads. One-time operation with preview.'
+                    . ($this->backfillAlreadyRan() ? ' (Already ran.)' : ''),
+                'link' => $this->buildLink('oc-tools/backfill'),
+            ],
+        ];
+
         return $this->view(
-            'OpenCredits\Credits:Tools\Rebuild',
-            'oc_tools_rebuild',
-            ['ran' => false, 'rows' => 0] + $this->toolsOverview()
+            'OpenCredits\Credits:Tools\Index',
+            'oc_tools_index',
+            ['tools' => $tools] + $this->toolsOverview()
         );
     }
 
@@ -32,6 +46,15 @@ class Tools extends AbstractController
             'memberCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(*) FROM xf_oc_balance'),
             'transactionCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(*) FROM xf_oc_transaction'),
         ];
+    }
+
+    public function actionRebuildForm(): \XF\Mvc\Reply\AbstractReply
+    {
+        return $this->view(
+            'OpenCredits\Credits:Tools\Rebuild',
+            'oc_tools_rebuild',
+            ['ran' => false, 'rows' => 0]
+        );
     }
 
     public function actionRebuild(): \XF\Mvc\Reply\AbstractReply

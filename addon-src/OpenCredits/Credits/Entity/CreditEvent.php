@@ -23,9 +23,8 @@ class CreditEvent extends Entity
     public function getDisplayHint(): string
     {
         $currency = $this->Currency;
-        $title = $currency ? $currency->title : 'Credits';
         $decimals = $currency ? (int)$currency->decimals : 2;
-        $hint = number_format((float)$this->amount, $decimals) . ' ' . $title . ' each';
+        $hint = number_format((float)$this->amount, $decimals) . ' each';
         if ($this->trigger === 'daily_login') {
             $hint .= ' · once per day, always';
         } elseif ($this->max_per_day > 0) {
