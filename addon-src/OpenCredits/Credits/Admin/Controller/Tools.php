@@ -25,8 +25,7 @@ class Tools extends AbstractController
             ],
             [
                 'label' => 'Backfill historical content',
-                'hint' => 'Award credits for pre-install posts and threads. One-time operation with preview.'
-                    . ($this->backfillAlreadyRan() ? ' (Already ran.)' : ''),
+                'hint' => 'Award credits for pre-install posts and threads, per event and per member, with preview.',
                 'link' => $this->buildLink('oc-tools/backfill'),
             ],
         ];
