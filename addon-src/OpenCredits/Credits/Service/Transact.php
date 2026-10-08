@@ -12,6 +12,40 @@ use XF\Service\AbstractService;
 class Transact extends AbstractService
 {
     protected static $primaryCurrencyId = null;
+    protected static $balanceCache = [];
+
+    /**
+     * Balances for a user across currencies, cached per request.
+     * Each row: currency_id, title, prefix, suffix, decimals, is_primary, balance.
+     */
+    public function balancesFor(int $userId, bool $visibleOnly): array
+    {
+        if ($userId <= 0) {
+            return [];
+        }
+        $key = $userId . ':' . ($visibleOnly ? 'v' : 'a');
+        if (!isset(self::$balanceCache[$key])) {
+            self::$balanceCache[$key] = $this->db()->fetchAll(
+                'SELECT c.currency_id, c.title, c.prefix, c.suffix, c.decimals, c.is_primary,'
+                . ' COALESCE(b.balance, 0) AS balance'
+                . ' FROM xf_oc_currency AS c'
+                . ' LEFT JOIN xf_oc_balance AS b ON b.currency_id = c.currency_id AND b.user_id = ?'
+                . ' WHERE c.active = 1' . ($visibleOnly ? ' AND c.visible = 1' : '')
+                . ' ORDER BY c.currency_id',
+                $userId
+            );
+        }
+        return self::$balanceCache[$key];
+    }
+
+    public static function clearBalanceCache(?int $userId = null): void
+    {
+        if ($userId === null) {
+            self::$balanceCache = [];
+        } else {
+            unset(self::$balanceCache[$userId . ':v'], self::$balanceCache[$userId . ':a']);
+        }
+    }
 
     public function primaryCurrencyId(): int
     {
@@ -36,7 +70,9 @@ class Transact extends AbstractService
     {
         $db = $this->db();
         $rows = $db->fetchAll(
-            'SELECT * FROM xf_oc_event WHERE `trigger` = ? AND active = 1 ORDER BY event_id',
+            'SELECT e.* FROM xf_oc_event AS e'
+            . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id AND c.active = 1'
+            . ' WHERE e.`trigger` = ? AND e.active = 1 ORDER BY e.event_id',
             $trigger
         );
         if (!$rows) {
@@ -55,6 +91,22 @@ class Transact extends AbstractService
         return $applied;
     }
 
+    /**
+     * Current cached balance for a user/currency. Missing row means 0.
+     * Integrators: check this before charging (adjust() itself is
+     * unrestricted by design — privileged code only).
+     */
+    public function getBalance(int $userId, int $currencyId): float
+    {
+        if ($userId <= 0) {
+            return 0.0;
+        }
+        return (float)$this->db()->fetchOne(
+            'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ?',
+            [$userId, $currencyId]
+        );
+    }
+
     public function adjust(int $userId, int $currencyId, float $amount, string $trigger, int $contentId = 0, string $note = '', string $contentType = ''): bool
     {
         if ($userId <= 0 || $amount == 0.0) {
@@ -65,6 +117,10 @@ class Transact extends AbstractService
         $db->beginTransaction();
         try {
             $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
+            if (!$this->allowsResultingBalance($userId, $currencyId, $amount)) {
+                $db->rollBack();
+                return false;
+            }
             $this->applyBalanceDelta($userId, $currencyId, $amount);
             $db->insert('xf_oc_transaction', [
                 'user_id' => $userId,
@@ -77,12 +133,38 @@ class Transact extends AbstractService
                 'log_date' => \XF::$time,
             ]);
             $db->commit();
-            $this->clearBalanceCache($userId);
+            self::clearBalanceCache($userId);
+            $this->app->fire('oc_credits_adjust', [$userId, $currencyId, $amount, $trigger, $contentId]);
             return true;
         } catch (\Throwable $e) {
             $db->rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Whether applying $delta keeps the balance legal for the currency.
+     * Currencies with allow_negative off floor at zero. Must run inside a
+     * transaction holding the user's locks.
+     */
+    protected function allowsResultingBalance(int $userId, int $currencyId, float $delta): bool
+    {
+        $db = $this->db();
+        $currency = $db->fetchRow(
+            'SELECT allow_negative FROM xf_oc_currency WHERE currency_id = ?',
+            $currencyId
+        );
+        if (!$currency) {
+            return false;
+        }
+        if ((int)$currency['allow_negative']) {
+            return true;
+        }
+        $balance = (float)$db->fetchOne(
+            'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
+            [$userId, $currencyId]
+        );
+        return ($balance + $delta) >= 0;
     }
 
     /**
@@ -140,20 +222,14 @@ class Transact extends AbstractService
                 'content_id' => $fromUserId, 'note' => '', 'log_date' => $now,
             ]);
             $db->commit();
-            $this->clearBalanceCache($fromUserId);
-            $this->clearBalanceCache($toUserId);
+            self::clearBalanceCache($fromUserId);
+            self::clearBalanceCache($toUserId);
+            $this->app->fire('oc_credits_adjust', [$fromUserId, $currencyId, -$amount, 'transfer', $toUserId]);
+            $this->app->fire('oc_credits_adjust', [$toUserId, $currencyId, $amount, 'transfer', $fromUserId]);
             return true;
         } catch (\Throwable $e) {
             $db->rollBack();
             throw $e;
-        }
-    }
-
-    protected function clearBalanceCache(int $userId): void
-    {
-        $class = 'OpenCredits\Credits\XF\Entity\User';
-        if (class_exists($class)) {
-            $class::clearOcBalanceCache($userId);
         }
     }
 
@@ -173,21 +249,33 @@ class Transact extends AbstractService
     /**
      * Daily login: exactly once per calendar day, regardless of event config.
      * Called from the visitor_setup listener (every request for logged-in users).
+     * The user-row lock serializes concurrent first-requests of the day.
      */
     public function awardDailyLoginIfNeeded(int $userId): bool
     {
         if ($userId <= 0) {
             return false;
         }
-        $start = strtotime('today midnight');
-        $already = (int)$this->db()->fetchOne(
-            'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
-            [$userId, 'daily_login', $start]
-        );
-        if ($already > 0) {
-            return false;
+        $db = $this->db();
+        $db->beginTransaction();
+        try {
+            $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
+            $start = strtotime('today midnight');
+            $already = (int)$db->fetchOne(
+                'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
+                [$userId, 'daily_login', $start]
+            );
+            if ($already > 0) {
+                $db->commit();
+                return false;
+            }
+            $awarded = $this->awardByTrigger('daily_login', $userId, $userId);
+            $db->commit();
+            return $awarded;
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
         }
-        return $this->awardByTrigger('daily_login', $userId, $userId);
     }
 
     /**
@@ -197,22 +285,26 @@ class Transact extends AbstractService
     public function rebuildAllBalances(): int
     {
         $db = $this->db();
-        $db->query('DELETE FROM xf_oc_balance');
-        $stmt = $db->query(
-            'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
-            . ' SELECT user_id, currency_id, SUM(amount) FROM xf_oc_transaction GROUP BY user_id, currency_id'
-        );
-        $rows = (int)$stmt->rowsAffected();
-        $primaryId = $this->primaryCurrencyId();
-        $db->query(
-            'UPDATE xf_user u LEFT JOIN xf_oc_balance b ON b.user_id = u.user_id AND b.currency_id = ?'
-            . ' SET u.oc_credits = COALESCE(b.balance, 0)',
-            $primaryId
-        );
-        $class = 'OpenCredits\Credits\XF\Entity\User';
-        if (class_exists($class)) {
-            $class::clearOcBalanceCache();
+        $db->beginTransaction();
+        try {
+            $db->query('DELETE FROM xf_oc_balance');
+            $stmt = $db->query(
+                'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
+                . ' SELECT user_id, currency_id, SUM(amount) FROM xf_oc_transaction GROUP BY user_id, currency_id'
+            );
+            $rows = (int)$stmt->rowsAffected();
+            $primaryId = $this->primaryCurrencyId();
+            $db->query(
+                'UPDATE xf_user u LEFT JOIN xf_oc_balance b ON b.user_id = u.user_id AND b.currency_id = ?'
+                . ' SET u.oc_credits = COALESCE(b.balance, 0)',
+                $primaryId
+            );
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
         }
+        self::clearBalanceCache();
         return $rows;
     }
 }

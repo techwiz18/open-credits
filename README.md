@@ -18,6 +18,10 @@ let members transfer credits, gate trophies on wealth.
   (username autocomplete included; transfers can never overdraw).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
   trophies, notices, and user-group promotions.
+* **Display control** — per-location toggles in Setup → Options → Credits
+  (postbit, account menu, profile stat, profile tab).
+* **Admin tools** — rebuild balances from the ledger, backfill pre-install
+  content, all under AdminCP → Credits → Tools.
 
 ## Requirements
 
@@ -85,6 +89,28 @@ Credits (Earning events / Currencies).
   check the **Credits** tab if access fails.
 * **Uninstalling deletes everything** — balances, ledger, events, and
   currencies are wiped (disabling is not offered; re-install starts from zero).
+
+## Integrating other add-ons
+
+Award or charge credits from your own add-on through the transaction service
+(positive earns, negative charges — always logged):
+
+```php
+/** @var \OpenCredits\Credits\Service\Transact $credits */
+$credits = \XF::app()->service('OpenCredits\Credits:Transact');
+
+// Check first: adjust() itself never overdraw-blocks (privileged code only).
+if ($credits->getBalance($userId, $currencyId) >= $price) {
+    $credits->adjust($userId, $currencyId, -$price, 'my_addon_purchase', $contentId, 'Entry fee');
+}
+```
+
+React to every balance change by listening to the `oc_credits_adjust` code
+event, which fires with `($userId, $currencyId, $amount, $trigger, $contentId)`
+after each committed change (transfers fire once per leg).
+
+Full reference (method signatures, trust rules, criteria, worked examples):
+[docs/API.md](docs/API.md).
 
 ## For developers
 

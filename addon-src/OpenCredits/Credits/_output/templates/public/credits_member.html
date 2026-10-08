@@ -2,7 +2,7 @@
 	<div class="block-container">
 		<h3 class="block-header">{$user.username}</h3>
 		<div class="block-body">
-			<xf:foreach loop="$user.oc_all_balances" value="$ocBalance">
+			<xf:foreach loop="$user.oc_balances" value="$ocBalance">
 				<div class="block-row">
 					<div class="pairs pairs--justified">
 						<dt>{$ocBalance.title}</dt>

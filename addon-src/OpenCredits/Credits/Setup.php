@@ -58,6 +58,7 @@ class Setup extends AbstractSetup
             $table->addColumn('note', 'varchar', 255)->setDefault('');
             $table->addColumn('log_date', 'int');
             $table->addKey(['user_id', 'log_date']);
+            $table->addKey(['user_id', 'currency_id', 'log_date'], 'user_currency_date');
         });
     }
 
@@ -187,6 +188,13 @@ class Setup extends AbstractSetup
     {
         $this->schemaManager()->alterTable('xf_oc_transaction', function (Alter $table) {
             $table->addColumn('content_type', 'varchar', 25)->setDefault('');
+        });
+    }
+
+    public function upgrade921Step1()
+    {
+        $this->schemaManager()->alterTable('xf_oc_transaction', function (Alter $table) {
+            $table->addKey(['user_id', 'currency_id', 'log_date'], 'user_currency_date');
         });
     }
 

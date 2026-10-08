@@ -11,27 +11,33 @@ use XF\Mvc\ParameterBag;
 
 class CreditEvent extends AbstractController
 {
-    public const TRIGGERS = [
-        'thread' => 'New thread',
-        'post' => 'Reply',
-        'reaction_received' => 'Content reacted to',
-        'register' => 'Registration',
-        'daily_login' => 'Daily visit',
-    ];
+    public const TRIGGERS = EventEntity::TRIGGER_LABELS;
 
     protected function preDispatchController($action, ParameterBag $params)
     {
         $this->assertAdminPermission('ocCredits');
+        $this->setSectionContext('ocEvents');
     }
 
     public function actionIndex(): \XF\Mvc\Reply\AbstractReply
     {
+        $events = $this->finder('OpenCredits\Credits:CreditEvent')
+            ->with('Currency')
+            ->order(['currency_id', 'trigger'])
+            ->fetch();
+
+        $groups = [];
+        foreach ($events as $event) {
+            $cid = (int)$event->currency_id;
+            if (!isset($groups[$cid])) {
+                $groups[$cid] = ['currency' => $event->Currency, 'events' => []];
+            }
+            $groups[$cid]['events'][] = $event;
+        }
+
         $viewParams = [
-            'events' => $this->finder('OpenCredits\Credits:CreditEvent')
-                ->with('Currency')
-                ->order(['currency_id', 'trigger'])
-                ->fetch(),
-            'triggers' => self::TRIGGERS,
+            'groups' => $groups,
+            'total' => count($events),
         ];
         return $this->view('OpenCredits\Credits:Event\Listing', 'oc_event_list', $viewParams);
     }
@@ -83,8 +89,15 @@ class CreditEvent extends AbstractController
         if (!isset(self::TRIGGERS[$input['trigger']])) {
             return $this->error('Unknown event trigger.');
         }
-        if (!$input['currency_id']) {
-            return $this->error('Please choose a currency.');
+        $currency = $this->em()->find('OpenCredits\Credits:Currency', $input['currency_id']);
+        if (!$currency) {
+            return $this->error('Please choose an existing currency.');
+        }
+        if (!$currency->active) {
+            return $this->error('Events cannot use an inactive currency. Activate it first.');
+        }
+        if ($input['amount'] == 0.0) {
+            return $this->error('Amount cannot be zero. Deactivate the event instead.');
         }
 
         $form = $this->formAction();

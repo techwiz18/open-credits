@@ -1,0 +1,1 @@
+Member pages show the primary currency balance.

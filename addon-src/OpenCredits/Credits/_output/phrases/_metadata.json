@@ -59,6 +59,60 @@
         "version_string": "0.3.0",
         "hash": "643e7eb45d35ba3662fbf6daed9daa97"
     },
+    "option.ocShowMenu.txt": {
+        "global_cache": false,
+        "version_id": 913,
+        "version_string": "0.9.13",
+        "hash": "9e79af1690769748a41c23b1099f963f"
+    },
+    "option.ocShowPostbit.txt": {
+        "global_cache": false,
+        "version_id": 913,
+        "version_string": "0.9.13",
+        "hash": "f3a5e7f7d84a866d13f7d6cec2c36978"
+    },
+    "option.ocShowProfileStats.txt": {
+        "global_cache": false,
+        "version_id": 913,
+        "version_string": "0.9.13",
+        "hash": "9013c958a443696048730bcd14de9785"
+    },
+    "option.ocShowProfileTab.txt": {
+        "global_cache": false,
+        "version_id": 913,
+        "version_string": "0.9.13",
+        "hash": "642baf7b47420b1374f1efe0b1da6e5e"
+    },
+    "option_explain.ocShowMenu.txt": {
+        "global_cache": false,
+        "version_id": 913,
+        "version_string": "0.9.13",
+        "hash": "9467dce8a132e40ef12fe8dd8b67da13"
+    },
+    "option_explain.ocShowPostbit.txt": {
+        "global_cache": false,
+        "version_id": 913,
+        "version_string": "0.9.13",
+        "hash": "b5e8039bba695806608b2b85e564254c"
+    },
+    "option_explain.ocShowProfileStats.txt": {
+        "global_cache": false,
+        "version_id": 913,
+        "version_string": "0.9.13",
+        "hash": "7e26b744d87d84bfd94942f3b376cf5a"
+    },
+    "option_explain.ocShowProfileTab.txt": {
+        "global_cache": false,
+        "version_id": 913,
+        "version_string": "0.9.13",
+        "hash": "fb4e3756a82d1d270bb6949625c882a3"
+    },
+    "option_group.ocCredits.txt": {
+        "global_cache": false,
+        "version_id": 913,
+        "version_string": "0.9.13",
+        "hash": "948a2e3548aaf7f9941a3192fa607d51"
+    },
     "permission.general_ocTransfer.txt": {
         "global_cache": false,
         "version_id": 600,

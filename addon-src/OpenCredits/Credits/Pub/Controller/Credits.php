@@ -62,7 +62,7 @@ class Credits extends AbstractController
         'thread' => 'New thread',
         'post' => 'Reply',
         'reaction_received' => 'Reaction received',
-        'register' => 'Welcome bonus',
+        'register' => 'Registration',
         'daily_login' => 'Daily visit',
     ];
 
@@ -127,7 +127,7 @@ class Credits extends AbstractController
                 || ($txn->trigger === 'reaction_received' && $txn->content_type === 'thread')
             ) {
                 $threadId = (int)$txn->content_id;
-                if (isset($threads[$threadId])) {
+                if (isset($threads[$threadId]) && $threads[$threadId]->canView()) {
                     $entry['detailThread'] = $threads[$threadId];
                     if ($txn->trigger === 'reaction_received') {
                         $entry['detail'] = 'on';
@@ -137,9 +137,9 @@ class Credits extends AbstractController
                 || ($txn->trigger === 'reaction_received' && $txn->content_type === 'post')
             ) {
                 $postId = (int)$txn->content_id;
-                if (isset($posts[$postId])) {
+                if (isset($posts[$postId]) && $posts[$postId]->canView()) {
                     $threadId = (int)$posts[$postId]->thread_id;
-                    if (isset($postThreads[$threadId])) {
+                    if (isset($postThreads[$threadId]) && $postThreads[$threadId]->canView()) {
                         $entry['detailThread'] = $postThreads[$threadId];
                         $entry['detail'] = $txn->trigger === 'reaction_received' ? 'on your reply in' : 'in reply to';
                     }
@@ -152,6 +152,9 @@ class Credits extends AbstractController
 
     public function actionMember(ParameterBag $params): AbstractReply
     {
+        if (!\XF::visitor()->hasPermission('general', 'ocView')) {
+            return $this->noPermission();
+        }
         $user = $this->em()->find('XF:User', $this->filter('user_id', 'uint'));
         if (!$user || !$user->canViewBasicProfile($error)) {
             throw $this->exception($this->notFound($error));
@@ -166,7 +169,9 @@ class Credits extends AbstractController
 
     protected function assertViewableCurrency(int $currencyId): \XF\Mvc\Entity\Entity
     {
-        $finder = $this->finder('OpenCredits\Credits:Currency')->where('active', 1);
+        $finder = $this->finder('OpenCredits\Credits:Currency')
+            ->where('active', 1)
+            ->where('visible', 1);
         if ($currencyId) {
             $currency = (clone $finder)->where('currency_id', $currencyId)->fetchOne();
             if ($currency) {
@@ -240,6 +245,9 @@ class Credits extends AbstractController
         }
         if ((int)$target->user_id === (int)$visitor->user_id) {
             return $this->error('You cannot transfer credits to yourself.');
+        }
+        if (in_array($target->user_state, ['banned', 'rejected', 'disabled'], true)) {
+            return $this->error('Credits cannot be transferred to that account.');
         }
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */

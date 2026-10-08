@@ -14,6 +14,7 @@ class Currency extends AbstractController
     protected function preDispatchController($action, ParameterBag $params)
     {
         $this->assertAdminPermission('ocCredits');
+        $this->setSectionContext('ocCurrencies');
     }
 
     public function actionIndex(): \XF\Mvc\Reply\AbstractReply
@@ -22,6 +23,10 @@ class Currency extends AbstractController
             'currencies' => $this->finder('OpenCredits\Credits:Currency')
                 ->order('currency_id')
                 ->fetch(),
+            'currencyCount' => $this->finder('OpenCredits\Credits:Currency')->total(),
+            'eventCount' => $this->finder('OpenCredits\Credits:CreditEvent')->total(),
+            'memberCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(DISTINCT user_id) FROM xf_oc_balance'),
+            'transactionCount' => (int)$this->app->db()->fetchOne('SELECT COUNT(*) FROM xf_oc_transaction'),
         ];
         return $this->view('OpenCredits\Credits:Currency\Listing', 'oc_currency_list', $viewParams);
     }
@@ -64,6 +69,17 @@ class Currency extends AbstractController
             'is_primary' => 'bool',
             'visible' => 'bool',
         ]);
+        $input['decimals'] = max(0, min(2, $input['decimals']));
+
+        if (!$input['is_primary'] && $currency->is_primary) {
+            $otherPrimary = $this->finder('OpenCredits\Credits:Currency')
+                ->where('currency_id', '!=', $currency->currency_id ?: 0)
+                ->where('is_primary', 1)
+                ->fetchOne();
+            if (!$otherPrimary && !$currency->isInsert()) {
+                return $this->error('There must always be exactly one primary currency. Flag another currency primary first.');
+            }
+        }
 
         $form = $this->formAction();
         $form->basicEntitySave($currency, $input);
@@ -98,6 +114,14 @@ class Currency extends AbstractController
             ->total();
         if ($eventCount) {
             return $this->error('This currency still has earning events. Delete or reassign them first.');
+        }
+
+        $historyCount = (int)$this->app->db()->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_transaction WHERE currency_id = ?',
+            $currency->currency_id
+        );
+        if ($historyCount) {
+            return $this->error('This currency has transaction history. Deactivate it instead of deleting.');
         }
 
         /** @var DeletePlugin $plugin */

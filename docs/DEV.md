@@ -33,6 +33,8 @@ container; edits apply on next page load (templates recompile automatically).
 | `docker compose exec -T web php /var/www/html/cmd.php <cmd>` | non-interactive (pipe `y` for confirms) |
 
 * Forum: http://localhost:8080 · phpMyAdmin: http://localhost:8081 (root/rootpass)
+* Port clash (something else on 8080)? Copy `.env.example` to `.env` and set
+  `WEB_PORT=8082` — the compose file honors it, defaulting to 8080.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
 
 ## Granting the credit permissions (dev shortcut)
@@ -44,6 +46,14 @@ docker compose exec db mysql -uxf -popencredits xf_dev -e \
   "INSERT INTO xf_permission_entry (user_group_id, user_id, permission_group_id, permission_id, permission_value, permission_value_int) VALUES (2, 0, 'general', 'ocView', 'allow', 0), (2, 0, 'general', 'ocTransfer', 'allow', 0), (3, 0, 'general', 'ocView', 'allow', 0), (3, 0, 'general', 'ocTransfer', 'allow', 0);"
 docker compose exec -T web php /var/www/html/cmd.php xf-rebuild:users
 ```
+
+## Git workflow (do not push features straight to main)
+
+* `main` is always release-ready and mirrors the public GitHub repo.
+* All new work happens on `dev/*` branches (e.g. `dev/integrator-hooks`),
+  pushed to origin for backup as you go.
+* Merge to `main` only after the feature is fully tested on dev;
+  cut releases from `main` afterwards.
 
 ## Release
 

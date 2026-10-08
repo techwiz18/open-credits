@@ -53,6 +53,20 @@ Transfers floor at zero and never overdraw; `adjust()` stays unrestricted for
 admin tooling. Registration day skips the daily bonus (`register_date` check).
 Rebuilds use `Transact::rebuildAllBalances()` (ledger → `xf_oc_balance` rows +
 primary mirror in `xf_user.oc_credits`).
+`Transact::getBalance()` reads the cached row (missing = 0). Every committed
+change fires the `oc_credits_adjust` code event with
+`($userId, $currencyId, $amount, $trigger, $contentId)` for cross-addon hooks.
+
+## Enforced rules and known limits
+
+* `ocView` gates history, member pane, profile displays, and postbit; `visible`
+  currencies only. Revoking hides the addon completely.
+* Transfers always floor at zero; `adjust()` enforces each currency's
+  `allow_negative` and refuses unknown currencies.
+* Awards skip inactive currencies; registration skips banned/rejected/disabled.
+* No clawback on content delete (by design); backfill counts live content too;
+  `max_per_day` is best-effort under concurrency; no per-day guard races the
+  daily award thanks to the user-row lock.
 
 ## Frontend
 
@@ -65,6 +79,12 @@ primary mirror in `xf_user.oc_credits`).
 * Permissions (namespace `general`, own interface tab `ocCredits`):
   `ocView` (history), `ocTransfer` (transfer form + save). Default deny;
   install/upgrade auto-allows both for the group titled `Registered`.
+* Display options (`ocCredits` option group): `ocShowPostbit`, `ocShowMenu`,
+  `ocShowProfileStats`, `ocShowProfileTab` — each template mod gates on its
+  option; all default on.
+* Tools (`oc-tools` admin route): rebuild (sync service call + result view),
+  one-shot historical backfill (lump sums per member per post/thread event,
+  guarded by existing `Historical backfill` rows, then rebuild).
 
 ## Conventions for new work
 

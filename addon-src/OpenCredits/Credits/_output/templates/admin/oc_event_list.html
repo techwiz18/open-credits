@@ -4,22 +4,29 @@
 	<xf:button href="{{ link('oc-events/add') }}" icon="add">Add event</xf:button>
 </xf:pageaction>
 
-<xf:if is="$events is not empty">
+<xf:if is="$groups is not empty">
+	<xf:foreach loop="$groups" value="$group">
+		<div class="block">
+			<div class="block-container">
+				<h3 class="block-header">{$group.currency.title} <span class="u-muted">({$group.currency.prefix}1.00{$group.currency.suffix})</span></h3>
+				<div class="block-body">
+					<xf:datalist>
+						<xf:foreach loop="$group.events" value="$event">
+							<xf:datarow
+								label="{$event.display_label}"
+								hint="{$event.display_hint}"
+								href="{{ link('oc-events/edit', $event) }}"
+								delete="{{ link('oc-events/delete', $event) }}" />
+						</xf:foreach>
+					</xf:datalist>
+				</div>
+			</div>
+		</div>
+	</xf:foreach>
 	<div class="block">
 		<div class="block-container">
-			<div class="block-body">
-				<xf:datalist>
-					<xf:foreach loop="$events" value="$event">
-						<xf:datarow
-							label="{$event.trigger}"
-							hint="{$event.Currency.title} - {$event.amount|number($event.Currency.decimals)} each - cap {$event.max_per_day} per day, 0 means unlimited"
-							href="{{ link('oc-events/edit', $event) }}"
-							delete="{{ link('oc-events/delete', $event) }}" />
-					</xf:foreach>
-				</xf:datalist>
-			</div>
 			<div class="block-footer">
-				<span class="block-footer-counter">{{ display_totals($events) }}</span>
+				<span class="block-footer-counter">{$total|number} events</span>
 			</div>
 		</div>
 	</div>
