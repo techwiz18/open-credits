@@ -33,6 +33,8 @@ container; edits apply on next page load (templates recompile automatically).
 | `docker compose exec -T web php /var/www/html/cmd.php <cmd>` | non-interactive (pipe `y` for confirms) |
 
 * Forum: http://localhost:8080 · phpMyAdmin: http://localhost:8081 (root/rootpass)
+* Port clash (something else on 8080)? Copy `.env.example` to `.env` and set
+  `WEB_PORT=8082` — the compose file honors it, defaulting to 8080.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
 
 ## Granting the credit permissions (dev shortcut)
