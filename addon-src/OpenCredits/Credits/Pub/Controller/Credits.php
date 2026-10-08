@@ -127,7 +127,7 @@ class Credits extends AbstractController
                 || ($txn->trigger === 'reaction_received' && $txn->content_type === 'thread')
             ) {
                 $threadId = (int)$txn->content_id;
-                if (isset($threads[$threadId])) {
+                if (isset($threads[$threadId]) && $threads[$threadId]->canView()) {
                     $entry['detailThread'] = $threads[$threadId];
                     if ($txn->trigger === 'reaction_received') {
                         $entry['detail'] = 'on';
@@ -137,9 +137,9 @@ class Credits extends AbstractController
                 || ($txn->trigger === 'reaction_received' && $txn->content_type === 'post')
             ) {
                 $postId = (int)$txn->content_id;
-                if (isset($posts[$postId])) {
+                if (isset($posts[$postId]) && $posts[$postId]->canView()) {
                     $threadId = (int)$posts[$postId]->thread_id;
-                    if (isset($postThreads[$threadId])) {
+                    if (isset($postThreads[$threadId]) && $postThreads[$threadId]->canView()) {
                         $entry['detailThread'] = $postThreads[$threadId];
                         $entry['detail'] = $txn->trigger === 'reaction_received' ? 'on your reply in' : 'in reply to';
                     }
