@@ -10,6 +10,8 @@ let members transfer credits, gate trophies on wealth.
 [*] [B]Wallet everywhere[/B] — balances in postbit, in the account menu, and on member profiles (primary stat plus a full currencies tab); per-currency history page, reachable from the Credits nav tab.
 [*] [B]Transfers[/B] — send credits to another member, with username autocomplete. Transfers can never overdraw.
 [*] [B]Trophies[/B] — "has at least / fewer than X credits" criteria work with trophies, notices, and user-group promotions.
+[*] [B]Admin tools[/B] — rebuild balances, backfill pre-install content, display toggles, all under AdminCP → Credits → Tools.
+[*] [B]Built to integrate[/B] — spend/award API plus a change event other add-ons can hook. Full reference in docs/API.md on GitHub.
 [/LIST]
 
 [B]Requirements[/B]
@@ -52,7 +54,7 @@ Change amounts, add triggers, or add currencies any time in AdminCP → Credits.
 [B]Troubleshooting[/B]
 [LIST]
 [*] [B]Balances look wrong[/B] — AdminCP → Credits → Rebuild balances (or CLI: [ICODE]php cmd.php oc-credits:rebuild[/ICODE]).
-[*] [B]Permission errors[/B] — check the Credits permission tab per user group.
+[*] [B]Permission errors[/B] — check the Credits permission tab per user group (fresh installs auto-allow them for Registered).
 [*] [B]Uninstalling deletes everything[/B] — balances, ledger, events, currencies.
 [/LIST]
 

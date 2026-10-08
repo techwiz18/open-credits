@@ -22,6 +22,8 @@ let members transfer credits, gate trophies on wealth.
   (postbit, account menu, profile stat, profile tab).
 * **Admin tools** — rebuild balances from the ledger, backfill pre-install
   content, all under AdminCP → Credits → Tools.
+* **Built to integrate** — spend/award API plus a change event other add-ons
+  can hook (see below).
 
 ## Requirements
 
