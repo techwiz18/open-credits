@@ -11,6 +11,7 @@
 namespace XF;
 
 /**
+ * @property bool|null $ocSendEarnAlerts option.ocSendEarnAlerts
  * @property bool|null $ocShowMenu Show balance in account menu
  * @property bool|null $ocShowPostbit Show balances in postbit
  * @property bool|null $ocShowProfileStats Show primary balance on profiles

@@ -89,6 +89,12 @@
         "version_string": "0.9.13",
         "hash": "642baf7b47420b1374f1efe0b1da6e5e"
     },
+    "option.ocSendEarnAlerts.txt": {
+        "global_cache": false,
+        "version_id": 923,
+        "version_string": "0.10.0-dev",
+        "hash": "35821d4ca0536bed995883a6e1bd0b88"
+    },
     "option_explain.ocShowMenu.txt": {
         "global_cache": false,
         "version_id": 913,
@@ -112,6 +118,12 @@
         "version_id": 913,
         "version_string": "0.9.13",
         "hash": "fb4e3756a82d1d270bb6949625c882a3"
+    },
+    "option_explain.ocSendEarnAlerts.txt": {
+        "global_cache": false,
+        "version_id": 923,
+        "version_string": "0.10.0-dev",
+        "hash": "662a154030443f19b5228f09178b5c33"
     },
     "option_group.ocCredits.txt": {
         "global_cache": false,

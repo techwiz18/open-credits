@@ -109,6 +109,9 @@ class Transact extends AbstractService
         ?\XF\Entity\User $sender = null,
         ?string $reason = null
     ): void {
+        if (empty($this->app->options()->ocSendEarnAlerts)) {
+            return;
+        }
         try {
             $receiver = $this->app->em()->find('XF:User', $userId);
             if (!$receiver) {
