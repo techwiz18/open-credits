@@ -1,0 +1,43 @@
+<xf:title>Adjust member credits</xf:title>
+
+<div class="block">
+	<div class="block-container">
+		<xf:if is="$ran">
+			<div class="block-body">
+				<div class="block-row block-row--separated">
+					Adjusted {$targetUsername} by {$amount}. New balance: {$newBalance|number}.
+					The change is logged in the transaction ledger with trigger <code>admin_adjust</code>.
+				</div>
+			</div>
+			<div class="block-footer">
+				<a href="{{ link('oc-tools') }}" class="button">Back to tools</a>
+				<a href="{{ link('oc-tools/adjust') }}" class="button button--primary">Adjust another member</a>
+			</div>
+		<xf:else />
+			<xf:form action="{{ link('oc-tools/adjust-save') }}" class="block" ajax="true">
+				<div class="block-body">
+					<div class="block-row block-row--separated">
+						Grant or remove credits for a member. Positive amounts grant,
+						negative amounts remove. Every adjustment is written through
+						the transaction service and appears in the member's history.
+					</div>
+					<xf:textboxrow name="username" value="{$username}" label="Member"
+						placeholder="Username"
+						data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
+						data-single="true" minlength="2" required="required" />
+					<xf:selectrow name="currency_id" value="{$currencyId}" label="Currency">
+						<xf:foreach loop="$currencies" value="$currency">
+							<xf:option value="{$currency.currency_id}">{$currency.title}</xf:option>
+						</xf:foreach>
+					</xf:selectrow>
+					<xf:textboxrow name="amount" value="{$amount}" label="Amount" type="number" step="0.01"
+						hint="Positive grants, negative removes. Two decimals." required="required" />
+					<xf:textboxrow name="note" value="{$note}" label="Note" maxlength="255"
+						placeholder="Reason shown in history (e.g. event prize, correction)"
+						hint="Saved on the ledger row. Blank becomes “Admin adjustment”." />
+				</div>
+				<xf:submitrow submit="Apply adjustment" />
+			</xf:form>
+		</xf:if>
+	</div>
+</div>

@@ -19,6 +19,11 @@
         "version_string": "0.9.16",
         "hash": "b52fa60703a2e9f32cff005aa1696ca1"
     },
+    "admin/oc_tools_adjust.html": {
+        "version_id": 921,
+        "version_string": "0.9.21",
+        "hash": "f65759c784aec7811731438e44d877ea"
+    },
     "admin/oc_tools_backfill.html": {
         "version_id": 919,
         "version_string": "0.9.19",
