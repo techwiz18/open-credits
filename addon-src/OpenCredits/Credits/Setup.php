@@ -41,6 +41,7 @@ class Setup extends AbstractSetup
             $table->addColumn('usergroup_ids', 'blob')->nullable();
             $table->addColumn('max_per_day', 'int')->setDefault(0);
             $table->addColumn('active', 'tinyint')->setDefault(1);
+            $table->addColumn('send_alert', 'tinyint')->setDefault(1);
             $table->addKey(['trigger', 'active']);
         });
     }
@@ -198,6 +199,13 @@ class Setup extends AbstractSetup
         });
     }
 
+    public function upgrade923Step1()
+    {
+        $this->schemaManager()->alterTable('xf_oc_event', function (Alter $table) {
+            $table->addColumn('send_alert', 'tinyint')->setDefault(1);
+        });
+    }
+
     public function upgrade600Step1()
     {
         // Debit rows (transfers, charges) need signed amounts
@@ -231,6 +239,7 @@ class Setup extends AbstractSetup
                     'amount' => $row['amount'],
                     'max_per_day' => 0,
                     'active' => 1,
+                    'send_alert' => 1,
                 ]);
             }
         }

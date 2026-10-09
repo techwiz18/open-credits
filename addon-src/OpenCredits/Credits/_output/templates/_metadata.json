@@ -10,9 +10,9 @@
         "hash": "83ef151bd5cd08535f534e7518299950"
     },
     "admin/oc_event_edit.html": {
-        "version_id": 907,
-        "version_string": "0.9.7",
-        "hash": "cf44ea6b4631167bb2711d974d4d1b64"
+        "version_id": 922,
+        "version_string": "0.10.0-dev",
+        "hash": "d8c5d817543a1a81948e7d784c8a5c61"
     },
     "admin/oc_event_list.html": {
         "version_id": 916,
@@ -38,6 +38,11 @@
         "version_id": 919,
         "version_string": "0.9.19",
         "hash": "ef4211072e5c820ca58b01d217eb11e8"
+    },
+    "public/alert_user_oc_earn.html": {
+        "version_id": 922,
+        "version_string": "0.10.0-dev",
+        "hash": "055a1102e683636f3bd61f5ca5429f95"
     },
     "public/credits_index.html": {
         "version_id": 920,

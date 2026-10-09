@@ -70,7 +70,9 @@ class Transact extends AbstractService
     {
         $db = $this->db();
         $rows = $db->fetchAll(
-            'SELECT e.* FROM xf_oc_event AS e'
+            'SELECT e.*, c.decimals, c.title AS currency_title,'
+            . ' c.prefix AS currency_prefix, c.suffix AS currency_suffix'
+            . ' FROM xf_oc_event AS e'
             . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id AND c.active = 1'
             . ' WHERE e.`trigger` = ? AND e.active = 1 ORDER BY e.event_id',
             $trigger
@@ -86,9 +88,58 @@ class Transact extends AbstractService
             }
             if ($this->adjust($userId, (int)$row['currency_id'], (float)$row['amount'], $trigger, $contentId, '', $contentType)) {
                 $applied = true;
+                if (!empty($row['send_alert'])) {
+                    $this->sendEarnAlert($userId, $row, $trigger);
+                }
             }
         }
         return $applied;
+    }
+
+    /**
+     * Sends a "you earned credits" alert (content_type user, action oc_earn).
+     * Never throws: earning must not break because alerting failed.
+     * $eventRow needs amount, currency_id, decimals, currency_title,
+     * currency_prefix, currency_suffix (awardByTrigger selects them all).
+     */
+    protected function sendEarnAlert(
+        int $userId,
+        array $eventRow,
+        string $trigger,
+        ?\XF\Entity\User $sender = null,
+        ?string $reason = null
+    ): void {
+        try {
+            $receiver = $this->app->em()->find('XF:User', $userId);
+            if (!$receiver) {
+                return;
+            }
+            $decimals = (int)($eventRow['decimals'] ?? 2);
+            if ($reason === null) {
+                $reason = \OpenCredits\Credits\Entity\CreditEvent::TRIGGER_LABELS[$trigger]
+                    ?? ucwords(str_replace('_', ' ', $trigger));
+            }
+            $extra = [
+                'amount' => round((float)$eventRow['amount'], $decimals),
+                'currency_id' => (int)$eventRow['currency_id'],
+                'currency_title' => (string)($eventRow['currency_title'] ?? 'Credits'),
+                'prefix' => (string)($eventRow['currency_prefix'] ?? ''),
+                'suffix' => (string)($eventRow['currency_suffix'] ?? ''),
+                'decimals' => $decimals,
+                'reason' => $reason,
+            ];
+            $this->app->repository('XF:UserAlert')->alertFromUser(
+                $receiver,
+                $sender,
+                'user',
+                $userId,
+                'oc_earn',
+                $extra,
+                ['dependsOnAddOnId' => 'OpenCredits/Credits']
+            );
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits earn alert failed: ');
+        }
     }
 
     /**
@@ -256,6 +307,22 @@ class Transact extends AbstractService
             self::clearBalanceCache($toUserId);
             $this->app->fire('oc_credits_adjust', [$fromUserId, $currencyId, -$amount, 'transfer', $toUserId]);
             $this->app->fire('oc_credits_adjust', [$toUserId, $currencyId, $amount, 'transfer', $fromUserId]);
+            $sender = $this->app->em()->find('XF:User', $fromUserId);
+            $currency = $this->app->em()->find('OpenCredits\Credits:Currency', $currencyId);
+            $this->sendEarnAlert(
+                $toUserId,
+                [
+                    'amount' => $amount,
+                    'currency_id' => $currencyId,
+                    'decimals' => $currency ? (int)$currency->decimals : 2,
+                    'currency_title' => $currency ? (string)$currency->title : 'Credits',
+                    'currency_prefix' => $currency ? (string)$currency->prefix : '',
+                    'currency_suffix' => $currency ? (string)$currency->suffix : '',
+                ],
+                'transfer',
+                $sender ?: null,
+                'Transfer from ' . ($sender ? $sender->username : 'a member')
+            );
             return true;
         } catch (\Throwable $e) {
             $db->rollBack();

@@ -1,4 +1,10 @@
 {
+    "alert_opt_out.user_oc_earn.txt": {
+        "global_cache": false,
+        "version_id": 923,
+        "version_string": "0.10.0-dev",
+        "hash": "0d4f72d8ff1e9c6acf8e6d2b3eb07617"
+    },
     "admin_navigation.ocCredits.txt": {
         "global_cache": false,
         "version_id": 700,

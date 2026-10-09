@@ -22,9 +22,14 @@
 			<xf:numberboxrow name="max_per_day" value="{$event.max_per_day}" label="Max awards per day"
 				min="0" hint="How many times this event can pay out per member per day. 0 = unlimited. Daily visits always pay once per day regardless." />
 
-			<xf:checkboxrow>
-				<xf:option name="active" selected="$event.active" label="Active" />
-			</xf:checkboxrow>
+		<xf:checkboxrow>
+			<xf:option name="active" selected="$event.active" label="Active" />
+		</xf:checkboxrow>
+
+		<xf:checkboxrow>
+			<xf:option name="send_alert" selected="$event.send_alert" label="Send alert"
+				hint="Notify the member when this event pays out. Members can opt out in their preferences." />
+		</xf:checkboxrow>
 		</div>
 		<xf:submitrow submit="Save" />
 	</div>

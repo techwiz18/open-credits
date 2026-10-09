@@ -83,8 +83,8 @@ class CreditEvent extends AbstractController
             'amount' => 'float',
             'max_per_day' => 'uint',
             'active' => 'bool',
+            'send_alert' => 'bool',
         ]);
-        $input['amount'] = round($input['amount'], 2);
 
         if (!isset(self::TRIGGERS[$input['trigger']])) {
             return $this->error('Unknown event trigger.');
@@ -96,6 +96,7 @@ class CreditEvent extends AbstractController
         if (!$currency->active) {
             return $this->error('Events cannot use an inactive currency. Activate it first.');
         }
+        $input['amount'] = round($input['amount'], (int)$currency->decimals);
         if ($input['amount'] == 0.0) {
             return $this->error('Amount cannot be zero. Deactivate the event instead.');
         }

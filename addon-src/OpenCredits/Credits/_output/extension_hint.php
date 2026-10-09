@@ -8,6 +8,11 @@
  * @noinspection PhpMultipleClassesDeclarationsInOneFile
  */
 
+namespace OpenCredits\Credits\XF\Alert
+{
+	class XFCP_User extends \XF\Alert\User {}
+}
+
 namespace OpenCredits\Credits\XF\Entity
 {
 	class XFCP_User extends \XF\Entity\User {}
