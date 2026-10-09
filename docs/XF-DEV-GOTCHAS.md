@@ -44,12 +44,20 @@ correct files + metadata. Hand-write only listeners/permissions/template-mods.
 ## 4. `_output` file ownership vs Apache writes
 
 `xf-make:*` runs as root in Docker, so new files are root-owned. XF dev mode
-rewrites `templates/_metadata.json` on page render as `www-data` → red
-`Template errors` banner with `Permission denied`. Fix:
+rewrites `_output` on page render/option save as `www-data` → red
+`Template errors` banner or `E_WARNING ... Permission denied` (saving ANY
+option re-exports option JSONs). Fix:
 
 ```bash
-./scripts/dev.sh fix-perms   # chmod 0777 dirs / 0666 files under _output, via container
+./scripts/dev.sh fix-perms   # 0777 dirs / 0666 files under _output, via container
 ```
+
+Files are 0666 deliberately, NOT 0644: git only tracks the exec bit, so 666
+shows as clean 644 while staying www-data-writable. Never `chmod 644`
+`_output` files to silence diffs — that revokes Apache writes and breaks the
+next dev-mode export. (0777 files would show as noisy 755 diffs; 666 avoids
+that.) New www-data-owned files come back 644, so re-run `fix-perms` after
+imports/upgrades and before editing those files as your host user.
 
 ## 5. CLI services: use `\XF::app()`, know the DB API
 

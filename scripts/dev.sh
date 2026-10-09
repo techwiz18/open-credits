@@ -41,9 +41,12 @@ PHP
     docker compose exec web php /var/www/html/cmd.php xf-addon:rebuild OpenCredits/Credits || true
     ;;
   fix-perms)
-    # CLI generators run as root in the container; Apache needs www-data-writable
-    # _output so dev-mode template/phrase sync doesn't throw permission errors.
-    docker compose exec web bash -c "chmod -R 0777 /var/www/html/src/addons/OpenCredits/Credits/_output"
+    # CLI generators run as root in the container; Apache (www-data) must be
+    # able to rewrite _output on dev-mode export (e.g. saving ANY option
+    # re-exports option JSONs). Files are 0666 (not 0777): git only tracks the
+    # exec bit, so 666 shows as clean 644 while staying www-data-writable.
+    # Never chmod _output files to 644 — Apache writes will fail (E_WARNING).
+    docker compose exec web bash -c "find /var/www/html/src/addons/OpenCredits/Credits/_output -type d -exec chmod 0777 {} + -o -type f -exec chmod 0666 {} +"
     ;;
   logs)
     docker compose logs -f "${2:-web}"
