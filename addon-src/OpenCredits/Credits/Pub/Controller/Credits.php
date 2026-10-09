@@ -67,6 +67,15 @@ class Credits extends AbstractController
     ];
 
     /**
+     * Smallest input step for an amount field, e.g. "1" for 0-decimal
+     * currencies, "0.01" for 2-decimal ones.
+     */
+    protected static function amountStep(int $decimals): string
+    {
+        return $decimals > 0 ? '0.' . str_repeat('0', $decimals - 1) . '1' : '1';
+    }
+
+    /**
      * Turns transaction entities into display rows, resolving counterparties
      * and content links in bulk (no per-row queries).
      */
@@ -210,6 +219,7 @@ class Credits extends AbstractController
             'currency' => $currency,
             'balance' => $balance,
             'to' => $this->filter('to', 'str'),
+            'amountStep' => self::amountStep((int)$currency->decimals),
         ];
 
         return $this->view(
@@ -229,8 +239,8 @@ class Credits extends AbstractController
         }
 
         $to = $this->filter('to', 'str');
-        $amount = round($this->filter('amount', 'float'), 2);
         $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
+        $amount = round($this->filter('amount', 'float'), (int)$currency->decimals);
 
         if (!strlen($to)) {
             return $this->error('Please enter a username to send credits to.');

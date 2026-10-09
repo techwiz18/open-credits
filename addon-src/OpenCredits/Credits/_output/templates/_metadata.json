@@ -20,9 +20,9 @@
         "hash": "b52fa60703a2e9f32cff005aa1696ca1"
     },
     "admin/oc_tools_adjust.html": {
-        "version_id": 921,
-        "version_string": "0.9.21",
-        "hash": "f65759c784aec7811731438e44d877ea"
+        "version_id": 922,
+        "version_string": "0.10.0-dev",
+        "hash": "377b721da3c97adc0ac4aeeae9eb1f91"
     },
     "admin/oc_tools_backfill.html": {
         "version_id": 919,
@@ -50,8 +50,8 @@
         "hash": "dc422d598b270b6519ecc3b79bf62629"
     },
     "public/credits_transfer.html": {
-        "version_id": 901,
-        "version_string": "0.9.1",
-        "hash": "e126dd4fe485f2d2f36676e94593d041"
+        "version_id": 922,
+        "version_string": "0.10.0-dev",
+        "hash": "25bee78a50601d8c3599b10ef49d3ea4"
     }
 }

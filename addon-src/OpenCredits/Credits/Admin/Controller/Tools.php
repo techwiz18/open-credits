@@ -194,6 +194,13 @@ class Tools extends AbstractController
         if ($amount == 0.0) {
             return $this->error('Enter a non-zero amount. Positive grants, negative removes.');
         }
+        $currency = $currencies[$currencyId];
+        if (round($amount, (int)$currency->decimals) == 0.0) {
+            return $this->error(
+                'That amount is smaller than ' . $currency->title . '\'s smallest unit'
+                . ' — enter a larger amount.'
+            );
+        }
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');

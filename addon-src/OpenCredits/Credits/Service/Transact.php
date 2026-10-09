@@ -117,6 +117,22 @@ class Transact extends AbstractService
         $db->beginTransaction();
         try {
             $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
+            // Quantize to the currency's smallest unit so the ledger never
+            // holds sub-decimal values that would display misleadingly
+            // (e.g. 0.50 stored on a 0-decimal currency renders as "1").
+            $decimals = $db->fetchOne(
+                'SELECT decimals FROM xf_oc_currency WHERE currency_id = ?',
+                $currencyId
+            );
+            if ($decimals === false || $decimals === null) {
+                $db->rollBack();
+                return false;
+            }
+            $amount = round($amount, (int)$decimals);
+            if ($amount == 0.0) {
+                $db->rollBack();
+                return false;
+            }
             if (!$this->allowsResultingBalance($userId, $currencyId, $amount)) {
                 $db->rollBack();
                 return false;
@@ -198,6 +214,20 @@ class Transact extends AbstractService
             $first = min($fromUserId, $toUserId);
             $second = max($fromUserId, $toUserId);
             $db->query('SELECT user_id FROM xf_user WHERE user_id IN (?, ?) FOR UPDATE', [$first, $second]);
+            // Quantize to the currency's smallest unit (see adjust()).
+            $decimals = $db->fetchOne(
+                'SELECT decimals FROM xf_oc_currency WHERE currency_id = ?',
+                $currencyId
+            );
+            if ($decimals === false || $decimals === null) {
+                $db->rollBack();
+                return false;
+            }
+            $amount = round($amount, (int)$decimals);
+            if ($amount <= 0) {
+                $db->rollBack();
+                return false;
+            }
             // Transfers never overdraw: the sender must cover the amount.
             // (Admin adjustments via adjust() stay unrestricted by design.)
             $senderBalance = (float)$db->fetchOne(
