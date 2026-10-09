@@ -333,6 +333,104 @@ class Transact extends AbstractService
         }
     }
 
+    /**
+     * Redeems a coupon code for a member. Owns its transaction and locks the
+     * code row, so limited-use caps stay exact under concurrency.
+     *
+     * Returns 'ok' or a failure code: 'not_found', 'inactive', 'expired',
+     * 'exhausted', 'already_redeemed', 'invalid_amount'. On 'ok', $granted
+     * receives ['amount', 'currency_id'] for the result view.
+     */
+    public function redeem(int $userId, string $code, ?array &$granted = null): string
+    {
+        $granted = null;
+        if ($userId <= 0) {
+            return 'not_found';
+        }
+        $code = \OpenCredits\Credits\Entity\Code::normalize($code);
+        if ($code === '') {
+            return 'not_found';
+        }
+
+        $db = $this->db();
+        $db->beginTransaction();
+        try {
+            $row = $db->fetchRow(
+                'SELECT * FROM xf_oc_code WHERE code = ? FOR UPDATE',
+                $code
+            );
+            if (!$row) {
+                $db->rollBack();
+                return 'not_found';
+            }
+            if (!(int)$row['active']) {
+                $db->rollBack();
+                return 'inactive';
+            }
+            if ((int)$row['expiry_date'] > 0 && (int)$row['expiry_date'] <= \XF::$time) {
+                $db->rollBack();
+                return 'expired';
+            }
+            $already = (int)$db->fetchOne(
+                'SELECT COUNT(*) FROM xf_oc_transaction'
+                . ' WHERE user_id = ? AND `trigger` = ? AND content_id = ?',
+                [$userId, 'redeem', (int)$row['code_id']]
+            );
+            if ($already > 0) {
+                $db->rollBack();
+                return 'already_redeemed';
+            }
+            if ((int)$row['max_uses'] > 0 && (int)$row['uses'] >= (int)$row['max_uses']) {
+                $db->rollBack();
+                return 'exhausted';
+            }
+
+            $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
+            $currencyId = (int)$row['currency_id'];
+            $decimals = $db->fetchOne(
+                'SELECT decimals FROM xf_oc_currency WHERE currency_id = ?',
+                $currencyId
+            );
+            if ($decimals === false || $decimals === null) {
+                $db->rollBack();
+                return 'invalid_amount';
+            }
+            $amount = round((float)$row['amount'], (int)$decimals);
+            if ($amount <= 0) {
+                $db->rollBack();
+                return 'invalid_amount';
+            }
+            if (!$this->allowsResultingBalance($userId, $currencyId, $amount)) {
+                $db->rollBack();
+                return 'invalid_amount';
+            }
+
+            $this->applyBalanceDelta($userId, $currencyId, $amount);
+            $db->insert('xf_oc_transaction', [
+                'user_id' => $userId,
+                'currency_id' => $currencyId,
+                'amount' => $amount,
+                'trigger' => 'redeem',
+                'content_type' => 'code',
+                'content_id' => (int)$row['code_id'],
+                'note' => substr($code, 0, 255),
+                'log_date' => \XF::$time,
+            ]);
+            $db->query(
+                'UPDATE xf_oc_code SET uses = uses + 1 WHERE code_id = ?',
+                (int)$row['code_id']
+            );
+            $db->commit();
+            self::clearBalanceCache($userId);
+            $this->app->fire('oc_credits_adjust', [$userId, $currencyId, $amount, 'redeem', (int)$row['code_id']]);
+            $granted = ['amount' => $amount, 'currency_id' => $currencyId];
+            return 'ok';
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
+    }
+
     protected function passesDailyLimit(int $eventId, int $userId, int $maxPerDay): bool
     {
         if ($maxPerDay <= 0) {

@@ -64,6 +64,7 @@ class Credits extends AbstractController
         'reaction_received' => 'Reaction received',
         'register' => 'Registration',
         'daily_login' => 'Daily visit',
+        'redeem' => 'Redeem code',
     ];
 
     /**
@@ -274,5 +275,72 @@ class Credits extends AbstractController
         }
 
         return $this->redirect($this->buildLink('credits', null, ['currency_id' => $currency->currency_id]));
+    }
+
+    public function actionRedeem(ParameterBag $params): AbstractReply
+    {
+        $visitor = \XF::visitor();
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
+            return $this->noPermission();
+        }
+
+        return $this->view(
+            'OpenCredits\Credits:Credits\Redeem',
+            'credits_redeem',
+            ['ran' => false, 'code' => $this->filter('code', 'str')]
+        );
+    }
+
+    public function actionRedeemSave(ParameterBag $params): AbstractReply
+    {
+        $this->assertPostOnly();
+
+        $visitor = \XF::visitor();
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
+            return $this->noPermission();
+        }
+
+        $code = trim($this->filter('code', 'str'));
+        if ($code === '') {
+            return $this->error('Enter a redeem code.');
+        }
+
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+        try {
+            $granted = null;
+            $status = $svc->redeem((int)$visitor->user_id, $code, $granted);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits redeem failed: ');
+            return $this->error('Redemption failed due to a server error. Please try again.');
+        }
+
+        if ($status !== 'ok') {
+            $messages = [
+                'not_found' => 'That code was not found. Check the spelling and try again.',
+                'inactive' => 'That code is no longer active.',
+                'expired' => 'That code has expired.',
+                'exhausted' => 'That code has already been fully redeemed.',
+                'already_redeemed' => 'You have already redeemed that code.',
+                'invalid_amount' => 'That code cannot be redeemed right now.',
+            ];
+            return $this->error($messages[$status] ?? 'That code cannot be redeemed.');
+        }
+
+        $currency = $this->em()->find(
+            'OpenCredits\Credits:Currency',
+            (int)$granted['currency_id']
+        );
+
+        return $this->view(
+            'OpenCredits\Credits:Credits\Redeem',
+            'credits_redeem',
+            [
+                'ran' => true,
+                'code' => $code,
+                'amount' => (float)$granted['amount'],
+                'currency' => $currency,
+            ]
+        );
     }
 }

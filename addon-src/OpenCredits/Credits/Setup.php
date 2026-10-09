@@ -106,6 +106,11 @@ class Setup extends AbstractSetup
         $this->grantRegisteredDefaults();
     }
 
+    public function installStep9()
+    {
+        $this->createCodeTable();
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -113,6 +118,7 @@ class Setup extends AbstractSetup
         $sm->dropTable('xf_oc_event');
         $sm->dropTable('xf_oc_transaction');
         $sm->dropTable('xf_oc_balance');
+        $sm->dropTable('xf_oc_code');
     }
 
     public function uninstallStep2()
@@ -203,6 +209,26 @@ class Setup extends AbstractSetup
     {
         $this->schemaManager()->alterTable('xf_oc_event', function (Alter $table) {
             $table->addColumn('send_alert', 'tinyint')->setDefault(1);
+        });
+    }
+
+    public function upgrade924Step1()
+    {
+        $this->createCodeTable();
+    }
+
+    protected function createCodeTable(): void
+    {
+        $this->createTable('xf_oc_code', function (Create $table) {
+            $table->addColumn('code_id', 'int')->autoIncrement();
+            $table->addColumn('code', 'varchar', 32);
+            $table->addColumn('currency_id', 'int')->setDefault(1);
+            $table->addColumn('amount', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
+            $table->addColumn('max_uses', 'int')->setDefault(1);
+            $table->addColumn('uses', 'int')->setDefault(0);
+            $table->addColumn('expiry_date', 'int')->setDefault(0);
+            $table->addColumn('active', 'tinyint')->setDefault(1);
+            $table->addUniqueKey('code', 'code');
         });
     }
 

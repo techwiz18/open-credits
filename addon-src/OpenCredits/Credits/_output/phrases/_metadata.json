@@ -5,6 +5,12 @@
         "version_string": "0.10.0-dev",
         "hash": "0d4f72d8ff1e9c6acf8e6d2b3eb07617"
     },
+    "admin_navigation.ocCodes.txt": {
+        "global_cache": false,
+        "version_id": 924,
+        "version_string": "0.10.0-dev",
+        "hash": "ce37147b88ec2f9a6fc6c36d8cf8eaaf"
+    },
     "admin_navigation.ocCredits.txt": {
         "global_cache": false,
         "version_id": 700,
