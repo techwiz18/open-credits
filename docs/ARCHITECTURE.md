@@ -49,6 +49,12 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 
 All earning paths funnel into `Transact::awardByTrigger()` (awards EVERY active
 event for the trigger, so overlapping per-currency events stack) → `adjust()`.
+Amounts are quantized to each currency's decimals before any check; dust that
+rounds to zero is refused. Reaction awards carry a per-reactor dedupe key, so
+un-react/re-react cycles pay once per reactor per content. Threads/replies
+created under moderation award on the visible transition. Events may carry
+forum/usergroup restrictions (`xf_oc_event.forum_ids`, `usergroup_ids`);
+forum scoping applies to thread/post content, group scoping to all earn paths.
 Transfers floor at zero and never overdraw; `adjust()` stays unrestricted for
 admin tooling. Registration day skips the daily bonus (`register_date` check).
 Rebuilds use `Transact::rebuildAllBalances()` (ledger → `xf_oc_balance` rows +
@@ -62,10 +68,15 @@ change fires the `oc_credits_adjust` code event with
 * `ocView` gates history, member pane, profile displays, and postbit; `visible`
   currencies only. Revoking hides the addon completely.
 * Transfers always floor at zero; `adjust()` enforces each currency's
-  `allow_negative` and refuses unknown currencies.
+  `allow_negative` and refuses unknown users/currencies and inactive
+  currencies. Transfer with an unresolvable `currency_id` errors instead of
+  falling back.
 * Awards skip inactive currencies; registration skips banned/rejected/disabled.
-* No clawback on content delete (by design); backfill counts live content too;
-  `max_per_day` is best-effort under concurrency; no per-day guard races the
+* No clawback on content delete (by design); backfill runs per-event inside a
+  transaction, quantizes to currency decimals, skips inactive currencies, and
+  site-wide runs exclude already per-member-backfilled users;
+  `max_per_day` counts per (event, currency) excluding backfill rows and is
+  best-effort under concurrency; no per-day guard races the
   daily award thanks to the user-row lock.
 
 ## Frontend

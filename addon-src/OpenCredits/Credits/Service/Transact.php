@@ -47,6 +47,11 @@ class Transact extends AbstractService
         }
     }
 
+    public static function clearPrimaryCache(): void
+    {
+        self::$primaryCurrencyId = null;
+    }
+
     public function primaryCurrencyId(): int
     {
         if (self::$primaryCurrencyId === null) {
@@ -65,9 +70,23 @@ class Transact extends AbstractService
     /**
      * Awards EVERY active event registered for the trigger (e.g. a thread
      * event in each currency). Returns true if at least one applied.
+     *
+     * $nodeId/$userGroupIds scope events carrying forum_ids/usergroup_ids
+     * restrictions; unrestricted events always apply. Forum scoping only
+     * constrains content triggers — triggers without a forum context
+     * (register, daily_login) pass the forum check. $dedupeKey (e.g. a
+     * per-reactor marker) is stored in the ledger note and skips the award
+     * when an identical row already exists.
      */
-    public function awardByTrigger(string $trigger, int $userId, int $contentId = 0, string $contentType = ''): bool
-    {
+    public function awardByTrigger(
+        string $trigger,
+        int $userId,
+        int $contentId = 0,
+        string $contentType = '',
+        int $nodeId = 0,
+        array $userGroupIds = [],
+        ?string $dedupeKey = null
+    ): bool {
         $db = $this->db();
         $rows = $db->fetchAll(
             'SELECT e.*, c.decimals, c.title AS currency_title,'
@@ -82,11 +101,31 @@ class Transact extends AbstractService
         }
 
         $applied = false;
+        $needsGroups = false;
         foreach ($rows as $row) {
-            if (!$this->passesDailyLimit((int)$row['event_id'], $userId, (int)$row['max_per_day'])) {
+            $rawGroups = $row['usergroup_ids'] ?? null;
+            if (is_string($rawGroups)
+                ? ($rawGroups !== '' && $rawGroups !== '[]' && $rawGroups !== 'null')
+                : !empty($rawGroups)
+            ) {
+                $needsGroups = true;
+                break;
+            }
+        }
+        $groupIds = $userGroupIds !== []
+            ? $userGroupIds
+            : ($needsGroups ? $this->loadEarnerGroupIds($userId) : []);
+        foreach ($rows as $row) {
+            if (!$this->eventAppliesTo($row, $nodeId, $groupIds)) {
                 continue;
             }
-            if ($this->adjust($userId, (int)$row['currency_id'], (float)$row['amount'], $trigger, $contentId, '', $contentType)) {
+            if (!$this->passesDailyLimit((int)$row['event_id'], $userId, (int)$row['max_per_day'], (int)$row['currency_id'])) {
+                continue;
+            }
+            if ($dedupeKey !== null && $dedupeKey !== '' && $this->dedupeKeyUsed($userId, $trigger, $contentType, $contentId, $dedupeKey)) {
+                continue;
+            }
+            if ($this->adjust($userId, (int)$row['currency_id'], (float)$row['amount'], $trigger, $contentId, (string)$dedupeKey, $contentType)) {
                 $applied = true;
                 if (!empty($row['send_alert'])) {
                     $this->sendEarnAlert($userId, $row, $trigger);
@@ -94,6 +133,75 @@ class Transact extends AbstractService
             }
         }
         return $applied;
+    }
+
+    /**
+     * Whether an event row's forum/usergroup restrictions admit this award.
+     * Empty restrictions always pass; forum scoping passes when there is no
+     * forum context (non-content triggers).
+     */
+    protected function eventAppliesTo(array $row, int $nodeId, array $userGroupIds): bool
+    {
+        $forumIds = $this->decodeIdList($row['forum_ids'] ?? null);
+        if ($forumIds && $nodeId > 0 && !in_array($nodeId, $forumIds, true)) {
+            return false;
+        }
+        $groupIds = $this->decodeIdList($row['usergroup_ids'] ?? null);
+        if ($groupIds && !array_intersect($groupIds, array_map('intval', $userGroupIds))) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Decodes a JSON id list as stored by the JSON_ARRAY entity columns.
+     */
+    protected function decodeIdList($value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('intval', $value), function ($id) {
+                return $id > 0;
+            }));
+        }
+        if (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                return array_values(array_filter(array_map('intval', $decoded), function ($id) {
+                    return $id > 0;
+                }));
+            }
+        }
+        return [];
+    }
+
+    protected function dedupeKeyUsed(int $userId, string $trigger, string $contentType, int $contentId, string $dedupeKey): bool
+    {
+        return (bool)$this->db()->fetchOne(
+            'SELECT transaction_id FROM xf_oc_transaction'
+            . ' WHERE user_id = ? AND `trigger` = ? AND content_type = ? AND content_id = ? AND note = ? LIMIT 1',
+            [$userId, $trigger, substr($contentType, 0, 25), $contentId, substr($dedupeKey, 0, 255)]
+        );
+    }
+
+    /**
+     * Primary + secondary group ids of the earner, for usergroup-scoped
+     * events. Only called when at least one event carries a restriction.
+     */
+    protected function loadEarnerGroupIds(int $userId): array
+    {
+        try {
+            $user = $this->app->em()->find('XF:User', $userId);
+            if (!$user) {
+                return [];
+            }
+            return array_values(array_unique(array_merge(
+                [(int)$user->user_group_id],
+                array_map('intval', (array)$user->secondary_group_ids)
+            )));
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits earner groups lookup failed: ');
+            return [];
+        }
     }
 
     /**
@@ -146,9 +254,10 @@ class Transact extends AbstractService
     }
 
     /**
-     * Current cached balance for a user/currency. Missing row means 0.
-     * Integrators: check this before charging (adjust() itself is
-     * unrestricted by design — privileged code only).
+     * Current balance for a user/currency, read directly (missing row = 0).
+     * Integrators: check this before charging (adjust() itself never
+     * overdraw-blocks — privileged code only). Note the check holds no lock,
+     * so re-verify after any concurrent writes if exactness matters.
      */
     public function getBalance(int $userId, int $currencyId): float
     {
@@ -170,19 +279,25 @@ class Transact extends AbstractService
         $db = $this->db();
         $db->beginTransaction();
         try {
-            $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
-            // Quantize to the currency's smallest unit so the ledger never
-            // holds sub-decimal values that would display misleadingly
-            // (e.g. 0.50 stored on a 0-decimal currency renders as "1").
-            $decimals = $db->fetchOne(
-                'SELECT decimals FROM xf_oc_currency WHERE currency_id = ?',
-                $currencyId
-            );
-            if ($decimals === false || $decimals === null) {
+            $userExists = $db->fetchOne('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
+            if (!$userExists) {
                 $db->rollBack();
                 return false;
             }
-            $amount = round($amount, (int)$decimals);
+            // Quantize to the currency's smallest unit so the ledger never
+            // holds sub-decimal values that would display misleadingly
+            // (e.g. 0.50 stored on a 0-decimal currency renders as "1").
+            // Inactive currencies fail closed: awards skip them upstream and
+            // direct writes are refused here.
+            $currency = $db->fetchRow(
+                'SELECT decimals, active FROM xf_oc_currency WHERE currency_id = ?',
+                $currencyId
+            );
+            if (!$currency || !(int)$currency['active']) {
+                $db->rollBack();
+                return false;
+            }
+            $amount = round($amount, (int)$currency['decimals']);
             if ($amount == 0.0) {
                 $db->rollBack();
                 return false;
@@ -267,17 +382,21 @@ class Transact extends AbstractService
         try {
             $first = min($fromUserId, $toUserId);
             $second = max($fromUserId, $toUserId);
-            $db->query('SELECT user_id FROM xf_user WHERE user_id IN (?, ?) FOR UPDATE', [$first, $second]);
-            // Quantize to the currency's smallest unit (see adjust()).
-            $decimals = $db->fetchOne(
-                'SELECT decimals FROM xf_oc_currency WHERE currency_id = ?',
-                $currencyId
-            );
-            if ($decimals === false || $decimals === null) {
+            $locked = $db->fetchAll('SELECT user_id FROM xf_user WHERE user_id IN (?, ?) FOR UPDATE', [$first, $second]);
+            if (count($locked) !== 2) {
                 $db->rollBack();
                 return false;
             }
-            $amount = round($amount, (int)$decimals);
+            // Quantize to the currency's smallest unit (see adjust()).
+            $currency = $db->fetchRow(
+                'SELECT decimals, active FROM xf_oc_currency WHERE currency_id = ?',
+                $currencyId
+            );
+            if (!$currency || !(int)$currency['active']) {
+                $db->rollBack();
+                return false;
+            }
+            $amount = round($amount, (int)$currency['decimals']);
             if ($amount <= 0) {
                 $db->rollBack();
                 return false;
@@ -385,17 +504,21 @@ class Transact extends AbstractService
                 return 'exhausted';
             }
 
-            $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
-            $currencyId = (int)$row['currency_id'];
-            $decimals = $db->fetchOne(
-                'SELECT decimals FROM xf_oc_currency WHERE currency_id = ?',
-                $currencyId
-            );
-            if ($decimals === false || $decimals === null) {
+            $userExists = $db->fetchOne('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
+            if (!$userExists) {
                 $db->rollBack();
                 return 'invalid_amount';
             }
-            $amount = round((float)$row['amount'], (int)$decimals);
+            $currencyId = (int)$row['currency_id'];
+            $currency = $db->fetchRow(
+                'SELECT decimals, active FROM xf_oc_currency WHERE currency_id = ?',
+                $currencyId
+            );
+            if (!$currency || !(int)$currency['active']) {
+                $db->rollBack();
+                return 'invalid_amount';
+            }
+            $amount = round((float)$row['amount'], (int)$currency['decimals']);
             if ($amount <= 0) {
                 $db->rollBack();
                 return 'invalid_amount';
@@ -431,15 +554,16 @@ class Transact extends AbstractService
         }
     }
 
-    protected function passesDailyLimit(int $eventId, int $userId, int $maxPerDay): bool
+    protected function passesDailyLimit(int $eventId, int $userId, int $maxPerDay, int $currencyId): bool
     {
         if ($maxPerDay <= 0) {
             return true;
         }
         $start = strtotime('today midnight');
         $count = (int)$this->db()->fetchOne(
-            'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND log_date >= ? AND `trigger` IN (SELECT `trigger` FROM xf_oc_event WHERE event_id = ?)',
-            [$userId, $start, $eventId]
+            'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND currency_id = ? AND log_date >= ?'
+            . ' AND note != ? AND `trigger` IN (SELECT `trigger` FROM xf_oc_event WHERE event_id = ?)',
+            [$userId, $currencyId, $start, 'Historical backfill', $eventId]
         );
         return $count < $maxPerDay;
     }

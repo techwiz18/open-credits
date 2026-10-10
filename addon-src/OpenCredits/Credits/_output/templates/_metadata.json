@@ -20,14 +20,14 @@
         "hash": "83ef151bd5cd08535f534e7518299950"
     },
     "admin/oc_event_edit.html": {
-        "version_id": 922,
+        "version_id": 924,
         "version_string": "0.10.0-dev",
-        "hash": "d8c5d817543a1a81948e7d784c8a5c61"
+        "hash": "b2b40f488b49be7858b7acad37015c4d"
     },
     "admin/oc_event_list.html": {
-        "version_id": 916,
-        "version_string": "0.9.16",
-        "hash": "b52fa60703a2e9f32cff005aa1696ca1"
+        "version_id": 924,
+        "version_string": "0.10.0-dev",
+        "hash": "60d8f715d4d886e0d223b430a8a079a2"
     },
     "admin/oc_tools_adjust.html": {
         "version_id": 922,

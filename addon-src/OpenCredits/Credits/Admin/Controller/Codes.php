@@ -109,6 +109,9 @@ class Codes extends AbstractController
             if ($parsed === false) {
                 return $this->error('Expiry date not understood. Use YYYY-MM-DD or leave blank for no expiry.');
             }
+            if ($parsed <= \XF::$time) {
+                return $this->error('Expiry date must be in the future. Leave blank for no expiry.');
+            }
             $expiryDate = (int)$parsed;
         }
 

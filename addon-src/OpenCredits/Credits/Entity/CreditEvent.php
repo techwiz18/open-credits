@@ -38,6 +38,9 @@ class CreditEvent extends Entity
         if (!$this->send_alert) {
             $hint .= ' · no alert';
         }
+        if (!empty($this->forum_ids) || !empty($this->usergroup_ids)) {
+            $hint .= ' · scoped';
+        }
         return $hint;
     }
 

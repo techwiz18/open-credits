@@ -51,6 +51,9 @@ class CreditEvent extends AbstractController
                 ->order('currency_id')
                 ->fetch(),
             'triggers' => self::TRIGGERS,
+            'userGroups' => $this->finder('XF:UserGroup')->order('title')->fetch(),
+            'eventForumIds' => $this->implodeIds($event->forum_ids),
+            'eventGroupIds' => $this->decodeIds($event->usergroup_ids),
         ];
         return $this->view('OpenCredits\Credits:Event\Edit', 'oc_event_edit', $viewParams);
     }
@@ -84,6 +87,8 @@ class CreditEvent extends AbstractController
             'max_per_day' => 'uint',
             'active' => 'bool',
             'send_alert' => 'bool',
+            'forum_ids' => 'str',
+            'usergroup_ids' => 'array-uint',
         ]);
 
         if (!isset(self::TRIGGERS[$input['trigger']])) {
@@ -100,6 +105,8 @@ class CreditEvent extends AbstractController
         if ($input['amount'] == 0.0) {
             return $this->error('Amount cannot be zero. Deactivate the event instead.');
         }
+        $input['forum_ids'] = $this->decodeIds($input['forum_ids']);
+        $input['usergroup_ids'] = $this->decodeIds($input['usergroup_ids']);
 
         $form = $this->formAction();
         $form->basicEntitySave($event, $input);
@@ -126,5 +133,38 @@ class CreditEvent extends AbstractController
     protected function assertEventExists($id, $with = null, $phraseKey = null): EventEntity
     {
         return $this->assertRecordExists('OpenCredits\Credits:CreditEvent', $id, $with, $phraseKey);
+    }
+
+    /**
+     * Normalizes a comma-separated id string or an id array into a clean
+     * int list for the JSON_ARRAY columns. Empty input means unrestricted.
+     */
+    protected function decodeIds($value): array
+    {
+        if (is_string($value)) {
+            $value = explode(',', $value);
+        }
+        if (!is_array($value)) {
+            return [];
+        }
+        $ids = [];
+        foreach ($value as $id) {
+            $id = (int)$id;
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+        return array_values(array_unique($ids));
+    }
+
+    protected function implodeIds($value): string
+    {
+        if (is_string($value)) {
+            return implode(', ', $this->decodeIds($value));
+        }
+        if (is_array($value)) {
+            return implode(', ', $this->decodeIds(implode(',', $value)));
+        }
+        return '';
     }
 }

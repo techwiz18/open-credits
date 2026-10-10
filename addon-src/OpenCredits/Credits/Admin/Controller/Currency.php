@@ -93,6 +93,7 @@ class Currency extends AbstractController
                 );
                 /** @var \OpenCredits\Credits\Service\Transact $svc */
                 $svc = $this->service('OpenCredits\Credits:Transact');
+                \OpenCredits\Credits\Service\Transact::clearPrimaryCache();
                 $svc->rebuildAllBalances();
             }
         });
@@ -122,6 +123,13 @@ class Currency extends AbstractController
         );
         if ($historyCount) {
             return $this->error('This currency has transaction history. Deactivate it instead of deleting.');
+        }
+
+        $codeCount = $this->finder('OpenCredits\Credits:Code')
+            ->where('currency_id', $currency->currency_id)
+            ->total();
+        if ($codeCount) {
+            return $this->error('This currency still has redeem codes. Delete or reassign them first.');
         }
 
         /** @var DeletePlugin $plugin */

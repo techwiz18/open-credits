@@ -102,6 +102,7 @@ class Tools extends AbstractController
         }
 
         $events = $this->finder('OpenCredits\Credits:CreditEvent')
+            ->with('Currency')
             ->where('event_id', $eventIds)
             ->where('active', 1)
             ->where('trigger', ['post', 'thread'])
@@ -111,14 +112,36 @@ class Tools extends AbstractController
             return $this->error('No eligible events selected. Only active post/thread events can be backfilled.');
         }
 
+        // Events on inactive currencies are skipped, never paid.
+        $eligible = [];
         $awarded = 0;
         $skipped = [];
         foreach ($events as $event) {
-            if (!$force && $this->backfillEventRan($event, $onlyUserId)) {
+            $currency = $event->Currency;
+            if ($currency && $currency->active) {
+                $eligible[] = $event;
+            } else {
                 $skipped[] = (int)$event->event_id;
-                continue;
             }
-            $awarded += $this->runBackfillEvent($event, $onlyUserId);
+        }
+        if (!$eligible) {
+            return $this->error('No eligible events selected. The chosen events use inactive currencies.');
+        }
+
+        $db = $this->app->db();
+        $db->beginTransaction();
+        try {
+            foreach ($eligible as $event) {
+                if (!$force && $this->backfillEventRan($event, $onlyUserId)) {
+                    $skipped[] = (int)$event->event_id;
+                    continue;
+                }
+                $awarded += $this->runBackfillEvent($event, $onlyUserId);
+            }
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
         }
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
@@ -164,7 +187,7 @@ class Tools extends AbstractController
 
         $username = trim($this->filter('username', 'str'));
         $currencyId = $this->filter('currency_id', 'uint');
-        $amount = (float)$this->filter('amount', 'str');
+        $amount = $this->filter('amount', 'float');
         $note = trim($this->filter('note', 'str'));
 
         $currencies = $this->finder('OpenCredits\Credits:Currency')
@@ -253,6 +276,10 @@ class Tools extends AbstractController
             ->where('trigger', ['post', 'thread'])
             ->fetch();
         foreach ($events as $event) {
+            $previewCurrency = $event->Currency;
+            if (!$previewCurrency || !$previewCurrency->active) {
+                continue;
+            }
             if ($event->trigger === 'post') {
                 $users = (int)$this->app->db()->fetchOne(
                     "SELECT COUNT(DISTINCT user_id) FROM xf_post WHERE message_state = 'visible' AND user_id > 0"
@@ -282,7 +309,11 @@ class Tools extends AbstractController
         $now = \XF::$time;
         $rows = 0;
 
-        $perItem = (float)$event->amount;
+        $currency = $event->Currency;
+        $decimals = $currency ? (int)$currency->decimals : 2;
+        // Quantize like every other write path: 0-decimal currencies must
+        // never receive sub-unit lump sums.
+        $perItem = round((float)$event->amount, $decimals);
         if ($perItem == 0.0) {
             return 0;
         }
@@ -296,6 +327,14 @@ class Tools extends AbstractController
         if ($onlyUserId > 0) {
             $sql .= ' AND user_id = ?';
             $params[] = $onlyUserId;
+        } else {
+            // A site-wide run must not re-pay members who already received a
+            // per-member backfill for this event (their rows carry a nonzero
+            // content_id, invisible to the site-wide completion guard).
+            $sql .= ' AND user_id NOT IN (SELECT user_id FROM xf_oc_transaction'
+                . " WHERE note = 'Historical backfill' AND `trigger` = ? AND currency_id = ? AND content_id <> 0)";
+            $params[] = $event->trigger;
+            $params[] = (int)$event->currency_id;
         }
         $counts = $db->fetchPairs($sql . ' GROUP BY user_id', $params);
 
@@ -303,7 +342,7 @@ class Tools extends AbstractController
             $db->insert('xf_oc_transaction', [
                 'user_id' => (int)$userId,
                 'currency_id' => (int)$event->currency_id,
-                'amount' => round($count * $perItem, 2),
+                'amount' => round($count * $perItem, $decimals),
                 'trigger' => $event->trigger,
                 'content_type' => $event->trigger,
                 'content_id' => $onlyUserId > 0 ? $onlyUserId : 0,

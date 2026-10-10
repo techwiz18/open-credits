@@ -8,7 +8,7 @@
 	<xf:foreach loop="$groups" value="$group">
 		<div class="block">
 			<div class="block-container">
-				<h3 class="block-header">{$group.currency.title} <span class="u-muted">({$group.currency.prefix}1.00{$group.currency.suffix})</span></h3>
+				<h3 class="block-header">{$group.currency.title} <span class="u-muted">({$group.currency.prefix}{1|number($group.currency.decimals)}{$group.currency.suffix})</span></h3>
 				<div class="block-body">
 					<xf:datalist>
 						<xf:foreach loop="$group.events" value="$event">
