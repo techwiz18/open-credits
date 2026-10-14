@@ -1,0 +1,1 @@
+Awarded {count} historical transaction rows. Balances have been rebuilt from the full ledger.

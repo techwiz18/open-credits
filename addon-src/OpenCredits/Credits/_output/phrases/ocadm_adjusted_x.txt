@@ -1,0 +1,1 @@
+Adjusted {user} by {amount}. New balance: {balance}.

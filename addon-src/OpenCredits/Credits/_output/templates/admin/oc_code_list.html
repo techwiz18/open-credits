@@ -1,7 +1,7 @@
-<xf:title>Redeem codes</xf:title>
+<xf:title>{{ phrase('admin_navigation.ocCodes') }}</xf:title>
 
 <xf:pageaction>
-	<xf:button href="{{ link('oc-codes/add') }}" icon="add">Add code</xf:button>
+	<xf:button href="{{ link('oc-codes/add') }}" icon="add">{{ phrase('ocadm_add_code') }}</xf:button>
 </xf:pageaction>
 
 <xf:if is="$codes is not empty">
@@ -12,17 +12,17 @@
 					<xf:foreach loop="$codes" value="$code">
 						<xf:datarow
 							label="{$code.code}"
-							hint="{$code.Currency.title}: {$code.Currency.prefix}{$code.amount|number($code.Currency.decimals)}{$code.Currency.suffix} · {$code.use_label}{{ $code.expiry_date ? ' · expires ' . date($code.expiry_date) : '' }}{{ $code.active ? '' : ' · INACTIVE' }}"
+							hint="{$code.Currency.title}: {$code.Currency.prefix}{$code.amount|number($code.Currency.decimals)}{$code.Currency.suffix} · {$code.use_label}{{ $code.expiry_date ? ' · ' . phrase('ocadm_expires_x', {'date': date($code.expiry_date)}) : '' }}{{ $code.active ? '' : ' · ' . phrase('ocadm_hint_inactive') }}"
 							href="{{ link('oc-codes/edit', $code) }}"
 							delete="{{ link('oc-codes/delete', $code) }}" />
 					</xf:foreach>
 				</xf:datalist>
 			</div>
 			<div class="block-footer">
-				<span class="block-footer-counter">{$total|number} codes</span>
+				<span class="block-footer-counter">{{ phrase('ocadm_x_codes', {'count': $total|number}) }}</span>
 			</div>
 		</div>
 	</div>
 <xf:else />
-	<div class="blockMessage">No redeem codes yet.</div>
+	<div class="blockMessage">{{ phrase('ocadm_no_codes') }}</div>
 </xf:if>

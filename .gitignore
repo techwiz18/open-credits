@@ -7,6 +7,8 @@ addon-src/OpenCredits/Credits/_data/
 db_data/
 # Env
 .env
+# Session handoff notes (may contain dev-only credentials) — never commit
+HANDOFF.md
 # OS
 .DS_Store
 Thumbs.db

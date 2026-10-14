@@ -14,13 +14,13 @@
     <input type="hidden" name="currency_id" value="{$currency.currency_id}" />
     <div class="block-container">
         <div class="block-body">
-            <xf:textboxrow name="to" value="{$to}" label="To user"
+            <xf:textboxrow name="to" value="{$to}" label="{{ phrase('oc_to_user') }}"
                 placeholder="Username" required="true"
                 data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
                 data-single="true" minlength="2" />
-            <xf:textboxrow name="amount" type="number" step="{$amountStep}" min="{$amountStep}" label="Amount"
+            <xf:textboxrow name="amount" type="number" step="{$amountStep}" min="{$amountStep}" label="{{ phrase('oc_amount') }}"
                 placeholder="0.00" required="true"
-                hint="Smallest unit for {$currency.title}: {$amountStep}." />
+                hint="{{ phrase('oc_smallest_unit_x', {'currency': $currency.title, 'step': $amountStep}) }}" />
         </div>
         <xf:submitrow submit="{{ phrase('oc_transfer') }}" />
     </div>

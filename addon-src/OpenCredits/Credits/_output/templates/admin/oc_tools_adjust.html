@@ -1,42 +1,40 @@
-<xf:title>Adjust member credits</xf:title>
+<xf:title>{{ phrase('ocadm_adjust_title') }}</xf:title>
 
 <div class="block">
 	<div class="block-container">
 		<xf:if is="$ran">
 			<div class="block-body">
 				<div class="block-row block-row--separated">
-					Adjusted {$targetUsername} by {$amount}. New balance: {$newBalance|number}.
-					The change is logged in the transaction ledger with trigger <code>admin_adjust</code>.
+					{{ phrase('ocadm_adjusted_x', {'user': $targetUsername, 'amount': $amount, 'balance': $newBalance|number}) }}
+					{{ phrase('ocadm_adjust_logged') }}
 				</div>
 			</div>
 			<div class="block-footer">
-				<a href="{{ link('oc-tools') }}" class="button">Back to tools</a>
-				<a href="{{ link('oc-tools/adjust') }}" class="button button--primary">Adjust another member</a>
+				<a href="{{ link('oc-tools') }}" class="button">{{ phrase('ocadm_back_to_tools') }}</a>
+				<a href="{{ link('oc-tools/adjust') }}" class="button button--primary">{{ phrase('ocadm_adjust_another') }}</a>
 			</div>
 		<xf:else />
 			<xf:form action="{{ link('oc-tools/adjust-save') }}" class="block" ajax="true">
 				<div class="block-body">
 					<div class="block-row block-row--separated">
-						Grant or remove credits for a member. Positive amounts grant,
-						negative amounts remove. Every adjustment is written through
-						the transaction service and appears in the member's history.
+						{{ phrase('ocadm_adjust_explain') }}
 					</div>
-					<xf:textboxrow name="username" value="{$username}" label="Member"
-						placeholder="Username"
+					<xf:textboxrow name="username" value="{$username}" label="{{ phrase('ocadm_member') }}"
+						placeholder="{{ phrase('ocadm_username_placeholder') }}"
 						data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
 						data-single="true" minlength="2" required="required" />
-					<xf:selectrow name="currency_id" value="{$currencyId}" label="Currency">
+					<xf:selectrow name="currency_id" value="{$currencyId}" label="{{ phrase('ocadm_currency') }}">
 						<xf:foreach loop="$currencies" value="$currency">
 							<xf:option value="{$currency.currency_id}">{$currency.title}</xf:option>
 						</xf:foreach>
 					</xf:selectrow>
-					<xf:textboxrow name="amount" value="{$amount}" label="Amount" type="number" step="0.01"
-						hint="Positive grants, negative removes. Rounded to the currency's smallest unit (whole numbers for 0-decimal currencies); dust amounts are refused." required="required" />
-					<xf:textboxrow name="note" value="{$note}" label="Note" maxlength="255"
-						placeholder="Reason shown in history (e.g. event prize, correction)"
-						hint="Saved on the ledger row. Blank becomes “Admin adjustment”." />
+					<xf:textboxrow name="amount" value="{$amount}" label="{{ phrase('oc_amount') }}" type="number" step="0.01"
+						hint="{{ phrase('ocadm_adjust_amount_hint') }}" required="required" />
+					<xf:textboxrow name="note" value="{$note}" label="{{ phrase('ocadm_note') }}" maxlength="255"
+						placeholder="{{ phrase('ocadm_note_placeholder') }}"
+						hint="{{ phrase('ocadm_note_hint') }}" />
 				</div>
-				<xf:submitrow submit="Apply adjustment" />
+				<xf:submitrow submit="{{ phrase('ocadm_apply_adjustment') }}" />
 			</xf:form>
 		</xf:if>
 	</div>

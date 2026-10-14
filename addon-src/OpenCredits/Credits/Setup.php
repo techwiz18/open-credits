@@ -60,6 +60,8 @@ class Setup extends AbstractSetup
             $table->addColumn('log_date', 'int');
             $table->addKey(['user_id', 'log_date']);
             $table->addKey(['user_id', 'currency_id', 'log_date'], 'user_currency_date');
+            $table->addKey(['user_id', 'trigger', 'content_id', 'content_type'], 'user_trigger_content');
+            $table->addKey(['user_id', 'trigger', 'log_date'], 'user_trigger_date');
         });
     }
 
@@ -168,9 +170,15 @@ class Setup extends AbstractSetup
 
     protected function grantRegisteredDefaults(): void
     {
+        // Prefer the stable group id; fall back to the (mutable) title.
         $groupId = (int)$this->db()->fetchOne(
-            "SELECT user_group_id FROM xf_user_group WHERE title = 'Registered'"
+            'SELECT user_group_id FROM xf_user_group WHERE user_group_id = 2'
         );
+        if ($groupId <= 0) {
+            $groupId = (int)$this->db()->fetchOne(
+                "SELECT user_group_id FROM xf_user_group WHERE title = 'Registered'"
+            );
+        }
         if ($groupId <= 0) {
             return;
         }
@@ -217,6 +225,14 @@ class Setup extends AbstractSetup
         $this->createCodeTable();
     }
 
+    public function upgrade927Step1()
+    {
+        $this->schemaManager()->alterTable('xf_oc_transaction', function (Alter $table) {
+            $table->addKey(['user_id', 'trigger', 'content_id', 'content_type'], 'user_trigger_content');
+            $table->addKey(['user_id', 'trigger', 'log_date'], 'user_trigger_date');
+        });
+    }
+
     protected function createCodeTable(): void
     {
         $this->createTable('xf_oc_code', function (Create $table) {
@@ -253,20 +269,27 @@ class Setup extends AbstractSetup
             ['trigger' => 'register', 'amount' => '10.00'],
             ['trigger' => 'daily_login', 'amount' => '5.00'],
         ];
+        // Upgrade steps run in version order: upgrade200Step1 seeds before
+        // upgrade923Step1 creates send_alert, so only write the key when the
+        // column exists (ancient DBs upgrading through 200 would fatal).
+        $hasSendAlert = $this->schemaManager()->columnExists('xf_oc_event', 'send_alert');
         foreach ($defaults as $row) {
             $exists = $this->db()->fetchOne(
                 'SELECT event_id FROM xf_oc_event WHERE `trigger` = ? AND currency_id = 1',
                 $row['trigger']
             );
             if (!$exists) {
-                $this->db()->insert('xf_oc_event', [
+                $insert = [
                     'currency_id' => 1,
                     'trigger' => $row['trigger'],
                     'amount' => $row['amount'],
                     'max_per_day' => 0,
                     'active' => 1,
-                    'send_alert' => 1,
-                ]);
+                ];
+                if ($hasSendAlert) {
+                    $insert['send_alert'] = 1;
+                }
+                $this->db()->insert('xf_oc_event', $insert);
             }
         }
     }

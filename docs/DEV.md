@@ -37,6 +37,21 @@ container; edits apply on next page load (templates recompile automatically).
   `WEB_PORT=8082` — the compose file honors it, defaulting to 8080.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
 
+## Release checklist (local — needs the licensed XF runtime, so not in CI)
+
+Public CI covers `php -l` (8.2/8.3/8.4), `_output` JSON validity, and
+gitleaks. Everything below runs on the dev stack before any release:
+
+```bash
+docker compose exec -T web php /var/www/html/cmd.php xf-addon:validate-json OpenCredits/Credits
+docker compose exec -T web bash -c "cd /var/www/html/src/addons/OpenCredits/Credits && ./vendor/bin/phpunit"
+docker compose exec -T web php /var/www/html/cmd.php xf-addon:build-release OpenCredits/Credits
+# fresh-install smoke on a scratch copy, then upgrade smoke 0.9.x → current
+./scripts/dev.sh fix-perms   # after every generator/import/upgrade
+```
+
+See `addon-src/OpenCredits/Credits/tests/README.md` for the test setup.
+
 ## Granting the credit permissions (dev shortcut)
 
 Fresh installs auto-allow both for Registered. To re-grant manually:

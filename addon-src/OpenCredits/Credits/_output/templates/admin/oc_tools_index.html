@@ -1,4 +1,4 @@
-<xf:title>Tools</xf:title>
+<xf:title>{{ phrase('ocadm_tools_title') }}</xf:title>
 
 <xf:if is="$tools is not empty">
 	<div class="block">
@@ -16,5 +16,5 @@
 		</div>
 	</div>
 <xf:else />
-	<div class="blockMessage">No tools available.</div>
+	<div class="blockMessage">{{ phrase('ocadm_no_tools') }}</div>
 </xf:if>

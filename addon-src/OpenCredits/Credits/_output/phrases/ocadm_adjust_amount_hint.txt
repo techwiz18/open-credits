@@ -1,0 +1,1 @@
+Positive grants, negative removes. Rounded to the currency's smallest unit (whole numbers for 0-decimal currencies); dust amounts are refused.

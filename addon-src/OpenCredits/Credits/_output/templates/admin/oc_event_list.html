@@ -1,7 +1,7 @@
-<xf:title>Earning events</xf:title>
+<xf:title>{{ phrase('ocadm_earning_events') }}</xf:title>
 
 <xf:pageaction>
-	<xf:button href="{{ link('oc-events/add') }}" icon="add">Add event</xf:button>
+	<xf:button href="{{ link('oc-events/add') }}" icon="add">{{ phrase('ocadm_add_event') }}</xf:button>
 </xf:pageaction>
 
 <xf:if is="$groups is not empty">
@@ -26,10 +26,10 @@
 	<div class="block">
 		<div class="block-container">
 			<div class="block-footer">
-				<span class="block-footer-counter">{$total|number} events</span>
+				<span class="block-footer-counter">{{ phrase('ocadm_x_events', {'count': $total|number}) }}</span>
 			</div>
 		</div>
 	</div>
 <xf:else />
-	<div class="blockMessage">No earning events yet.</div>
+	<div class="blockMessage">{{ phrase('ocadm_no_events') }}</div>
 </xf:if>

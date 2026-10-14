@@ -1,0 +1,1 @@
+Applies to admin adjustments and charges. Member-to-member transfers can never overdraw, regardless of this setting.

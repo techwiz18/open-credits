@@ -13,15 +13,15 @@
                 <xf:if is="$xf.visitor.hasPermission('general', 'ocTransfer')">
                 <a href="{{ link('credits/transfer', '', {'currency_id': $currency.currency_id}) }}" class="button">{{ phrase('oc_transfer_to') }}</a>
                 </xf:if>
-                <a href="{{ link('credits/redeem') }}" class="button">Redeem a code</a>
+                <a href="{{ link('credits/redeem') }}" class="button">{{ phrase('oc_redeem_a_code') }}</a>
             </div>
             <xf:if is="$currencies|count > 1">
                 <div class="block-row block-row--separated">
                     <dl class="pairs pairs--justified">
-                        <dt>Viewing history for</dt>
+                        <dt>{{ phrase('oc_viewing_history_for') }}</dt>
                         <dd>
                             <strong>{$currency.title}</strong>
-                            <span class="u-muted">— switch currency:</span>
+                            <span class="u-muted">— {{ phrase('oc_switch_currency') }}:</span>
                             <xf:foreach loop="$currencies" value="$c">
                                 <xf:if is="$c.currency_id != $currency.currency_id">
                                     <a href="{{ link('credits', '', {'currency_id': $c.currency_id}) }}" class="button button--small">{$c.title}</a>

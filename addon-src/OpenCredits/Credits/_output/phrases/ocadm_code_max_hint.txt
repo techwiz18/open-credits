@@ -1,0 +1,1 @@
+How many times this code can be redeemed in total. 0 = unlimited. Each member can still only redeem it once.

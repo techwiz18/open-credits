@@ -24,22 +24,24 @@ class CreditEvent extends Entity
     {
         $currency = $this->Currency;
         $decimals = $currency ? (int)$currency->decimals : 2;
-        $hint = number_format((float)$this->amount, $decimals) . ' each';
+        $hint = \XF::phrase('ocadm_hint_each', [
+            'amount' => number_format((float)$this->amount, $decimals),
+        ])->render();
         if ($this->trigger === 'daily_login') {
-            $hint .= ' · once per day, always';
+            $hint .= ' · ' . \XF::phrase('ocadm_hint_daily')->render();
         } elseif ($this->max_per_day > 0) {
-            $hint .= ' · max ' . $this->max_per_day . ' per day';
+            $hint .= ' · ' . \XF::phrase('ocadm_hint_max_x', ['n' => $this->max_per_day])->render();
         } else {
-            $hint .= ' · unlimited';
+            $hint .= ' · ' . \XF::phrase('ocadm_hint_unlimited')->render();
         }
         if (!$this->active) {
-            $hint .= ' · INACTIVE';
+            $hint .= ' · ' . \XF::phrase('ocadm_hint_inactive')->render();
         }
         if (!$this->send_alert) {
-            $hint .= ' · no alert';
+            $hint .= ' · ' . \XF::phrase('ocadm_hint_no_alert')->render();
         }
         if (!empty($this->forum_ids) || !empty($this->usergroup_ids)) {
-            $hint .= ' · scoped';
+            $hint .= ' · ' . \XF::phrase('ocadm_hint_scoped')->render();
         }
         return $hint;
     }

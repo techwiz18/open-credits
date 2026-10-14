@@ -1,0 +1,1 @@
+Recomputes every member's balance in every currency from the append-only transaction log. Use this if balances ever look wrong. Safe to run any time; takes seconds on most forums.

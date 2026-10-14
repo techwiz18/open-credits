@@ -7,11 +7,14 @@ on:
 jobs:
   php-lint:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-version: ['8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: ${{ matrix.php-version }}
       - name: PHP syntax check
         run: |
           fail=0
@@ -35,3 +38,15 @@ jobs:
       - name: addon.json sanity
         run: |
           python3 -c "import json; d=json.load(open('addon-src/OpenCredits/Credits/addon.json')); assert d['version_id'] and d['version_string'], 'version missing'; print(d['version_string'], d['version_id'])"
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+
+  # NOTE: jobs needing the licensed XF runtime (xf-addon:validate-json,
+  # build-release smoke, PHPUnit, Setup-step tests) cannot run in public CI
+  # and stay local: see docs/DEV.md "Release checklist".
