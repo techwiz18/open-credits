@@ -1,0 +1,1 @@
+Credits granted per redemption. Must be positive.

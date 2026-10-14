@@ -1,0 +1,12 @@
+{
+    "name": "techwiz18/open-credits-dev",
+    "description": "Dev-only tooling for the OpenCredits XenForo addon (stripped from releases via build.json).",
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "config": {
+        "audit": {
+            "abandoned": "ignore"
+        }
+    }
+}

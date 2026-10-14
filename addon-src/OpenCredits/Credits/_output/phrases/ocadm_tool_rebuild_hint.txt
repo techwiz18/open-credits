@@ -1,0 +1,1 @@
+Recompute every balance from the transaction log. Safe to run any time.

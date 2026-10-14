@@ -1,0 +1,1 @@
+Awards credits for content created before OpenCredits was installed, using each event's current amount. One lump-sum row per member per event. Completed events are skipped unless forced.

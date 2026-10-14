@@ -1,42 +1,40 @@
-<xf:title>Backfill historical content</xf:title>
+<xf:title>{{ phrase('ocadm_backfill_title') }}</xf:title>
 
 <div class="block">
 	<div class="block-container">
 		<xf:if is="$ran">
 			<div class="block-body">
 				<div class="block-row block-row--separated">
-					Awarded {$awarded|number} historical transaction rows. Balances have been rebuilt from the full ledger.
-					<xf:if is="$skipped is not empty">Skipped {$skipped|count} already-completed events.</xf:if>
+					{{ phrase('ocadm_backfill_ran_x', {'count': $awarded|number}) }}
+					<xf:if is="$skipped is not empty">{{ phrase('ocadm_backfill_skipped_x', {'count': $skipped|count}) }}</xf:if>
 				</div>
 			</div>
 			<div class="block-footer">
-				<a href="{{ link('oc-tools') }}" class="button">Back to tools</a>
+				<a href="{{ link('oc-tools') }}" class="button">{{ phrase('ocadm_back_to_tools') }}</a>
 			</div>
 		<xf:else />
 			<xf:form action="{{ link('oc-tools/backfill-save') }}" class="block" ajax="true">
 				<div class="block-body">
 					<div class="block-row block-row--separated">
-						Awards credits for content created <strong>before</strong> OpenCredits was installed,
-						using each event's current amount. One lump-sum row per member per event.
-						Completed events are skipped unless forced.
+						{{ phrase('ocadm_backfill_explain') }}
 					</div>
-					<xf:checkboxrow name="event_ids[]" label="Events to backfill">
+					<xf:checkboxrow name="event_ids[]" label="{{ phrase('ocadm_events_backfill_label') }}">
 						<xf:foreach loop="$preview" value="$row">
 							<xf:option value="{$row.event_id}" selected="{{ !$row.ran }}"
-								label="{$row.label} — {$row.amount|number($row.decimals)} {$row.currency} each — {$row.users|number} members with content"
-								hint="{{ $row.ran ? 'Already completed' : '' }}" />
+								label="{{ phrase('ocadm_backfill_option_x', {'label': $row.label, 'amount': $row.amount|number($row.decimals), 'currency': $row.currency, 'users': $row.users|number}) }}"
+								hint="{{ $row.ran ? phrase('ocadm_event_completed_hint') : '' }}" />
 						</xf:foreach>
 					</xf:checkboxrow>
-					<xf:textboxrow name="username" label="Only this member"
-						placeholder="Username — blank means everyone"
+					<xf:textboxrow name="username" label="{{ phrase('ocadm_only_member') }}"
+						placeholder="{{ phrase('ocadm_only_member_placeholder') }}"
 						data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
 						data-single="true" minlength="2" />
 					<xf:checkboxrow>
-						<xf:option name="force" label="Force re-run"
-							hint="Award again even for events that already completed. Use with care — members will be paid twice." />
+						<xf:option name="force" label="{{ phrase('ocadm_force_rerun') }}"
+							hint="{{ phrase('ocadm_force_hint') }}" />
 					</xf:checkboxrow>
 				</div>
-				<xf:submitrow submit="Run backfill" />
+				<xf:submitrow submit="{{ phrase('ocadm_run_backfill') }}" />
 			</xf:form>
 		</xf:if>
 	</div>

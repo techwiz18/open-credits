@@ -94,7 +94,7 @@ class Currency extends AbstractController
                 /** @var \OpenCredits\Credits\Service\Transact $svc */
                 $svc = $this->service('OpenCredits\Credits:Transact');
                 \OpenCredits\Credits\Service\Transact::clearPrimaryCache();
-                $svc->rebuildAllBalances();
+                $svc->rebuildAllBalancesFully();
             }
         });
         $form->run();

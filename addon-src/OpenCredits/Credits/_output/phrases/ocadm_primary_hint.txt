@@ -1,0 +1,1 @@
+Shown on the profile page. Exactly one currency is primary.

@@ -25,7 +25,7 @@ class Rebuild extends AbstractCommand
 
 		/** @var \OpenCredits\Credits\Service\Transact $svc */
 		$svc = \XF::app()->service('OpenCredits\Credits:Transact');
-		$rows = $svc->rebuildAllBalances();
+		$rows = $svc->rebuildAllBalancesFully();
 
 		$io->success("Rebuilt {$rows} credit balance(s) from the transaction log.");
 

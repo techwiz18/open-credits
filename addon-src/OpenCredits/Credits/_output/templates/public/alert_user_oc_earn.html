@@ -1,2 +1,2 @@
-You earned {$extra.prefix}{$extra.amount|number($extra.decimals)}{$extra.suffix} — {$extra.reason}.
-<a href="{{ link('credits', '', {'currency_id': $extra.currency_id}) }}" class="fauxBlockLink-blockLink">View history</a>
+{{ phrase('oc_alert_earned', {'amount': $extra.prefix . $extra.amount|number($extra.decimals) . $extra.suffix, 'reason': $extra.reason}) }}
+<a href="{{ link('credits', '', {'currency_id': $extra.currency_id}) }}" class="fauxBlockLink-blockLink">{{ phrase('oc_view_history') }}</a>

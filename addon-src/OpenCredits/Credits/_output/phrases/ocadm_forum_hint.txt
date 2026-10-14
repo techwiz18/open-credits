@@ -1,0 +1,1 @@
+Thread/reply awards only for content in these forums. Other triggers ignore this.

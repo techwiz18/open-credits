@@ -1,0 +1,1 @@
+Balances are stored to 2 decimal places.

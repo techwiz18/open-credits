@@ -47,9 +47,11 @@ class Code extends Entity
     public function getUseLabel(): string
     {
         if ($this->max_uses <= 0) {
-            return (int)$this->uses . ' used · unlimited';
+            return \XF::phrase('ocadm_use_unlimited_x', ['used' => (int)$this->uses])->render();
         }
-        return (int)$this->uses . '/' . (int)$this->max_uses . ' used';
+        return \XF::phrase('ocadm_use_x', [
+            'used' => (int)$this->uses . '/' . (int)$this->max_uses,
+        ])->render();
     }
 
     public static function getStructure(Structure $structure): Structure

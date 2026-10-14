@@ -1,0 +1,1 @@
+Rebuilt {count} balance rows from the transaction log. All wallet, postbit, and profile displays now reflect the ledger.

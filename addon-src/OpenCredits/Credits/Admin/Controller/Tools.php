@@ -19,18 +19,18 @@ class Tools extends AbstractController
     {
         $tools = [
             [
-                'label' => 'Rebuild balances',
-                'hint' => 'Recompute every balance from the transaction log. Safe to run any time.',
+                'label' => \XF::phrase('ocadm_tool_rebuild_title')->render(),
+                'hint' => \XF::phrase('ocadm_tool_rebuild_hint')->render(),
                 'link' => $this->buildLink('oc-tools/rebuild-form'),
             ],
             [
-                'label' => 'Backfill historical content',
-                'hint' => 'Award credits for pre-install posts and threads, per event and per member, with preview.',
+                'label' => \XF::phrase('ocadm_tool_backfill_title')->render(),
+                'hint' => \XF::phrase('ocadm_tool_backfill_hint')->render(),
                 'link' => $this->buildLink('oc-tools/backfill'),
             ],
             [
-                'label' => 'Adjust member credits',
-                'hint' => 'Grant or remove credits for a member. Fully logged with a note.',
+                'label' => \XF::phrase('ocadm_tool_adjust_title')->render(),
+                'hint' => \XF::phrase('ocadm_tool_adjust_hint')->render(),
                 'link' => $this->buildLink('oc-tools/adjust'),
             ],
         ];
@@ -57,7 +57,12 @@ class Tools extends AbstractController
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
-        $rows = $svc->rebuildAllBalances();
+        try {
+            $rows = $svc->rebuildAllBalancesFully();
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits rebuild failed: ');
+            return $this->error('Balance rebuild failed due to a server error. Please try again.');
+        }
 
         return $this->view(
             'OpenCredits\Credits:Tools\Rebuild',
@@ -128,25 +133,60 @@ class Tools extends AbstractController
             return $this->error('No eligible events selected. The chosen events use inactive currencies.');
         }
 
+        // Each event (and each site-wide batch) commits separately so huge
+        // forums complete in small transactions instead of one giant one.
+        // A failed event rolls back to its pre-run state (tracked by ledger
+        // id), so retrying it neither double-pays nor under-pays.
         $db = $this->app->db();
-        $db->beginTransaction();
         try {
             foreach ($eligible as $event) {
                 if (!$force && $this->backfillEventRan($event, $onlyUserId)) {
                     $skipped[] = (int)$event->event_id;
                     continue;
                 }
-                $awarded += $this->runBackfillEvent($event, $onlyUserId);
+                $txnStart = (int)$db->fetchOne('SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction');
+                try {
+                if ($onlyUserId > 0) {
+                    $result = $this->runBackfillEvent($event, $onlyUserId);
+                    $awarded += $result['rows'];
+                    continue;
+                }
+                    // Site-wide runs page through user-id ranges so huge forums
+                    // complete in small transactions instead of one giant one.
+                    $next = 0;
+                    do {
+                        $result = $this->runBackfillEvent($event, 0, $next, 5000);
+                        $awarded += $result['rows'];
+                        $next = $result['next'];
+                    } while ($next !== null);
+                } catch (\Throwable $e) {
+                    $db->query(
+                        'DELETE FROM xf_oc_transaction WHERE transaction_id > ?'
+                        . ' AND `trigger` = ? AND note = ?',
+                        [$txnStart, $event->trigger, 'Historical backfill']
+                    );
+                    throw $e;
+                }
             }
-            $db->commit();
         } catch (\Throwable $e) {
-            $db->rollBack();
-            throw $e;
+            \XF::logException($e, false, 'OpenCredits backfill failed: ');
+            return $this->error(
+                'Backfill failed part-way. Finished events are kept and the '
+                . 'failed event was rolled back — fix the cause and re-run.'
+            );
         }
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
-        $svc->rebuildAllBalances();
+        try {
+            $svc->rebuildAllBalancesFully();
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits backfill rebuild failed: ');
+            return $this->error(
+                'Backfill rows were written, but the balance rebuild failed. '
+                . 'Run AdminCP → Credits → Tools → Rebuild balances to finish.'
+            );
+        }
 
         return $this->view(
             'OpenCredits\Credits:Tools\Backfill',
@@ -227,14 +267,19 @@ class Tools extends AbstractController
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
-        $ok = $svc->adjust(
-            (int)$target->user_id,
-            $currencyId,
-            $amount,
-            'admin_adjust',
-            0,
-            $note !== '' ? $note : 'Admin adjustment'
-        );
+        try {
+            $ok = $svc->adjust(
+                (int)$target->user_id,
+                $currencyId,
+                $amount,
+                'admin_adjust',
+                0,
+                $note !== '' ? $note : 'Admin adjustment'
+            );
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits admin adjust failed: ');
+            return $this->error('Adjustment failed due to a server error. Please try again.');
+        }
 
         if (!$ok) {
             return $this->error('Adjustment refused — check the currency allows the resulting balance (no overdraft when negatives are disabled).');
@@ -303,11 +348,16 @@ class Tools extends AbstractController
         return $preview;
     }
 
-    protected function runBackfillEvent($event, int $onlyUserId = 0): int
+    /**
+     * Backfills one event. Per-member mode writes a single row. Site-wide
+     * mode processes one user-id range per call (pass $batchSize > 0 and loop
+     * on 'next') so huge forums complete in small transactions. Each call
+     * commits atomically and returns ['rows', 'next' (or null when done)].
+     */
+    protected function runBackfillEvent($event, int $onlyUserId = 0, int $startAfterUserId = 0, int $batchSize = 0): array
     {
         $db = $this->app->db();
         $now = \XF::$time;
-        $rows = 0;
 
         $currency = $event->Currency;
         $decimals = $currency ? (int)$currency->decimals : 2;
@@ -315,42 +365,78 @@ class Tools extends AbstractController
         // never receive sub-unit lump sums.
         $perItem = round((float)$event->amount, $decimals);
         if ($perItem == 0.0) {
-            return 0;
+            return ['rows' => 0, 'next' => null];
         }
 
         if ($event->trigger === 'post') {
-            $sql = "SELECT user_id, COUNT(*) FROM xf_post WHERE message_state = 'visible' AND user_id > 0";
+            $contentTable = 'xf_post';
+            $stateColumn = 'message_state';
+            $stateValue = 'visible';
         } else {
-            $sql = "SELECT user_id, COUNT(*) FROM xf_thread WHERE discussion_state = 'visible' AND user_id > 0";
+            $contentTable = 'xf_thread';
+            $stateColumn = 'discussion_state';
+            $stateValue = 'visible';
         }
+        $maxUserId = max(
+            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_user'),
+            $onlyUserId
+        );
+
+        $where = "{$stateColumn} = '{$stateValue}' AND user_id > 0";
         $params = [];
         if ($onlyUserId > 0) {
-            $sql .= ' AND user_id = ?';
+            $where .= ' AND user_id = ?';
             $params[] = $onlyUserId;
-        } else {
+            $endUserId = $maxUserId;
+        } elseif ($batchSize > 0) {
+            $endUserId = $startAfterUserId + $batchSize;
+            $where .= ' AND user_id > ? AND user_id <= ?';
+            $params[] = $startAfterUserId;
+            $params[] = $endUserId;
             // A site-wide run must not re-pay members who already received a
             // per-member backfill for this event (their rows carry a nonzero
             // content_id, invisible to the site-wide completion guard).
-            $sql .= ' AND user_id NOT IN (SELECT user_id FROM xf_oc_transaction'
+            $where .= ' AND user_id NOT IN (SELECT user_id FROM xf_oc_transaction'
+                . " WHERE note = 'Historical backfill' AND `trigger` = ? AND currency_id = ? AND content_id <> 0)";
+            $params[] = $event->trigger;
+            $params[] = (int)$event->currency_id;
+        } else {
+            $endUserId = $maxUserId;
+            // A site-wide run must not re-pay members who already received a
+            // per-member backfill for this event (their rows carry a nonzero
+            // content_id, invisible to the site-wide completion guard).
+            $where .= ' AND user_id NOT IN (SELECT user_id FROM xf_oc_transaction'
                 . " WHERE note = 'Historical backfill' AND `trigger` = ? AND currency_id = ? AND content_id <> 0)";
             $params[] = $event->trigger;
             $params[] = (int)$event->currency_id;
         }
-        $counts = $db->fetchPairs($sql . ' GROUP BY user_id', $params);
+        $counts = $db->fetchPairs(
+            "SELECT user_id, COUNT(*) FROM {$contentTable} WHERE {$where} GROUP BY user_id",
+            $params
+        );
 
-        foreach ($counts as $userId => $count) {
-            $db->insert('xf_oc_transaction', [
-                'user_id' => (int)$userId,
-                'currency_id' => (int)$event->currency_id,
-                'amount' => round($count * $perItem, $decimals),
-                'trigger' => $event->trigger,
-                'content_type' => $event->trigger,
-                'content_id' => $onlyUserId > 0 ? $onlyUserId : 0,
-                'note' => 'Historical backfill',
-                'log_date' => $now,
-            ]);
-            $rows++;
+        $rows = 0;
+        $db->beginTransaction();
+        try {
+            foreach ($counts as $userId => $count) {
+                $db->insert('xf_oc_transaction', [
+                    'user_id' => (int)$userId,
+                    'currency_id' => (int)$event->currency_id,
+                    'amount' => round($count * $perItem, $decimals),
+                    'trigger' => $event->trigger,
+                    'content_type' => $event->trigger,
+                    'content_id' => $onlyUserId > 0 ? $onlyUserId : 0,
+                    'note' => 'Historical backfill',
+                    'log_date' => $now,
+                ]);
+                $rows++;
+            }
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
         }
-        return $rows;
+        $next = ($batchSize > 0 && $onlyUserId <= 0 && $endUserId < $maxUserId) ? $endUserId : null;
+        return ['rows' => $rows, 'next' => $next];
     }
 }

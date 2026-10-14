@@ -1,0 +1,10 @@
+{
+    "exclude": [
+        "tests",
+        "vendor",
+        "composer.json",
+        "composer.lock",
+        "phpunit.xml",
+        "build.json"
+    ]
+}

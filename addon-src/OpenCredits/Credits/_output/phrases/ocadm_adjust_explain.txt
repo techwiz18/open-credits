@@ -1,0 +1,1 @@
+Grant or remove credits for a member. Positive amounts grant, negative amounts remove. Every adjustment is written through the transaction service and appears in the member's history.

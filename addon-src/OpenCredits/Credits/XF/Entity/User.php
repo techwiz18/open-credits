@@ -9,10 +9,17 @@ class User extends XFCP_User
     /**
      * @return array[] Active + visible currencies with this user's balances.
      * Each row: currency_id, title, prefix, suffix, decimals, balance.
+     * Fails open to [] so template rendering never 500s when the addon
+     * tables are unavailable (mid-upgrade, failed install).
      */
     public function getOcBalances(): array
     {
-        return $this->ocTransact()->balancesFor((int)$this->user_id, true);
+        try {
+            return $this->ocTransact()->balancesFor((int)$this->user_id, true);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits balances lookup failed: ');
+            return [];
+        }
     }
 
     /**
@@ -20,7 +27,12 @@ class User extends XFCP_User
      */
     public function getOcAllBalances(): array
     {
-        return $this->ocTransact()->balancesFor((int)$this->user_id, false);
+        try {
+            return $this->ocTransact()->balancesFor((int)$this->user_id, false);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits balances lookup failed: ');
+            return [];
+        }
     }
 
     /**
@@ -28,7 +40,7 @@ class User extends XFCP_User
      */
     public function getOcPrimary(): ?array
     {
-        foreach ($this->ocTransact()->balancesFor((int)$this->user_id, true) as $row) {
+        foreach ($this->getOcAllBalances() as $row) {
             if (!empty($row['is_primary'])) {
                 return $row;
             }

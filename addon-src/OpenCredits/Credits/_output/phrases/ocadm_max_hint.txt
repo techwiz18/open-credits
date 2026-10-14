@@ -1,0 +1,1 @@
+How many times this event can pay out per member per day. 0 = unlimited. Daily visits always pay once per day regardless.

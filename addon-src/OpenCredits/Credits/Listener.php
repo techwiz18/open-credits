@@ -22,11 +22,20 @@ class Listener
     protected static function needsForumContext(string $trigger): bool
     {
         if (!array_key_exists($trigger, self::$needsForumContext)) {
-            self::$needsForumContext[$trigger] = (bool)\XF::app()->db()->fetchOne(
-                'SELECT event_id FROM xf_oc_event WHERE `trigger` = ? AND active = 1'
-                . " AND forum_ids IS NOT NULL AND forum_ids != '' AND forum_ids != '[]' LIMIT 1",
-                $trigger
-            );
+            // Guarded: this runs on core hot paths (post save, reactions),
+            // which must never 500 when the addon tables are unavailable
+            // (mid-upgrade, failed install). Fail open — downstream award
+            // calls fail safe on their own.
+            try {
+                self::$needsForumContext[$trigger] = (bool)\XF::app()->db()->fetchOne(
+                    'SELECT event_id FROM xf_oc_event WHERE `trigger` = ? AND active = 1'
+                    . " AND forum_ids IS NOT NULL AND forum_ids != '' AND forum_ids != '[]' LIMIT 1",
+                    $trigger
+                );
+            } catch (\Throwable $e) {
+                \XF::logException($e, false, 'OpenCredits forum-context check failed: ');
+                self::$needsForumContext[$trigger] = false;
+            }
         }
         return self::$needsForumContext[$trigger];
     }
@@ -60,8 +69,12 @@ class Listener
         }
         $nodeId = 0;
         if (self::needsForumContext('post')) {
-            $thread = $entity->Thread;
-            $nodeId = $thread ? (int)$thread->node_id : 0;
+            try {
+                $thread = $entity->Thread;
+                $nodeId = $thread ? (int)$thread->node_id : 0;
+            } catch (\Throwable $e) {
+                \XF::logException($e, false, 'OpenCredits post forum lookup failed: ');
+            }
         }
         self::applyTrigger('post', (int)$entity->user_id, (int)$entity->post_id, 'post', $nodeId);
     }

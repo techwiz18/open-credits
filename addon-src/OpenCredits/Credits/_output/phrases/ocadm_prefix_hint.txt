@@ -1,0 +1,1 @@
+Shown before the amount, e.g. $ or B$. Can be blank.

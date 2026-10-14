@@ -1,4 +1,508 @@
 {
+    "ocadm_active.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "4d3d769b812b6faa6b76e1a8abaece2d"
+    },
+    "ocadm_add_code.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "86486988e5f03414943e96cd5f365f6e"
+    },
+    "ocadm_add_currency.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "b12fbda20958271c797fa53510153ab0"
+    },
+    "ocadm_add_event.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "8b53ed03ace55acb950477150ff040e7"
+    },
+    "ocadm_adjust_amount_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "d0a2e4744b7c978a4cd0d11e678b7997"
+    },
+    "ocadm_adjust_another.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "edfdd73f647e11d805d1ed0f3f351a56"
+    },
+    "ocadm_adjust_explain.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "9c2d0bedfd91386c70c11ec7fa5af98c"
+    },
+    "ocadm_adjust_title.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "13cef49d1d27fe87e1bd7f4889a717b4"
+    },
+    "ocadm_adjusted_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "66f82d715c18d53d6e73726cf5126799"
+    },
+    "ocadm_alert_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "86b4a499c4cfd03848f6b3c580c85e7a"
+    },
+    "ocadm_allow_negative.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "3a671b18a818d73641f0bd36d303c452"
+    },
+    "ocadm_allow_negative_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "0180fca2bc877eab652b91c535f4f62c"
+    },
+    "ocadm_amount_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "d4d7ebd3f6755b1684b9f7c492c4feb6"
+    },
+    "ocadm_apply_adjustment.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "e7dd59969cef3d8c58242094162e8868"
+    },
+    "ocadm_back_to_tools.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "c72742f4bfc417287281fdac6a190420"
+    },
+    "ocadm_backfill_explain.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "fa1a6e14e775e6292db7dd59f3e14b05"
+    },
+    "ocadm_backfill_ran_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "ab1d2c3d04034be89702200e1da5b0aa"
+    },
+    "ocadm_backfill_skipped_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "e0b33dc0da79f3896a99db15e2a8d53f"
+    },
+    "ocadm_backfill_title.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "e92f0169bf57564a255d8417e094b667"
+    },
+    "ocadm_code_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "4dc78a50bd55653def19db84300e9c31"
+    },
+    "ocadm_code_max_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "60e464a4c66685faf77b0d1fd8f1566e"
+    },
+    "ocadm_currencies.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "dfcfc43722eef1eab1e4a12e50a068b1"
+    },
+    "ocadm_currency.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "386c339d37e737a436499d423a77df0c"
+    },
+    "ocadm_currency_active_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "4422dedaab10a3ad0a1f49d96591fa93"
+    },
+    "ocadm_decimals.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "2b417805040de3a3df31c8fd3626b57c"
+    },
+    "ocadm_decimals_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "2e8a0175d801ac4eb935657f8b128c21"
+    },
+    "ocadm_earning_events.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "4edafe49e9ff0aca5796e6db9d7f1ed4"
+    },
+    "ocadm_edit_code_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "b804fa1782a13aa69b8a320feea165d7"
+    },
+    "ocadm_edit_currency_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "9758d8193bd905aff4107a06c4cf9d1e"
+    },
+    "ocadm_edit_event_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "87a84f3c22f81e02d535f815982d3039"
+    },
+    "ocadm_event_completed_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "08a11e554a5f5b2e9180083895e67a30"
+    },
+    "ocadm_events_backfill_label.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "c72fb860075ca922387075c0b6a3bdca"
+    },
+    "ocadm_expiry.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "95b16127e70e8a90220404fb48343182"
+    },
+    "ocadm_expiry_placeholder.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "d6e3bed1e74d80117c7cee2d23940ca7"
+    },
+    "ocadm_force_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "a4509209faa446b07868995d8b740c2a"
+    },
+    "ocadm_force_rerun.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "a765f38fbe79cab994a46732b6402114"
+    },
+    "ocadm_forum_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "7a93b04d9b3660c7b7b3f1f55bdf22b2"
+    },
+    "ocadm_forum_placeholder.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "4d7daccae8fb017e56669c1256ce5b48"
+    },
+    "ocadm_groups_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "d8fcf9a2ecef2e5e64221a94e35f8df1"
+    },
+    "ocadm_max_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "e743a1a5215de578b54cb5155f867d1d"
+    },
+    "ocadm_max_per_day.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "6d495e6d696cc5d272d62e08fa221769"
+    },
+    "ocadm_max_total.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "f6155076e20570c5f1b66a4e897ccc3b"
+    },
+    "ocadm_member.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "858ba4765e53c712ef672a9570474b1d"
+    },
+    "ocadm_no_codes.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "60befbaa47163ed6f3aaae91efd6ad7e"
+    },
+    "ocadm_no_currencies.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "889bb707ddd63f33a493bd1a36d900bf"
+    },
+    "ocadm_no_events.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "029945d0709d1ef303227684b9ae01c0"
+    },
+    "ocadm_no_tools.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "fd3be91dc07a40181a12335ac1561f20"
+    },
+    "ocadm_note.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "3b0649c72650c313a357338dcdfb64ec"
+    },
+    "ocadm_note_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "8434bc347307460e647a9d09e5094423"
+    },
+    "ocadm_note_placeholder.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "7cdf760b90a22a3f785e380c35605340"
+    },
+    "ocadm_only_forums.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "0de37360ed4e412b46210dca7155acf0"
+    },
+    "ocadm_only_groups.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "82fd822259bb80eef42f406401966b45"
+    },
+    "ocadm_only_member.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "c38af7a284a0f59e484a4d38d8d40a09"
+    },
+    "ocadm_only_member_placeholder.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "fbde1de95793453a8edb79b7664d564d"
+    },
+    "ocadm_prefix.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "716de874a0d74f25c0aa8c444c3a7539"
+    },
+    "ocadm_prefix_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "a739bdb66340efc431051792fa72f460"
+    },
+    "ocadm_primary.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "d9be0ad94d519b5d425730b3c6894aec"
+    },
+    "ocadm_primary_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "1a6446960c03af4d8415d7f9906cfb43"
+    },
+    "ocadm_rebuild_explain.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "8b5936b118be5c4c5ec75f0cf8935059"
+    },
+    "ocadm_rebuild_now.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "2eac6090faeb03e3bc9dab9323642864"
+    },
+    "ocadm_rebuild_title.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "a169bf9c479901c47c6fc12916752487"
+    },
+    "ocadm_rebuilt_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "314b36a798035339049a15413bbd562e"
+    },
+    "ocadm_run_backfill.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "f8145749c1ecd30d972414907128722c"
+    },
+    "ocadm_save.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "c9cc8cce247e49bae79f15173ce97354"
+    },
+    "ocadm_send_alert.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "f6c7ae731388c39bc39a2c96f3fdf935"
+    },
+    "ocadm_suffix.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "56e6ddd1cb6cec596b433440dfb21c17"
+    },
+    "ocadm_suffix_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "c98d155b52016eab844039a0735d3e5c"
+    },
+    "ocadm_title.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "b78a3223503896721cca1303f776159b"
+    },
+    "ocadm_title_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "715569bda7f6f8fd553f3800a89549cb"
+    },
+    "ocadm_tool_adjust_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "645ed74c4c5fc4d19d139073a0b33b73"
+    },
+    "ocadm_tool_adjust_title.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "13cef49d1d27fe87e1bd7f4889a717b4"
+    },
+    "ocadm_tool_backfill_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "a82868e8bffb2420bad5b59b04aa7eb0"
+    },
+    "ocadm_tool_backfill_title.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "e92f0169bf57564a255d8417e094b667"
+    },
+    "ocadm_tool_rebuild_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "254544efee5a2acc2a5fcb0d7e9fa4d1"
+    },
+    "ocadm_tool_rebuild_title.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "a169bf9c479901c47c6fc12916752487"
+    },
+    "ocadm_tools_title.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "8625e1de7be14c39b1d14dc03d822497"
+    },
+    "ocadm_trigger.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "f698f67f5666aff10729d8a1cb1c14d2"
+    },
+    "ocadm_trigger_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "1cd95c689f33f6fdab7bfcc46ac8d320"
+    },
+    "ocadm_used_so_far.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "678e7c47479bb338050de7744948edc8"
+    },
+    "ocadm_username_placeholder.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "f6039d44b29456b20f8f373155ae4973"
+    },
+    "ocadm_visible.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "ec24d78ce33048dc73a2b6b1a0690192"
+    },
+    "ocadm_visible_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "da3f9f2ea21185d95eb8aab7edd7fa89"
+    },
+    "ocadm_x_codes.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "519fbb0e736f73abb790eb971609f1bd"
+    },
+    "ocadm_x_events.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "a07794b7d7d435c383a1b74d94bd98ca"
+    },
     "alert_opt_out.user_oc_earn.txt": {
         "global_cache": false,
         "version_id": 923,
@@ -70,6 +574,90 @@
         "version_id": 300,
         "version_string": "0.3.0",
         "hash": "643e7eb45d35ba3662fbf6daed9daa97"
+    },
+    "oc_alert_earned.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "92bf4f823ac91dd6238a4710ce30af0f"
+    },
+    "oc_amount.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "b2f40690858b404ed10e62bdf422c704"
+    },
+    "oc_code.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "ca0dbad92a874b2f69b549293387925e"
+    },
+    "oc_redeem.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "81ed4dcb851fefbbbc791eeef4cd97a2"
+    },
+    "oc_redeem_a_code.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "6d5303da06cf0afbbc856e58d3c49e34"
+    },
+    "oc_redeem_another.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "f6e4f222f9b4c9c1c18ea485ac0ea17f"
+    },
+    "oc_redeem_explain.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "63aa7e54cdf593658fdcf5769ee64fe3"
+    },
+    "oc_redeemed_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "6d80846aa0f0f551d3a979f38376b4d2"
+    },
+    "oc_smallest_unit_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "e535116f8c24d9ee76ab1853e4c674b0"
+    },
+    "oc_to_user.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "e63c62356907b7996ea90939ce0bacbe"
+    },
+    "oc_view_history.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "dbda87480bc504af285e7ed4b775df61"
+    },
+    "oc_view_full_history.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "dc086e1aa14e0f263ed58999c9b51a26"
+    },
+    "oc_viewing_history_for.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "3a0063a205248d4785f5d5fc11140fc8"
+    },
+    "oc_switch_currency.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "77e49265a4598834b7f9df126cf1e5e3"
     },
     "option.ocShowMenu.txt": {
         "global_cache": false,
@@ -154,5 +742,35 @@
         "version_id": 800,
         "version_string": "0.8.0",
         "hash": "948a2e3548aaf7f9941a3192fa607d51"
+    },
+    "ocadm_code_amount_hint.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "3786ff50c74ddc4354941c95928662e2"
+    },
+    "ocadm_currency_sample_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "ef57867959de85f04b38cfb542aca64c"
+    },
+    "ocadm_currency_stats.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "39dc1c7c8d9d58d2e380c2ed3608c6b1"
+    },
+    "ocadm_adjust_logged.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "354306c04a0a9ead50f39c978592314e"
+    },
+    "ocadm_backfill_option_x.txt": {
+        "global_cache": false,
+        "version_id": 927,
+        "version_string": "0.10.1-dev",
+        "hash": "643b56d0f64992011f400a64485c19f6"
     }
 }
