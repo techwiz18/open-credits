@@ -34,10 +34,16 @@ namespace XF\Mvc\Entity {
 }
 
 namespace {
-    spl_autoload_register(function ($class) {
+    // Addon root: repo layout (<repo>/addon-src/OpenCredits/Credits) by
+    // default; override with OC_ADDON_SRC when the checkout is mounted
+    // elsewhere (e.g. a temp copy inside the web container).
+    $addonRoot = getenv('OC_ADDON_SRC')
+        ?: (__DIR__ . '/../../addon-src/OpenCredits/Credits');
+    spl_autoload_register(function ($class) use ($addonRoot) {
         $prefix = 'OpenCredits\\Credits\\';
         if (strpos($class, $prefix) === 0) {
-            $file = __DIR__ . '/../' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+            $file = $addonRoot . '/'
+                . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
             if (is_file($file)) {
                 require_once $file;
             }
