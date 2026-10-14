@@ -1,16 +1,15 @@
 # OpenCredits — open-source credits for XenForo 2.3+
 
-[![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-blue)](https://www.php.net/releases/8.2/) [![XenForo 2.3+](https://img.shields.io/badge/XenForo-2.3%2B-orange)](https://xenforo.com/) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/techwiz18/open-credits)](../../releases) [![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-blue)](https://www.php.net/releases/8.2/) [![XenForo 2.3+](https://img.shields.io/badge/XenForo-2.3%2B-orange)](https://xenforo.com/) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 A free (MIT) credits system for XenForo 2.3+: reward activity, show balances,
-let members transfer credits, gate trophies on wealth.
+let members transfer credits and redeem codes, gate trophies on wealth.
 
 ## What members get
 
 * **Earn credits** for posting threads/replies, receiving reactions, registering,
   and daily visits — amounts managed in AdminCP → Credits → Earning events.
-* **Multiple currencies** with a primary and per-currency visibility, all
-  managed in AdminCP → Credits → Currencies.
+* **Multiple currencies** with a primary and per-currency visibility.
 * **Wallet everywhere** — balances in postbit, in the account menu, and on
   member profiles (primary stat plus a full currencies tab); per-currency
   history at `/credits/`, reachable from the Credits nav tab.
@@ -22,12 +21,23 @@ let members transfer credits, gate trophies on wealth.
   member opt-out, global kill switch in Setup → Options → Credits).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
   trophies, notices, and user-group promotions.
+
+## What admins get
+
+* **Currencies & earning events** — amounts, per-currency triggers, daily
+  caps, forum/user-group scoping, and per-event alert toggles, all under
+  AdminCP → Credits.
+* **Redeem codes** — create coupon codes with use caps and expiry dates.
+* **Adjust tools** — grant or remove any member's credits, fully logged.
+* **Rebuild & backfill** — recompute every balance from the append-only
+  ledger; award pre-install content per event and member.
 * **Display control** — per-location toggles in Setup → Options → Credits
   (postbit, account menu, profile stat, profile tab).
-* **Admin tools** — rebuild balances from the ledger, backfill pre-install
-  content, all under AdminCP → Credits → Tools.
 * **Built to integrate** — spend/award API plus a change event other add-ons
   can hook (see below).
+
+All admin features are gated by the `Manage credits` admin permission
+(see AdminCP access below).
 
 ## Requirements
 
@@ -62,8 +72,8 @@ Add-ons → OpenCredits → **Upgrade**.
 
 ## AdminCP access
 
-The **Credits** AdminCP section (currencies, earning events) is gated by the
-`Manage credits` admin permission:
+The **Credits** AdminCP section (currencies, events, codes, tools) is gated by
+the `Manage credits` admin permission:
 
 * Super admins (the forum owner account is one by default) always have access.
 * Other admins need the toggle, and it only appears for the right account type:
@@ -93,8 +103,9 @@ Credits (Earning events / Currencies).
 * **No permission errors on `/credits/`** — the two Credits permissions default
   to deny except on fresh installs, which auto-allow them for Registered;
   check the **Credits** tab if access fails.
-* **Uninstalling deletes everything** — balances, ledger, events, and
-  currencies are wiped (disabling is not offered; re-install starts from zero).
+* **Uninstalling deletes everything** — balances, ledger, events, currencies,
+  and redeem codes are wiped (disabling is not offered; re-install starts
+  from zero).
 
 ## Integrating other add-ons
 
@@ -125,15 +136,18 @@ Full reference (method signatures, trust rules, criteria, worked examples):
   (written as an LLM/contributor reference).
 * [docs/XF-DEV-GOTCHAS.md](docs/XF-DEV-GOTCHAS.md) — hard-won XF 2.3 dev-output
   and API conventions.
-* CI lints PHP + validates `_output` JSON on every push.
+* CI runs PHP syntax checks (8.2–8.4), `_output` JSON validation, PHPUnit,
+  and secret scanning on every push. Runtime-dependent checks
+  (`xf-addon:validate-json`, build smoke) run locally — see DEV.md.
 
 ## Roadmap
 
 Tracked as [issues and milestones](../../milestones): v0.10 shipped alerts
-on earn (with per-event toggle, member opt-out, and global kill switch),
-redeem codes, and admin adjust/take tools; bigger epics (charge BBCode,
-interest/tax/paychecks, payments/shop, profile wallet + log pruning) sit in
-Future. File or vote on issues to shape what lands next.
+on earn, redeem codes, and admin adjust/take tools, and v0.10.1 followed with
+hardening (reaction-dedup, guarded backfills, event scoping, full i18n, test
+harness). Bigger epics (charge BBCode, interest/tax/paychecks, payments/shop,
+profile wallet + log pruning) sit in Future. File or vote on issues to shape
+what lands next.
 
 ## Built with AI
 
