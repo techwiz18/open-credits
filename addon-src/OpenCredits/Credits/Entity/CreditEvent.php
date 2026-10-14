@@ -35,6 +35,12 @@ class CreditEvent extends Entity
         if (!$this->active) {
             $hint .= ' · INACTIVE';
         }
+        if (!$this->send_alert) {
+            $hint .= ' · no alert';
+        }
+        if (!empty($this->forum_ids) || !empty($this->usergroup_ids)) {
+            $hint .= ' · scoped';
+        }
         return $hint;
     }
 
@@ -52,6 +58,7 @@ class CreditEvent extends Entity
             'usergroup_ids' => ['type' => self::JSON_ARRAY, 'nullable' => true, 'default' => null],
             'max_per_day' => ['type' => self::UINT, 'default' => 0],
             'active' => ['type' => self::BOOL, 'default' => true],
+            'send_alert' => ['type' => self::BOOL, 'default' => true],
         ];
         $structure->getters = [
             'display_label' => true,

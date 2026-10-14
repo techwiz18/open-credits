@@ -64,7 +64,17 @@ class Credits extends AbstractController
         'reaction_received' => 'Reaction received',
         'register' => 'Registration',
         'daily_login' => 'Daily visit',
+        'redeem' => 'Redeem code',
     ];
+
+    /**
+     * Smallest input step for an amount field, e.g. "1" for 0-decimal
+     * currencies, "0.01" for 2-decimal ones.
+     */
+    protected static function amountStep(int $decimals): string
+    {
+        return $decimals > 0 ? '0.' . str_repeat('0', $decimals - 1) . '1' : '1';
+    }
 
     /**
      * Turns transaction entities into display rows, resolving counterparties
@@ -120,7 +130,7 @@ class Credits extends AbstractController
             if ($txn->trigger === 'transfer') {
                 $entry['label'] = $amount < 0 ? 'Transfer sent' : 'Transfer received';
                 $otherId = (int)$txn->content_id;
-                if (isset($users[$otherId])) {
+                if (isset($users[$otherId]) && $users[$otherId]->canViewBasicProfile($profileError)) {
                     $entry['detailUser'] = $users[$otherId];
                 }
             } elseif ($txn->trigger === 'thread'
@@ -152,7 +162,7 @@ class Credits extends AbstractController
 
     public function actionMember(ParameterBag $params): AbstractReply
     {
-        if (!\XF::visitor()->hasPermission('general', 'ocView')) {
+        if (!\XF::visitor()->user_id || !\XF::visitor()->hasPermission('general', 'ocView')) {
             return $this->noPermission();
         }
         $user = $this->em()->find('XF:User', $this->filter('user_id', 'uint'));
@@ -167,7 +177,7 @@ class Credits extends AbstractController
         );
     }
 
-    protected function assertViewableCurrency(int $currencyId): \XF\Mvc\Entity\Entity
+    protected function assertViewableCurrency(int $currencyId, bool $fallback = true): \XF\Mvc\Entity\Entity
     {
         $finder = $this->finder('OpenCredits\Credits:Currency')
             ->where('active', 1)
@@ -176,6 +186,9 @@ class Credits extends AbstractController
             $currency = (clone $finder)->where('currency_id', $currencyId)->fetchOne();
             if ($currency) {
                 return $currency;
+            }
+            if (!$fallback) {
+                throw $this->exception($this->error('Please select a valid currency.'));
             }
         }
         $primary = (clone $finder)->where('is_primary', 1)->fetchOne();
@@ -210,6 +223,7 @@ class Credits extends AbstractController
             'currency' => $currency,
             'balance' => $balance,
             'to' => $this->filter('to', 'str'),
+            'amountStep' => self::amountStep((int)$currency->decimals),
         ];
 
         return $this->view(
@@ -229,8 +243,8 @@ class Credits extends AbstractController
         }
 
         $to = $this->filter('to', 'str');
-        $amount = round($this->filter('amount', 'float'), 2);
-        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
+        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'), false);
+        $amount = round($this->filter('amount', 'float'), (int)$currency->decimals);
 
         if (!strlen($to)) {
             return $this->error('Please enter a username to send credits to.');
@@ -249,6 +263,9 @@ class Credits extends AbstractController
         if (in_array($target->user_state, ['banned', 'rejected', 'disabled'], true)) {
             return $this->error('Credits cannot be transferred to that account.');
         }
+        if (in_array($visitor->user_state, ['banned', 'rejected', 'disabled'], true)) {
+            return $this->error('Credits cannot be transferred from that account.');
+        }
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
@@ -264,5 +281,75 @@ class Credits extends AbstractController
         }
 
         return $this->redirect($this->buildLink('credits', null, ['currency_id' => $currency->currency_id]));
+    }
+
+    public function actionRedeem(ParameterBag $params): AbstractReply
+    {
+        $visitor = \XF::visitor();
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
+            return $this->noPermission();
+        }
+
+        return $this->view(
+            'OpenCredits\Credits:Credits\Redeem',
+            'credits_redeem',
+            ['ran' => false, 'code' => $this->filter('code', 'str')]
+        );
+    }
+
+    public function actionRedeemSave(ParameterBag $params): AbstractReply
+    {
+        $this->assertPostOnly();
+
+        $visitor = \XF::visitor();
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
+            return $this->noPermission();
+        }
+
+        $code = trim($this->filter('code', 'str'));
+        if ($code === '') {
+            return $this->error('Enter a redeem code.');
+        }
+
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+        try {
+            $granted = null;
+            $status = $svc->redeem((int)$visitor->user_id, $code, $granted);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits redeem failed: ');
+            return $this->error('Redemption failed due to a server error. Please try again.');
+        }
+
+        if ($status !== 'ok') {
+            $messages = [
+                'not_found' => 'That code was not found. Check the spelling and try again.',
+                'inactive' => 'That code is no longer active.',
+                'expired' => 'That code has expired.',
+                'exhausted' => 'That code has already been fully redeemed.',
+                'already_redeemed' => 'You have already redeemed that code.',
+                'invalid_amount' => 'That code cannot be redeemed right now.',
+            ];
+            return $this->error($messages[$status] ?? 'That code cannot be redeemed.');
+        }
+
+        $currency = $this->em()->find(
+            'OpenCredits\Credits:Currency',
+            (int)$granted['currency_id']
+        );
+        if (!$currency) {
+            return $this->error('Redemption succeeded but the currency is gone. Contact an administrator.');
+        }
+
+        return $this->view(
+            'OpenCredits\Credits:Credits\Redeem',
+            'credits_redeem',
+            [
+                'ran' => true,
+                'code' => $code,
+                'amount' => (float)$granted['amount'],
+                'currency' => $currency,
+            ]
+        );
     }
 }

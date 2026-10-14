@@ -18,8 +18,9 @@
                 placeholder="Username" required="true"
                 data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
                 data-single="true" minlength="2" />
-            <xf:textboxrow name="amount" type="number" step="0.01" min="0.01" label="Amount"
-                placeholder="0.00" required="true" />
+            <xf:textboxrow name="amount" type="number" step="{$amountStep}" min="{$amountStep}" label="Amount"
+                placeholder="0.00" required="true"
+                hint="Smallest unit for {$currency.title}: {$amountStep}." />
         </div>
         <xf:submitrow submit="{{ phrase('oc_transfer') }}" />
     </div>

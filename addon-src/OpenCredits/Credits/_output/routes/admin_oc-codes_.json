@@ -1,0 +1,11 @@
+{
+    "route_type": "admin",
+    "route_prefix": "oc-codes",
+    "sub_name": "",
+    "format": ":int<code_id>",
+    "build_class": "",
+    "build_method": "",
+    "controller": "OpenCredits\\Credits\\Admin\\Controller\\Codes",
+    "context": "",
+    "action_prefix": ""
+}

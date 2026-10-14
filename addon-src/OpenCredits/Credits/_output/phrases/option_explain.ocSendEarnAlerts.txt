@@ -1,0 +1,1 @@
+Master switch for "you earned credits" alerts (event awards and transfers received). Per-event toggles and member opt-outs still apply when this is on.

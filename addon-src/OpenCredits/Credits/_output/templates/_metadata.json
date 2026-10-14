@@ -1,4 +1,14 @@
 {
+    "admin/oc_code_edit.html": {
+        "version_id": 924,
+        "version_string": "0.10.0-dev",
+        "hash": "498e8d85a8f138b51afd1088830bb489"
+    },
+    "admin/oc_code_list.html": {
+        "version_id": 924,
+        "version_string": "0.10.0-dev",
+        "hash": "1ca196c29e0b383f88cb8f6822731b64"
+    },
     "admin/oc_currency_edit.html": {
         "version_id": 906,
         "version_string": "0.9.6",
@@ -10,14 +20,19 @@
         "hash": "83ef151bd5cd08535f534e7518299950"
     },
     "admin/oc_event_edit.html": {
-        "version_id": 907,
-        "version_string": "0.9.7",
-        "hash": "cf44ea6b4631167bb2711d974d4d1b64"
+        "version_id": 924,
+        "version_string": "0.10.0-dev",
+        "hash": "b2b40f488b49be7858b7acad37015c4d"
     },
     "admin/oc_event_list.html": {
-        "version_id": 916,
-        "version_string": "0.9.16",
-        "hash": "b52fa60703a2e9f32cff005aa1696ca1"
+        "version_id": 924,
+        "version_string": "0.10.0-dev",
+        "hash": "60d8f715d4d886e0d223b430a8a079a2"
+    },
+    "admin/oc_tools_adjust.html": {
+        "version_id": 922,
+        "version_string": "0.10.0-dev",
+        "hash": "377b721da3c97adc0ac4aeeae9eb1f91"
     },
     "admin/oc_tools_backfill.html": {
         "version_id": 919,
@@ -34,19 +49,29 @@
         "version_string": "0.9.19",
         "hash": "ef4211072e5c820ca58b01d217eb11e8"
     },
+    "public/alert_user_oc_earn.html": {
+        "version_id": 922,
+        "version_string": "0.10.0-dev",
+        "hash": "055a1102e683636f3bd61f5ca5429f95"
+    },
     "public/credits_index.html": {
-        "version_id": 920,
-        "version_string": "0.9.20",
-        "hash": "6260574c47b3c7fef968027f60ada72c"
+        "version_id": 923,
+        "version_string": "0.10.0-dev",
+        "hash": "effdc62681f51e2d887c9de80cfc2b5d"
     },
     "public/credits_member.html": {
         "version_id": 920,
         "version_string": "0.9.20",
         "hash": "dc422d598b270b6519ecc3b79bf62629"
     },
+    "public/credits_redeem.html": {
+        "version_id": 924,
+        "version_string": "0.10.0-dev",
+        "hash": "d1f967c5171657a3b3594eb7152238ac"
+    },
     "public/credits_transfer.html": {
-        "version_id": 901,
-        "version_string": "0.9.1",
-        "hash": "e126dd4fe485f2d2f36676e94593d041"
+        "version_id": 922,
+        "version_string": "0.10.0-dev",
+        "hash": "25bee78a50601d8c3599b10ef49d3ea4"
     }
 }

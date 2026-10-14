@@ -1,0 +1,30 @@
+<xf:title>Redeem a code</xf:title>
+
+<div class="block">
+	<div class="block-container">
+		<xf:if is="$ran">
+			<div class="block-body">
+				<div class="block-row block-row--separated">
+					Added <strong>{$currency.prefix}{$amount|number($currency.decimals)}{$currency.suffix}</strong>
+					{$currency.title} to your balance.
+				</div>
+			</div>
+			<div class="block-footer">
+				<a href="{{ link('credits', '', {'currency_id': $currency.currency_id}) }}" class="button button--primary">View history</a>
+				<a href="{{ link('credits/redeem') }}" class="button">Redeem another</a>
+			</div>
+		<xf:else />
+			<xf:form action="{{ link('credits/redeem-save') }}" class="block" ajax="true">
+				<div class="block-body">
+					<div class="block-row block-row--separated">
+						Enter a coupon code to add credits to your balance.
+						Each code can be redeemed once per member.
+					</div>
+					<xf:textboxrow name="code" value="{$code}" label="Code"
+						placeholder="XXXX-XXXX-XXXX" required="required" maxlength="32" />
+				</div>
+				<xf:submitrow submit="Redeem" />
+			</xf:form>
+		</xf:if>
+	</div>
+</div>

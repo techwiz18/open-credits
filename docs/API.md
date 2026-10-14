@@ -42,8 +42,10 @@ $ok = $credits->adjust(
 The general-purpose entry point. Positive amounts award, negative amounts
 charge; every call writes one ledger row. **Trust model: `adjust()` never
 checks funds and never overdraw-blocks — it is privileged code. Always check
-`getBalance()` first when charging a member.** Returns false only for empty
-input (`$userId <= 0` or `$amount == 0.0`).
+`getBalance()` first when charging a member.** Amounts are rounded to the
+currency's decimals (dust rounds to zero and is refused). Returns false for
+empty input (`$userId <= 0` or `$amount == 0.0`), unknown users/currencies,
+inactive currencies, and overdrafts when the currency disallows negatives.
 
 ```php
 $ok = $credits->transfer(int $fromUserId, int $toUserId, float $amount, int $currencyId = 1): bool
@@ -75,6 +77,16 @@ $credits->adjust($userId, $currencyId, -$price, 'my_addon_entry', $contentId, 'T
 
 Charge with your own trigger key (namespaced, e.g. `my_addon_entry`) so the
 member's history stays readable.
+
+```php
+$status = $credits->redeem(int $userId, string $code, ?array &$granted = null): string
+```
+
+Redeems a member-facing coupon code (AdminCP → Credits → Redeem codes).
+Owns its transaction and locks the code row, so limited-use caps stay exact.
+Returns `'ok'` (with `$granted = ['amount', 'currency_id']`) or a failure
+code: `not_found`, `inactive`, `expired`, `exhausted`, `already_redeemed`
+(one per member per code), `invalid_amount`. No earn alert is sent.
 
 ## Reacting to balance changes
 

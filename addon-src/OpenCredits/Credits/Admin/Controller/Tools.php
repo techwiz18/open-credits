@@ -28,6 +28,11 @@ class Tools extends AbstractController
                 'hint' => 'Award credits for pre-install posts and threads, per event and per member, with preview.',
                 'link' => $this->buildLink('oc-tools/backfill'),
             ],
+            [
+                'label' => 'Adjust member credits',
+                'hint' => 'Grant or remove credits for a member. Fully logged with a note.',
+                'link' => $this->buildLink('oc-tools/adjust'),
+            ],
         ];
 
         return $this->view(
@@ -97,6 +102,7 @@ class Tools extends AbstractController
         }
 
         $events = $this->finder('OpenCredits\Credits:CreditEvent')
+            ->with('Currency')
             ->where('event_id', $eventIds)
             ->where('active', 1)
             ->where('trigger', ['post', 'thread'])
@@ -106,14 +112,36 @@ class Tools extends AbstractController
             return $this->error('No eligible events selected. Only active post/thread events can be backfilled.');
         }
 
+        // Events on inactive currencies are skipped, never paid.
+        $eligible = [];
         $awarded = 0;
         $skipped = [];
         foreach ($events as $event) {
-            if (!$force && $this->backfillEventRan($event, $onlyUserId)) {
+            $currency = $event->Currency;
+            if ($currency && $currency->active) {
+                $eligible[] = $event;
+            } else {
                 $skipped[] = (int)$event->event_id;
-                continue;
             }
-            $awarded += $this->runBackfillEvent($event, $onlyUserId);
+        }
+        if (!$eligible) {
+            return $this->error('No eligible events selected. The chosen events use inactive currencies.');
+        }
+
+        $db = $this->app->db();
+        $db->beginTransaction();
+        try {
+            foreach ($eligible as $event) {
+                if (!$force && $this->backfillEventRan($event, $onlyUserId)) {
+                    $skipped[] = (int)$event->event_id;
+                    continue;
+                }
+                $awarded += $this->runBackfillEvent($event, $onlyUserId);
+            }
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
         }
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
@@ -129,6 +157,97 @@ class Tools extends AbstractController
                 'skipped' => $skipped,
                 'preview' => [],
             ]
+        );
+    }
+
+    public function actionAdjust(): \XF\Mvc\Reply\AbstractReply
+    {
+        $currencies = $this->finder('OpenCredits\Credits:Currency')
+            ->where('active', 1)
+            ->order('currency_id')
+            ->fetch();
+
+        return $this->view(
+            'OpenCredits\Credits:Tools\Adjust',
+            'oc_tools_adjust',
+            [
+                'ran' => false,
+                'currencies' => $currencies,
+                'username' => '',
+                'currencyId' => $currencies->first()?->currency_id ?? 1,
+                'amount' => '',
+                'note' => '',
+            ]
+        );
+    }
+
+    public function actionAdjustSave(): \XF\Mvc\Reply\AbstractReply
+    {
+        $this->assertPostOnly();
+
+        $username = trim($this->filter('username', 'str'));
+        $currencyId = $this->filter('currency_id', 'uint');
+        $amount = $this->filter('amount', 'float');
+        $note = trim($this->filter('note', 'str'));
+
+        $currencies = $this->finder('OpenCredits\Credits:Currency')
+            ->where('active', 1)
+            ->order('currency_id')
+            ->fetch();
+
+        $viewParams = [
+            'ran' => false,
+            'currencies' => $currencies,
+            'username' => $username,
+            'currencyId' => $currencyId,
+            'amount' => $this->filter('amount', 'str'),
+            'note' => $note,
+        ];
+
+        if (!strlen($username)) {
+            return $this->error('Enter a username.');
+        }
+        $target = $this->finder('XF:User')->where('username', $username)->fetchOne();
+        if (!$target) {
+            return $this->error('User not found. Check the spelling and try again.');
+        }
+        if ($currencyId <= 0 || !isset($currencies[$currencyId])) {
+            return $this->error('Select an active currency.');
+        }
+        if ($amount == 0.0) {
+            return $this->error('Enter a non-zero amount. Positive grants, negative removes.');
+        }
+        $currency = $currencies[$currencyId];
+        if (round($amount, (int)$currency->decimals) == 0.0) {
+            return $this->error(
+                'That amount is smaller than ' . $currency->title . '\'s smallest unit'
+                . ' — enter a larger amount.'
+            );
+        }
+
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+        $ok = $svc->adjust(
+            (int)$target->user_id,
+            $currencyId,
+            $amount,
+            'admin_adjust',
+            0,
+            $note !== '' ? $note : 'Admin adjustment'
+        );
+
+        if (!$ok) {
+            return $this->error('Adjustment refused — check the currency allows the resulting balance (no overdraft when negatives are disabled).');
+        }
+
+        return $this->view(
+            'OpenCredits\Credits:Tools\Adjust',
+            'oc_tools_adjust',
+            array_merge($viewParams, [
+                'ran' => true,
+                'newBalance' => $svc->getBalance((int)$target->user_id, $currencyId),
+                'targetUsername' => $target->username,
+            ])
         );
     }
 
@@ -157,6 +276,10 @@ class Tools extends AbstractController
             ->where('trigger', ['post', 'thread'])
             ->fetch();
         foreach ($events as $event) {
+            $previewCurrency = $event->Currency;
+            if (!$previewCurrency || !$previewCurrency->active) {
+                continue;
+            }
             if ($event->trigger === 'post') {
                 $users = (int)$this->app->db()->fetchOne(
                     "SELECT COUNT(DISTINCT user_id) FROM xf_post WHERE message_state = 'visible' AND user_id > 0"
@@ -186,7 +309,11 @@ class Tools extends AbstractController
         $now = \XF::$time;
         $rows = 0;
 
-        $perItem = (float)$event->amount;
+        $currency = $event->Currency;
+        $decimals = $currency ? (int)$currency->decimals : 2;
+        // Quantize like every other write path: 0-decimal currencies must
+        // never receive sub-unit lump sums.
+        $perItem = round((float)$event->amount, $decimals);
         if ($perItem == 0.0) {
             return 0;
         }
@@ -200,6 +327,14 @@ class Tools extends AbstractController
         if ($onlyUserId > 0) {
             $sql .= ' AND user_id = ?';
             $params[] = $onlyUserId;
+        } else {
+            // A site-wide run must not re-pay members who already received a
+            // per-member backfill for this event (their rows carry a nonzero
+            // content_id, invisible to the site-wide completion guard).
+            $sql .= ' AND user_id NOT IN (SELECT user_id FROM xf_oc_transaction'
+                . " WHERE note = 'Historical backfill' AND `trigger` = ? AND currency_id = ? AND content_id <> 0)";
+            $params[] = $event->trigger;
+            $params[] = (int)$event->currency_id;
         }
         $counts = $db->fetchPairs($sql . ' GROUP BY user_id', $params);
 
@@ -207,7 +342,7 @@ class Tools extends AbstractController
             $db->insert('xf_oc_transaction', [
                 'user_id' => (int)$userId,
                 'currency_id' => (int)$event->currency_id,
-                'amount' => round($count * $perItem, 2),
+                'amount' => round($count * $perItem, $decimals),
                 'trigger' => $event->trigger,
                 'content_type' => $event->trigger,
                 'content_id' => $onlyUserId > 0 ? $onlyUserId : 0,

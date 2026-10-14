@@ -1,0 +1,28 @@
+<xf:title>Redeem codes</xf:title>
+
+<xf:pageaction>
+	<xf:button href="{{ link('oc-codes/add') }}" icon="add">Add code</xf:button>
+</xf:pageaction>
+
+<xf:if is="$codes is not empty">
+	<div class="block">
+		<div class="block-container">
+			<div class="block-body">
+				<xf:datalist>
+					<xf:foreach loop="$codes" value="$code">
+						<xf:datarow
+							label="{$code.code}"
+							hint="{$code.Currency.title}: {$code.Currency.prefix}{$code.amount|number($code.Currency.decimals)}{$code.Currency.suffix} · {$code.use_label}{{ $code.expiry_date ? ' · expires ' . date($code.expiry_date) : '' }}{{ $code.active ? '' : ' · INACTIVE' }}"
+							href="{{ link('oc-codes/edit', $code) }}"
+							delete="{{ link('oc-codes/delete', $code) }}" />
+					</xf:foreach>
+				</xf:datalist>
+			</div>
+			<div class="block-footer">
+				<span class="block-footer-counter">{$total|number} codes</span>
+			</div>
+		</div>
+	</div>
+<xf:else />
+	<div class="blockMessage">No redeem codes yet.</div>
+</xf:if>
