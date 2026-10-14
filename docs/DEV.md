@@ -44,7 +44,8 @@ gitleaks. Everything below runs on the dev stack before any release:
 
 ```bash
 docker compose exec -T web php /var/www/html/cmd.php xf-addon:validate-json OpenCredits/Credits
-docker compose exec -T web bash -c "cd /var/www/html/src/addons/OpenCredits/Credits && ./vendor/bin/phpunit"
+rm -rf src/.qatmp && cp -r qa src/.qatmp
+docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
 docker compose exec -T web php /var/www/html/cmd.php xf-addon:build-release OpenCredits/Credits
 # fresh-install smoke on a scratch copy, then upgrade smoke 0.9.x → current
 ./scripts/dev.sh fix-perms   # after every generator/import/upgrade
