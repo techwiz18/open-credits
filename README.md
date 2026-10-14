@@ -16,6 +16,10 @@ let members transfer credits, gate trophies on wealth.
   history at `/credits/`, reachable from the Credits nav tab.
 * **Transfers** — send credits to another member at `/credits/transfer`
   (username autocomplete included; transfers can never overdraw).
+* **Redeem codes** — coupon codes members redeem at `/credits/redeem`
+  (single/multi-use, expiry, one per member).
+* **Earn alerts** — notified when credits land (per-event admin toggle,
+  member opt-out, global kill switch in Setup → Options → Credits).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
   trophies, notices, and user-group promotions.
 * **Display control** — per-location toggles in Setup → Options → Credits
@@ -125,10 +129,11 @@ Full reference (method signatures, trust rules, criteria, worked examples):
 
 ## Roadmap
 
-Tracked as [issues and milestones](../../milestones): v0.10 candidates are
-alerts on earn, redeem codes, and admin adjust/take tools; bigger epics
-(charge BBCode, interest/tax/paychecks, payments/shop) sit in Future. File or
-vote on issues to shape what lands next.
+Tracked as [issues and milestones](../../milestones): v0.10 shipped alerts
+on earn (with per-event toggle, member opt-out, and global kill switch),
+redeem codes, and admin adjust/take tools; bigger epics (charge BBCode,
+interest/tax/paychecks, payments/shop, profile wallet + log pruning) sit in
+Future. File or vote on issues to shape what lands next.
 
 ## Built with AI
 
