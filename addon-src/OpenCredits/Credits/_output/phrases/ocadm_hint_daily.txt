@@ -1,1 +1,1 @@
-once per day, always
+once per day, always (UTC day)
