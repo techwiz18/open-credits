@@ -162,18 +162,55 @@ class Credits extends AbstractController
 
     public function actionMember(ParameterBag $params): AbstractReply
     {
-        if (!\XF::visitor()->user_id || !\XF::visitor()->hasPermission('general', 'ocView')) {
+        $visitor = \XF::visitor();
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
             return $this->noPermission();
         }
         $user = $this->em()->find('XF:User', $this->filter('user_id', 'uint'));
         if (!$user || !$user->canViewBasicProfile($error)) {
             throw $this->exception($this->notFound($error));
         }
+        $isSelf = (int)$user->user_id === (int)$visitor->user_id;
+
+        // Profile wallet: balances + compact transfer form + own recent history.
+        $currency = $this->assertViewableCurrency(0);
+        $canSend = $visitor->hasPermission('general', 'ocTransfer');
+        $lockedTo = $isSelf ? '' : $user->username;
+        $targetReceivable = !in_array($user->user_state, ['banned', 'rejected', 'disabled'], true);
+
+        $senderBalance = 0.0;
+        foreach ($visitor->oc_all_balances as $row) {
+            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
+                $senderBalance = (float)$row['balance'];
+                break;
+            }
+        }
+
+        $recent = [];
+        if ($isSelf) {
+            $transactions = $this->finder('OpenCredits\Credits:Transaction')
+                ->where('user_id', $visitor->user_id)
+                ->where('currency_id', $currency->currency_id)
+                ->order('log_date', 'DESC')
+                ->limit(10)
+                ->fetch();
+            $recent = $this->buildHistoryEntries($transactions);
+        }
 
         return $this->view(
             'OpenCredits\Credits:Credits\Member',
             'credits_member',
-            ['user' => $user, 'isSelf' => $user->user_id == \XF::visitor()->user_id]
+            [
+                'user' => $user,
+                'isSelf' => $isSelf,
+                'currency' => $currency,
+                'senderBalance' => $senderBalance,
+                'canSend' => $canSend,
+                'lockedTo' => $lockedTo,
+                'targetReceivable' => $targetReceivable,
+                'recent' => $recent,
+                'amountStep' => self::amountStep((int)$currency->decimals),
+            ]
         );
     }
 
