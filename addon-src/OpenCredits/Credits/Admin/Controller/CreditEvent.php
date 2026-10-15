@@ -30,7 +30,16 @@ class CreditEvent extends AbstractController
         foreach ($events as $event) {
             $cid = (int)$event->currency_id;
             if (!isset($groups[$cid])) {
-                $groups[$cid] = ['currency' => $event->Currency, 'events' => []];
+                $currency = $event->Currency;
+                $decimals = $currency ? (int)$currency->decimals : 2;
+                $groups[$cid] = [
+                    'currency' => $currency,
+                    // Preformatted sample unit: template filters reject literals.
+                    'sample' => ($currency ? $currency->prefix : '')
+                        . number_format(1, $decimals)
+                        . ($currency ? $currency->suffix : ''),
+                    'events' => [],
+                ];
             }
             $groups[$cid]['events'][] = $event;
         }
