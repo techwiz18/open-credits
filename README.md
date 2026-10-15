@@ -95,6 +95,10 @@ the `Manage credits` admin permission:
 Change amounts, add triggers, or add currencies any time in AdminCP →
 Credits (Earning events / Currencies).
 
+The daily-visit day runs on UTC midnight for everyone, regardless of forum
+or user time zone settings — so it can land hours before/after your local
+midnight. Registration day is covered by the registration bonus instead.
+
 ## Troubleshooting
 
 * **Balances look wrong** — AdminCP → Credits → **Rebuild balances**, or CLI
