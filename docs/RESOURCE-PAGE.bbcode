@@ -9,8 +9,10 @@ let members transfer credits, gate trophies on wealth.
 [*] [B]Multiple currencies[/B] with a primary and per-currency visibility, all managed in AdminCP → Credits → Currencies.
 [*] [B]Wallet everywhere[/B] — balances in postbit, in the account menu, and on member profiles (primary stat plus a full currencies tab); per-currency history page, reachable from the Credits nav tab.
 [*] [B]Transfers[/B] — send credits to another member, with username autocomplete. Transfers can never overdraw.
+[*] [B]Redeem codes[/B] — coupon codes members redeem for credits (single/multi-use, expiry, one per member).
+[*] [B]Earn alerts[/B] — members are notified when credits land, with per-event admin toggles, member opt-out, and a global kill switch.
 [*] [B]Trophies[/B] — "has at least / fewer than X credits" criteria work with trophies, notices, and user-group promotions.
-[*] [B]Admin tools[/B] — rebuild balances, backfill pre-install content, display toggles, all under AdminCP → Credits → Tools.
+[*] [B]Admin tools[/B] — adjust any member's balance, rebuild balances, backfill pre-install content, display toggles, all under AdminCP → Credits.
 [*] [B]Built to integrate[/B] — spend/award API plus a change event other add-ons can hook. Full reference in docs/API.md on GitHub.
 [/LIST]
 
@@ -55,11 +57,33 @@ Change amounts, add triggers, or add currencies any time in AdminCP → Credits.
 [LIST]
 [*] [B]Balances look wrong[/B] — AdminCP → Credits → Rebuild balances (or CLI: [ICODE]php cmd.php oc-credits:rebuild[/ICODE]).
 [*] [B]Permission errors[/B] — check the Credits permission tab per user group (fresh installs auto-allow them for Registered).
-[*] [B]Uninstalling deletes everything[/B] — balances, ledger, events, currencies.
+[*] [B]Uninstalling deletes everything[/B] — balances, ledger, events, currencies, and redeem codes.
 [/LIST]
 
 [B]Roadmap & support[/B]
 [LIST]
 [*] Future ideas live as [URL=https://github.com/techwiz18/open-credits/milestones]milestones[/URL] — vote and comment on [URL=https://github.com/techwiz18/open-credits/issues]issues[/URL].
 [*] Source: [URL=https://github.com/techwiz18/open-credits]github.com/techwiz18/open-credits[/URL] (MIT). This project is vibe-coded with AI assistance — review security-sensitive changes before deploying.
+[/LIST]
+
+[B]Changelog[/B]
+
+[B]0.10.1[/B] — hardening patch, no new member features. Upgrade the usual way.
+[LIST]
+[*] Reaction re-farming closed (one award per reactor per content).
+[*] Backfills run guarded and transactional, with per-member double-pay fixed.
+[*] Earning events support forum and user-group scoping.
+[*] Service layer fails closed on unknown users and inactive currencies.
+[*] Chunked, resumable balance rebuilds and backfills for large forums.
+[*] Full interface translation support (~110 new phrases).
+[*] Test harness (PHPUnit), stricter CI, dev-docs checklist.
+[/LIST]
+
+[B]0.10.0[/B]
+[LIST]
+[*] [B]Admin adjust/take tools[/B] — grant or remove any member's credits from AdminCP → Credits → Tools, fully logged with a note.
+[*] [B]Earn alerts[/B] — notified on earn (posts, reactions, visits, transfers) with a history link. Per-event toggles, member opt-out, global kill switch.
+[*] [B]Redeem codes[/B] — coupon codes at [I]/credits/redeem[/I]: auto-generated or custom, single/multi-use caps, expiry, one redemption per member.
+[*] [B]Decimal-correct amounts[/B] — all writes round to each currency's decimals, so 0-decimal currencies can't store misleading sub-unit values.
+[*] [B]Review hardening[/B] — tampered transfer currencies error out, ghost-user writes refused, daily limits counted per currency, moderated content pays on approval.
 [/LIST]
