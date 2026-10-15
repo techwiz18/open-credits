@@ -18,3 +18,64 @@
 		</div>
 	</div>
 </div>
+
+<xf:if is="$canSend and (!$lockedTo or $targetReceivable)">
+	<div class="block">
+		<div class="block-container">
+			<h3 class="block-header">{{ phrase('oc_transfer') }}</h3>
+			<xf:form action="{{ link('credits/transfer-save') }}" ajax="true">
+				<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
+				<div class="block-body">
+					<div class="block-row block-row--separated">
+						{$currency.title}: <strong>{$currency.prefix}{$senderBalance|number($currency.decimals)}{$currency.suffix}</strong>
+					</div>
+					<xf:if is="$lockedTo">
+						<input type="hidden" name="to" value="{$lockedTo}" />
+						<xf:formrow label="{{ phrase('oc_to_user') }}">{$lockedTo}</xf:formrow>
+					<xf:else />
+						<xf:textboxrow name="to" label="{{ phrase('oc_to_user') }}"
+							placeholder="Username" required="true"
+							data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
+							data-single="true" minlength="2" />
+					</xf:if>
+					<xf:textboxrow name="amount" type="number" step="{$amountStep}" min="{$amountStep}" label="{{ phrase('oc_amount') }}"
+						placeholder="0.00" required="true"
+						hint="{{ phrase('oc_smallest_unit_x', {'currency': $currency.title, 'step': $amountStep}) }}" />
+				</div>
+				<xf:submitrow submit="{{ phrase('oc_transfer') }}" />
+			</xf:form>
+		</div>
+	</div>
+<xf:elseif is="$lockedTo and !$targetReceivable" />
+	<div class="blockMessage">{{ phrase('oc_cannot_receive') }}</div>
+</xf:if>
+
+<xf:if is="$isSelf and $recent is not empty">
+	<div class="block">
+		<div class="block-container">
+			<h3 class="block-header">{{ phrase('oc_recent_history') }}</h3>
+			<div class="block-body">
+				<xf:foreach loop="$recent" value="$entry">
+					<div class="block-row">
+						<div class="contentRow">
+							<div class="contentRow-main">
+								<div class="contentRow-title">{$entry.label}</div>
+								<div class="contentRow-minor">
+									<xf:if is="$entry.detailUser">
+										<xf:username user="$entry.detailUser" />
+									<xf:elseif is="$entry.detailThread" />
+										{$entry.detail} <a href="{{ link('threads', $entry.detailThread) }}">{$entry.detailThread.title}</a>
+									</xf:if>
+									{{ date($entry.logDate) }}
+								</div>
+							</div>
+							<div class="contentRow-extra">
+								<xf:if is="$entry.amount > 0">+</xf:if>{$entry.amount|number($currency.decimals)}
+							</div>
+						</div>
+					</div>
+				</xf:foreach>
+			</div>
+		</div>
+	</div>
+</xf:if>

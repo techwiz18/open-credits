@@ -832,5 +832,17 @@
         "version_id": 928,
         "version_string": "0.10.1",
         "hash": "8d2a1edbf31542f18e6f6b6756c2035f"
+    },
+    "oc_recent_history.txt": {
+        "global_cache": false,
+        "version_id": 928,
+        "version_string": "0.10.1",
+        "hash": "a04412dd81d733f2bf41945a125e4370"
+    },
+    "oc_cannot_receive.txt": {
+        "global_cache": false,
+        "version_id": 928,
+        "version_string": "0.10.1",
+        "hash": "1cfa47e61ea5d47d9d78aefe2e7129b6"
     }
 }
