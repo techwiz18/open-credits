@@ -783,7 +783,7 @@
         "global_cache": false,
         "version_id": 928,
         "version_string": "0.10.1",
-        "hash": "136c488ba08a66741a66d08d4e1df2cf"
+        "hash": "fb31490c45821db8e041077bd1b8e255"
     },
     "ocadm_hint_each.txt": {
         "global_cache": false,
@@ -844,5 +844,125 @@
         "version_id": 928,
         "version_string": "0.10.1",
         "hash": "1cfa47e61ea5d47d9d78aefe2e7129b6"
+    },
+    "option.ocDayBoundary.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "0230e2016236da849b9275898f0d41c2"
+    },
+    "option_explain.ocDayBoundary.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "137f5f8019aee65a3aff891ed175f737"
+    },
+    "option.ocDayOffsetHours.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "ada026511cfa9c1c73bcf91579e48bea"
+    },
+    "option_explain.ocDayOffsetHours.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "ca866e399ad9842ddfb595c32e7e743e"
+    },
+    "oc_day_utc.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "f013542665c348100dd56d369b8db9ad"
+    },
+    "oc_day_board.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "6cc03d67953f744bcec74c3ccb93b440"
+    },
+    "oc_day_fixed.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "f23f48a1af803a0ecbf83bd6a5619332"
+    },
+    "ocadm_day_utc.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "4d58256ece94c3f88a38d2308a1860f3"
+    },
+    "ocadm_day_board.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "b544f4b5c3d0be086ded8102d6124098"
+    },
+    "ocadm_day_fixed.txt": {
+        "global_cache": false,
+        "version_id": 929,
+        "version_string": "0.11.0-dev",
+        "hash": "c2d2bb241a17d4aa2b869511430f96d1"
+    },
+    "option.ocHistoryRetentionDays.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "53a5fede4bcac5f4318265dd40255339"
+    },
+    "option_explain.ocHistoryRetentionDays.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "7bef7ad778a1774c373ee9ceadcf78d4"
+    },
+    "ocadm_tool_prune_title.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "fe2a58b08561ee94cb2068c798240bc4"
+    },
+    "ocadm_tool_prune_hint.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "036a4f21a3f4dd36bf6a6318c23beeb2"
+    },
+    "ocadm_prune_title.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "fe2a58b08561ee94cb2068c798240bc4"
+    },
+    "ocadm_prune_explain.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "fb551f6df7785e37af1a3892573ed092"
+    },
+    "ocadm_older_than_days.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "13c1538ab9dd2dd8ed67184440157041"
+    },
+    "ocadm_run_prune.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "4d82bb089bb1a1b651f3dc7aafde93d8"
+    },
+    "ocadm_pruned_x.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "411a8e64d919b06e9bdc440cdb374787"
+    },
+    "ocadm_prune_preview_x.txt": {
+        "global_cache": false,
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "33247519c434b1c9cf10db3d8995f54b"
     }
 }

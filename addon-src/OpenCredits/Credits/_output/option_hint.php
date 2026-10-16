@@ -11,6 +11,9 @@
 namespace XF;
 
 /**
+ * @property string|null $ocDayBoundary Daily boundary
+ * @property int|null $ocDayOffsetHours Boundary offset hours
+ * @property non-negative-int|null $ocHistoryRetentionDays History retention days
  * @property bool|null $ocSendEarnAlerts Send credit earn alerts
  * @property bool|null $ocShowMenu Show balance in account menu
  * @property bool|null $ocShowPostbit Show balances in postbit

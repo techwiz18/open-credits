@@ -1,0 +1,1 @@
+{currency}: {rows} rows older than {days} days

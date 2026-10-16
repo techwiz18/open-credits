@@ -33,6 +33,11 @@ class Tools extends AbstractController
                 'hint' => \XF::phrase('ocadm_tool_adjust_hint')->render(),
                 'link' => $this->buildLink('oc-tools/adjust'),
             ],
+            [
+                'label' => \XF::phrase('ocadm_tool_prune_title')->render(),
+                'hint' => \XF::phrase('ocadm_tool_prune_hint')->render(),
+                'link' => $this->buildLink('oc-tools/prune'),
+            ],
         ];
 
         return $this->view(
@@ -294,6 +299,83 @@ class Tools extends AbstractController
                 'targetUsername' => $target->username,
             ])
         );
+    }
+
+    public function actionPrune(): \XF\Mvc\Reply\AbstractReply
+    {
+        $retention = (int)$this->app()->options()->ocHistoryRetentionDays;
+        return $this->view(
+            'OpenCredits\Credits:Tools\Prune',
+            'oc_tools_prune',
+            [
+                'ran' => false,
+                'days' => $retention > 0 ? $retention : 365,
+                'snapshots' => 0,
+                'deleted' => 0,
+                'preview' => $this->prunePreview($retention > 0 ? $retention : 365),
+            ]
+        );
+    }
+
+    public function actionPruneSave(): \XF\Mvc\Reply\AbstractReply
+    {
+        $this->assertPostOnly();
+
+        $days = $this->filter('days', 'uint');
+        if ($days < 1) {
+            return $this->error('Enter at least 1 day.');
+        }
+        $cutoff = \XF::$time - $days * 86400;
+
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+        $snapshots = 0;
+        $deleted = 0;
+        try {
+            $next = 0;
+            do {
+                $result = $svc->pruneHistory($cutoff, $next, 5000);
+                $snapshots += $result['snapshots'];
+                $deleted += $result['deleted'];
+                $next = $result['next'];
+            } while ($next !== null);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits prune failed: ');
+            return $this->error('Pruning failed due to a server error. Completed batches are kept — fix the cause and re-run.');
+        }
+
+        return $this->view(
+            'OpenCredits\Credits:Tools\Prune',
+            'oc_tools_prune',
+            [
+                'ran' => true,
+                'days' => $days,
+                'snapshots' => $snapshots,
+                'deleted' => $deleted,
+                'preview' => [],
+            ]
+        );
+    }
+
+    protected function prunePreview(int $days): array
+    {
+        $cutoff = \XF::$time - $days * 86400;
+        $db = $this->app->db();
+        $rows = $db->fetchAll(
+            'SELECT c.currency_id, c.title, COUNT(*) AS rows FROM xf_oc_transaction AS t'
+            . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = t.currency_id'
+            . ' WHERE t.log_date <= ? AND t.`trigger` != ? AND t.note != ?'
+            . ' GROUP BY c.currency_id, c.title ORDER BY c.currency_id',
+            [$cutoff, 'redeem', 'Historical backfill']
+        );
+        $preview = [];
+        foreach ($rows as $row) {
+            $preview[] = [
+                'currency' => $row['title'],
+                'rows' => (int)$row['rows'],
+            ];
+        }
+        return $preview;
     }
 
     protected function backfillEventRan($event, int $onlyUserId = 0): bool

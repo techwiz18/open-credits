@@ -1,0 +1,1 @@
+Deletes ledger rows older than the given age after folding their totals into per-member balance snapshots, so balances and rebuilds stay exact. Backfill markers and redeem records are always kept. This cannot be undone — the per-row history is gone.

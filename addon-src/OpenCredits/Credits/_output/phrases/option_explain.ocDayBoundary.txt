@@ -1,0 +1,1 @@
+When the earning day rolls over for daily visits, daily limits, and registration-day checks. UTC midnight is shared worldwide; board time follows Setup > Options > Basic board information; fixed offset shifts UTC by the hours below.

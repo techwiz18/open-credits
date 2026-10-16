@@ -11,7 +11,7 @@ throwaway copy inside the `web` container (gitignored `src/`):
 
 ```bash
 rm -rf src/.qatmp && cp -r qa src/.qatmp
-docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
+docker compose exec -T web bash -c "cd /var/www/html/.qatmp && php -r 'copy(\"https://getcomposer.org/installer\", \"/tmp/cs.php\");' && php /tmp/cs.php --install-dir=/usr/local/bin --filename=composer && composer install && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
 ```
 
 (On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI does exactly that.)

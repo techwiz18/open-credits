@@ -1,0 +1,1 @@
+Default lookback for history pruning: ledger rows older than this many days are summarized into balance snapshots and deleted. 0 keeps history forever. Backfill markers and redeem records are never deleted.

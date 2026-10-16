@@ -73,5 +73,10 @@
         "version_id": 926,
         "version_string": "0.10.0",
         "hash": "65d282dd09657ee3718c18ad218f1c79"
+    },
+    "admin/oc_tools_prune.html": {
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "cf0ddc5333056393d65083d7ce5e55a8"
     }
 }
