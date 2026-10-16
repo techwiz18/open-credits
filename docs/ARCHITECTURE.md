@@ -72,9 +72,10 @@ change fires the `oc_credits_adjust` code event with
   currencies. Transfer with an unresolvable `currency_id` errors instead of
   falling back.
 * Awards skip inactive currencies; registration skips banned/rejected/disabled.
-* Daily boundaries are UTC midnights (`Transact::dayStartUtc()`), ignoring
-  forum/user time zones — consistent for all members and ungameable by
-  traveling; registration day skips the daily bonus on the same boundary.
+* Daily boundaries default to UTC midnights (`Transact::dayStart()`),
+  ignoring forum/user time zones — consistent for all members and ungameable
+  by traveling; configurable to board time or a fixed offset via options.
+  Registration day skips the daily bonus on the same boundary.
 * No clawback on content delete (by design); backfill runs per-event inside a
   transaction, quantizes to currency decimals, skips inactive currencies, and
   site-wide runs exclude already per-member-backfilled users;

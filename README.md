@@ -95,9 +95,11 @@ the `Manage credits` admin permission:
 Change amounts, add triggers, or add currencies any time in AdminCP →
 Credits (Earning events / Currencies).
 
-The daily-visit day runs on UTC midnight for everyone, regardless of forum
-or user time zone settings — so it can land hours before/after your local
-midnight. Registration day is covered by the registration bonus instead.
+The daily-visit day defaults to UTC midnight for everyone, regardless of
+forum or user time zone settings — so it can land hours before/after your
+local midnight. It can be switched to board time or a fixed UTC offset in
+Setup → Options → Credits. Registration day is covered by the registration
+bonus instead.
 
 ## Troubleshooting
 
