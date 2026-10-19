@@ -9,7 +9,7 @@ let members transfer and redeem credits, and gate trophies on wealth.
 [*] [B]Multiple currencies[/B] — a primary currency plus per-currency visibility.
 [*] [B]Wallet everywhere[/B] — postbit, account menu, profiles, and paged history; your own profile also has a transfer shortcut.
 [*] [B]Transfers & redeem codes[/B] — member-to-member transfers that never overdraw, plus single/multi-use coupon codes.
-[*] [B]Leaderboard[/B] — a placeable "Top credit holders" widget with a configurable count and currency.
+[*] [B]Leaderboard[/B] — a placeable "Top credit holders" widget with a configurable count and currency, optionally visible to guests.
 [*] [B]Alerts & trophies[/B] — optional alerts when credits land, and "has at least / fewer than X credits" criteria for trophies, notices, and promotions.
 [/LIST]
 
@@ -53,11 +53,11 @@ To upgrade later: upload the newer zip and click [B]Upgrade[/B] on the add-on.
 
 [B]Changelog[/B]
 
-[B]0.11.0[/B]
+[B]0.11.2[/B] — patch release (includes the 0.11.1 fix).
 [LIST]
-[*] [B]Profile wallet[/B] — profile pages show balances, a transfer shortcut, and recent history in one place.
-[*] [B]Configurable daily boundary[/B] — the daily-visit day follows UTC (default), board time, or a fixed UTC offset; registration-day skip uses the same boundary.
-[*] [B]History pruning[/B] — summarize old ledger rows into balance snapshots and delete them; balances and rebuilds stay exact. New retention option and AdminCP tool; redeem/backfill rows are kept.
-[*] [B]Top credit holders widget[/B] — a placeable leaderboard by balance, with a configurable count and currency.
-[*] [B]Tests[/B] — DST/boundary unit tests and a DB-backed prune integration suite.
+[*] [B]Prune history[/B] now works on MySQL 8 — the tool page no longer errors (the preview query used a reserved word as a column alias). Pruning itself was unaffected.
+[*] [B]Pruning[/B] now preserves reaction dedupe markers, never deletes rows from the current earning day, and prunes net-zero rows (the retention window now applies to everyone).
+[*] [B]Profile wallet[/B] respects profile privacy, and hidden currencies no longer leak in the history switcher or the profile stat.
+[*] [B]Leaderboard widget[/B] gains a [B]Show to guests[/B] option.
+[*] [B]Currency deletion[/B] is blocked while balances or pruned snapshots remain.
 [/LIST]

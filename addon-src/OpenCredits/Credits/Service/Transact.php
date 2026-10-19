@@ -815,16 +815,24 @@ class Transact extends AbstractService
 
     /**
      * Summarizes ledger rows at or before $cutoff into per-(member,currency)
-     * snapshot rows and deletes them. Backfill markers and redeem rows are
-     * never deleted (completion guards and one-per-member checks depend on
-     * them). Batched by user-id range like rebuilds; totals stay exact
-     * because each snapshot equals the sum of its deleted rows.
+     * snapshot rows and deletes them. Backfill markers, redeem rows, and
+     * reaction dedupe markers are never deleted (completion guards,
+     * one-per-member checks, and re-reaction dedupe depend on them). Batched
+     * by user-id range like rebuilds; totals stay exact because each snapshot
+     * equals the sum of its deleted rows.
      * Returns ['snapshots' => upserted, 'deleted' => rows, 'next' => ?].
      */
     public function pruneHistory(int $cutoff, int $startAfterUserId = 0, int $batchSize = 0): array
     {
         $empty = ['snapshots' => 0, 'deleted' => 0, 'next' => null];
         if ($cutoff <= 0 || $cutoff >= \XF::$time) {
+            return $empty;
+        }
+        // Never prune rows from the current earning day. On a 25-hour DST
+        // day a days=1 cutoff can otherwise land after dayStart() and delete
+        // the daily-login / daily-limit guards, allowing a second award.
+        $cutoff = min($cutoff, self::dayStart() - 1);
+        if ($cutoff <= 0) {
             return $empty;
         }
         $db = $this->db();
@@ -853,24 +861,25 @@ class Transact extends AbstractService
                 $sum = (float)$db->fetchOne(
                     'SELECT COALESCE(SUM(amount), 0) FROM xf_oc_transaction'
                     . ' WHERE user_id = ? AND currency_id = ? AND log_date <= ?'
-                    . " AND `trigger` != ? AND note != ?",
-                    [$uid, $cid, $cutoff, 'redeem', 'Historical backfill']
+                    . " AND `trigger` != ? AND note != ? AND note NOT LIKE ?",
+                    [$uid, $cid, $cutoff, 'redeem', 'Historical backfill', 'reaction:%']
                 );
-                if ($sum == 0.0 && $existing == 0.0) {
-                    continue;
+                if ($sum != 0.0) {
+                    $new = round($existing + $sum, 2);
+                    $db->query(
+                        'INSERT INTO xf_oc_snapshot (user_id, currency_id, balance, log_date) VALUES (?, ?, ?, ?)'
+                        . ' ON DUPLICATE KEY UPDATE balance = ?, log_date = ?',
+                        [$uid, $cid, $new, $cutoff, $new, $cutoff]
+                    );
+                    $snapshots++;
                 }
-                $new = round($existing + $sum, 2);
-                $db->query(
-                    'INSERT INTO xf_oc_snapshot (user_id, currency_id, balance, log_date) VALUES (?, ?, ?, ?)'
-                    . ' ON DUPLICATE KEY UPDATE balance = ?, log_date = ?',
-                    [$uid, $cid, $new, $cutoff, $new, $cutoff]
-                );
-                $snapshots++;
+                // Delete even when the old rows net to zero; otherwise those
+                // rows are never pruned and the retention window never applies.
                 $stmt = $db->query(
                     'DELETE FROM xf_oc_transaction'
                     . ' WHERE user_id = ? AND currency_id = ? AND log_date <= ?'
-                    . " AND `trigger` != ? AND note != ?",
-                    [$uid, $cid, $cutoff, 'redeem', 'Historical backfill']
+                    . " AND `trigger` != ? AND note != ? AND note NOT LIKE ?",
+                    [$uid, $cid, $cutoff, 'redeem', 'Historical backfill', 'reaction:%']
                 );
                 $deleted += (int)$stmt->rowsAffected();
             }

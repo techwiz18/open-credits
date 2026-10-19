@@ -29,10 +29,10 @@ docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install 
 ```
 
 Covered today:
-- `PruneHistoryTest` — the history-pruning invariant (#10B): pruning old
-  ledger rows into snapshots leaves every balance unchanged after a rebuild,
-  and redeem/backfill rows are never pruned. It writes only under a synthetic
-  user id above every real one.
+- `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,
+  and reaction dedupe rows survive; net-zero rows are still pruned; and the
+  current earning day is never touched. It writes only under a synthetic user
+  id above every real one.
 - `ChargeTest` — the `[charge]` service (#5): funds move reader → author, a
   repeat charge is a no-op, overdrafts are refused, and self-charges are free.
   It uses two real members (the service locks user rows) plus a synthetic

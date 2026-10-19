@@ -40,7 +40,8 @@ let members transfer credits and redeem codes, gate trophies on wealth.
 * **Display control** — per-location toggles in Setup → Options → Credits
   (postbit, account menu, profile stat, profile tab).
 * **Leaderboard widget** — place a "Top credit holders" widget with a
-  configurable count and currency (primary by default).
+  configurable count and currency (primary by default), optionally visible to
+  guests.
 * **Paywall control** — the `[charge]` BBCode plus a "Bypass charge BBCode"
   permission, so staff can read paywalled posts without paying.
 * **Built to integrate** — spend/award API plus a change event other add-ons

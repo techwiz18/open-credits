@@ -17,6 +17,7 @@ class TopHolders extends AbstractWidget
     protected $defaultOptions = [
         'limit' => 5,
         'currency_id' => 0,
+        'show_guests' => 0,
     ];
 
     protected function getDefaultTemplateParams($context)
@@ -35,7 +36,14 @@ class TopHolders extends AbstractWidget
     public function render()
     {
         $visitor = \XF::visitor();
-        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
+
+        // Members need the Credits view permission. Guests are hidden by
+        // default, but the widget's "show_guests" option (or granting ocView
+        // to the guest group) exposes it.
+        $canView = $visitor->user_id
+            ? $visitor->hasPermission('general', 'ocView')
+            : (!empty($this->options['show_guests']) || $visitor->hasPermission('general', 'ocView'));
+        if (!$canView) {
             return '';
         }
 
@@ -109,10 +117,12 @@ class TopHolders extends AbstractWidget
         $options = $request->filter([
             'limit' => 'uint',
             'currency_id' => 'uint',
+            'show_guests' => 'uint',
         ]);
         if ($options['limit'] < 1) {
             $options['limit'] = 1;
         }
+        $options['show_guests'] = !empty($options['show_guests']) ? 1 : 0;
         return true;
     }
 }

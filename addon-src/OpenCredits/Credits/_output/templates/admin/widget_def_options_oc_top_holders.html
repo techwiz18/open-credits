@@ -10,3 +10,10 @@
 		<xf:option value="{$currency.currency_id}">{$currency.title}</xf:option>
 	</xf:foreach>
 </xf:selectrow>
+
+<xf:checkboxrow label="{{ phrase('ocadm_widget_guest_visibility') }}"
+	hint="{{ phrase('ocadm_widget_show_guests_hint') }}">
+	<xf:option name="options[show_guests]" value="1" selected="{$options.show_guests}">
+		{{ phrase('ocadm_widget_show_guests') }}
+	</xf:option>
+</xf:checkboxrow>

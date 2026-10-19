@@ -262,12 +262,11 @@ class Setup extends AbstractSetup
         $this->addBalanceLeaderboardIndex();
     }
 
-    public function upgrade934Step1()
+    public function upgrade935Step1()
     {
-        // 933 is the released v0.11.1 version, so installs on it skip straight
-        // to 934. Create the table here (not in a 933 step) so both the
-        // 0.11.0 -> 0.12 and 0.11.1 -> 0.12 paths work. The guard keeps the
-        // step safe for any early dev install that already has the table.
+        // 933 is v0.11.1 and 934 is v0.11.2, so installs on either skip
+        // straight to 935. Create the table here so every upgrade path works,
+        // and guard it for early dev installs that already have it.
         if (!$this->tableExists('xf_oc_charge')) {
             $this->createChargeTable();
         }

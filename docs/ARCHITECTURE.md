@@ -111,10 +111,11 @@ change fires the `oc_credits_adjust` code event with
   guarded by existing `Historical backfill` rows, then rebuild).
 * Widget `oc_top_holders` (`Widget`/`TopHolders.php`): top N members by balance
   in one currency (primary by default, or any visible active currency),
-  `ocView`-gated, excludes banned/disabled and zero balances. One aggregate
-  `xf_oc_balance ⋈ xf_user` query + one user fetch. Templates:
-  `oc_widget_top_holders` (public) and `widget_def_options_oc_top_holders`
-  (admin options: count + currency).
+  `ocView`-gated, excludes banned/disabled and zero balances. Guests are hidden
+  unless the widget's `show_guests` option is enabled (or `ocView` is granted
+  to the guest group). One aggregate `xf_oc_balance ⋈ xf_user` query + one user
+  fetch. Templates: `oc_widget_top_holders` (public) and
+  `widget_def_options_oc_top_holders` (admin options: count, currency, guests).
 * `[charge=X]…[/charge]` (`BbCode/Charge.php`) hides post content until the
   reader pays X of the primary currency; authors, staff, and `ocChargeFree`
   holders bypass. Locked content is never rendered into the page. The unlock

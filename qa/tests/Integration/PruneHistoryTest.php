@@ -124,6 +124,77 @@ class PruneHistoryTest extends TestCase
         $this->assertEqualsWithDelta($before, $after, 0.0001, 'Balance is unchanged after prune + rebuild');
     }
 
+    public function testPruneKeepsReactionDedupeMarkers(): void
+    {
+        $old = 1;
+        // Reaction awards carry the per-reactor dedupe key in `note`. Pruning
+        // them would let un-react/re-react pay the author again.
+        $this->seed('reaction_received', 2.00, $old, 'reaction:42');
+        $this->seed('post', 1.00, $old);
+
+        $this->transact->rebuildAllBalancesFully();
+        $before = $this->transact->getBalance($this->userId, $this->currencyId);
+
+        $result = $this->transact->pruneHistory(2);
+        $this->assertSame(1, $result['deleted'], 'Only the normal row is pruned');
+
+        $kept = $this->db->fetchAll(
+            'SELECT note FROM xf_oc_transaction WHERE user_id = ?',
+            [$this->userId]
+        );
+        $this->assertCount(1, $kept, 'The reaction dedupe marker survives');
+        $this->assertSame('reaction:42', $kept[0]['note']);
+
+        $this->transact->rebuildAllBalancesFully();
+        $this->assertEqualsWithDelta($before, $this->transact->getBalance($this->userId, $this->currencyId), 0.0001);
+    }
+
+    public function testPruneDeletesNetZeroRows(): void
+    {
+        $old = 1;
+        $this->seed('octest_seed', 5.00, $old);
+        $this->seed('octest_seed', -5.00, $old);
+
+        $this->transact->rebuildAllBalancesFully();
+        $this->assertEqualsWithDelta(0.00, $this->transact->getBalance($this->userId, $this->currencyId), 0.0001);
+
+        $result = $this->transact->pruneHistory(2);
+        $this->assertSame(2, $result['deleted'], 'Net-zero rows are still pruned');
+
+        $remaining = (int)$this->db->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ?',
+            $this->userId
+        );
+        $this->assertSame(0, $remaining);
+
+        $this->transact->rebuildAllBalancesFully();
+        $this->assertEqualsWithDelta(0.00, $this->transact->getBalance($this->userId, $this->currencyId), 0.0001);
+    }
+
+    public function testPruneNeverDeletesCurrentDayRows(): void
+    {
+        $this->seed('daily_login', 5.00, \XF::$time); // current day, must survive
+        $this->seed('octest_seed', 1.00, 1);           // old, should be pruned
+
+        $this->transact->rebuildAllBalancesFully();
+        $before = $this->transact->getBalance($this->userId, $this->currencyId);
+
+        // A cutoff inside the current day would previously delete the row and
+        // allow a second daily-login award. Scope the batch to the synthetic
+        // user so the test does not touch real ledger rows.
+        $result = $this->transact->pruneHistory(\XF::$time - 1, $this->userId - 1, 1);
+        $this->assertSame(1, $result['deleted'], 'Only the old row is pruned');
+
+        $survivors = (int)$this->db->fetchOne(
+            "SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = 'daily_login'",
+            $this->userId
+        );
+        $this->assertSame(1, $survivors, 'Current-day daily login survives the prune');
+
+        $this->transact->rebuildAllBalancesFully();
+        $this->assertEqualsWithDelta($before, $this->transact->getBalance($this->userId, $this->currencyId), 0.0001);
+    }
+
     private function seed(string $trigger, float $amount, int $logDate, string $note = ''): void
     {
         $this->db->insert('xf_oc_transaction', [

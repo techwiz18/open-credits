@@ -42,6 +42,7 @@ class Credits extends AbstractController
             'currency' => $currency,
             'currencies' => $this->finder('OpenCredits\Credits:Currency')
                 ->where('active', 1)
+                ->where('visible', 1)
                 ->order('currency_id')
                 ->fetch(),
             'balance' => $balance,
@@ -167,7 +168,7 @@ class Credits extends AbstractController
             return $this->noPermission();
         }
         $user = $this->em()->find('XF:User', $this->filter('user_id', 'uint'));
-        if (!$user || !$user->canViewBasicProfile($error)) {
+        if (!$user || !$user->canViewFullProfile($error)) {
             throw $this->exception($this->notFound($error));
         }
         $isSelf = (int)$user->user_id === (int)$visitor->user_id;
