@@ -128,6 +128,11 @@ class Setup extends AbstractSetup
         $this->createChargeTable();
     }
 
+    public function installStep13()
+    {
+        $this->syncEditorButton(true);
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -152,6 +157,11 @@ class Setup extends AbstractSetup
         $db = $this->db();
         $db->delete('xf_permission_entry', "permission_group_id = 'general' AND permission_id IN ('ocView', 'ocTransfer', 'ocChargeFree')");
         $db->delete('xf_admin_permission_entry', "admin_permission_id = 'ocCredits'");
+    }
+
+    public function uninstallStep4()
+    {
+        $this->syncEditorButton(false);
     }
 
     public function upgrade900Step1()
@@ -257,6 +267,59 @@ class Setup extends AbstractSetup
         $this->createChargeTable();
     }
 
+    public function upgrade934Step1()
+    {
+        $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) {
+            $table->addKey(['content_type', 'content_id', 'currency_id', 'amount'], 'content_currency_amount');
+        });
+        $this->syncEditorButton(true);
+    }
+
+    /**
+     * Adds (or removes) the charge BBCode button in the rich-text editor
+     * toolbar's text group, for every viewport configuration. Idempotent and
+     * additive: existing button layout is preserved.
+     */
+    protected function syncEditorButton(bool $add): void
+    {
+        $config = \XF::options()->editorToolbarConfig;
+        if (!is_array($config) || !$config) {
+            return;
+        }
+        $button = 'xfCustom_charge';
+        $changed = false;
+
+        foreach ($config AS $type => &$groups) {
+            if (!is_array($groups)) {
+                continue;
+            }
+            foreach ($groups AS &$group) {
+                if (!is_array($group) || empty($group['buttons']) || !is_array($group['buttons'])) {
+                    continue;
+                }
+                $filtered = array_values(array_filter($group['buttons'], function ($existing) use ($button) {
+                    return $existing !== $button;
+                }));
+                if ($filtered !== $group['buttons']) {
+                    $group['buttons'] = $filtered;
+                    $changed = true;
+                }
+            }
+            unset($group);
+
+            if ($add && isset($groups['moreText']) && is_array($groups['moreText'])) {
+                $groups['moreText']['buttons'][] = $button;
+                $changed = true;
+            }
+        }
+        unset($groups);
+
+        if ($changed) {
+            \XF::repository(\XF\Repository\OptionRepository::class)
+                ->updateOption('editorToolbarConfig', $config);
+        }
+    }
+
     protected function addBalanceLeaderboardIndex(): void
     {
         $this->schemaManager()->alterTable('xf_oc_balance', function (Alter $table) {
@@ -324,6 +387,7 @@ class Setup extends AbstractSetup
                 'content_user_currency_amount'
             );
             $table->addKey(['user_id', 'charge_date'], 'user_date');
+            $table->addKey(['content_type', 'content_id', 'currency_id', 'amount'], 'content_currency_amount');
         });
     }
 

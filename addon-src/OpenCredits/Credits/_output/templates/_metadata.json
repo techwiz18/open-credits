@@ -84,6 +84,11 @@
         "version_string": "0.10.0",
         "hash": "65d282dd09657ee3718c18ad218f1c79"
     },
+    "public/oc_charge_author_stats.html": {
+        "version_id": 933,
+        "version_string": "0.12.0-dev",
+        "hash": "8a217c0c74e00dd64bf55aefeafd5fd1"
+    },
     "public/oc_charge_locked.html": {
         "version_id": 932,
         "version_string": "0.11.0",

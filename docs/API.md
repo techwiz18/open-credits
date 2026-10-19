@@ -77,6 +77,13 @@ Amounts the member has already paid to unlock this content, keyed as two-decimal
 strings (for example `['10.00' => true]`).
 
 ```php
+$count = $credits->unlockCountFor(string $contentType, int $contentId, int $currencyId, float $amount): int
+```
+
+Number of members who have unlocked the content at that price. Used by the
+`[charge]` BBCode's author-only stats line.
+
+```php
 $rows = $credits->rebuildAllBalances(): int
 ```
 

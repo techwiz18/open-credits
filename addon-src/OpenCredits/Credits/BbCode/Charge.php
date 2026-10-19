@@ -51,18 +51,23 @@ class Charge
 
         $visitor = \XF::visitor();
 
-        // Author, staff, and explicitly-permitted members see it free.
+        $contentType = (string)$entity->getEntityContentType();
+        $contentId = (int)$entity->getEntityId();
+        $currencyId = (int)$currency->currency_id;
+
+        // The author sees the content plus unlock stats for this block.
+        if ($visitor->user_id && (int)$visitor->user_id === $authorId) {
+            return self::renderChildren($children, $options, $renderer)
+                . self::authorStats($contentType, $contentId, $currencyId, $amount, $currency);
+        }
+
+        // Staff and explicitly-permitted members see it free (no stats).
         if ($visitor->user_id && (
-            (int)$visitor->user_id === $authorId
-            || $visitor->is_staff
+            $visitor->is_staff
             || $visitor->hasPermission('general', 'ocChargeFree')
         )) {
             return self::renderChildren($children, $options, $renderer);
         }
-
-        $contentType = (string)$entity->getEntityContentType();
-        $contentId = (int)$entity->getEntityId();
-        $currencyId = (int)$currency->currency_id;
 
         if ($visitor->user_id
             && self::hasPaid((int)$visitor->user_id, $contentType, $contentId, $currencyId, $amount)) {
@@ -93,6 +98,28 @@ class Charge
     protected static function renderChildren(array $children, array $options, Html $renderer): string
     {
         return $renderer->renderSubTree($children, $options);
+    }
+
+    /**
+     * Author-only line showing how many members paid and how much that earned.
+     * Rendered per charge block (i.e. per price).
+     */
+    protected static function authorStats(
+        string $contentType,
+        int $contentId,
+        int $currencyId,
+        float $amount,
+        $currency
+    ): string {
+        $count = self::transact()->unlockCountFor($contentType, $contentId, $currencyId, $amount);
+        if ($count <= 0) {
+            return '';
+        }
+        return \XF::app()->templater()->renderTemplate('public:oc_charge_author_stats', [
+            'count' => $count,
+            'amount' => $amount,
+            'total' => $currency->format($count * $amount),
+        ]);
     }
 
     protected static function authorId(array $options, Entity $entity): int

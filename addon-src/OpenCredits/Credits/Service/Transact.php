@@ -593,6 +593,22 @@ class Transact extends AbstractService
     }
 
     /**
+     * Number of members who have unlocked a content item at a given price.
+     * Intended for the author-facing stats line.
+     */
+    public function unlockCountFor(string $contentType, int $contentId, int $currencyId, float $amount): int
+    {
+        if ($contentId <= 0 || $contentType === '') {
+            return 0;
+        }
+        return (int)$this->db()->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_charge WHERE content_type = ? AND content_id = ?'
+            . ' AND currency_id = ? AND amount = ?',
+            [$contentType, $contentId, $currencyId, $amount]
+        );
+    }
+
+    /**
      * Redeems a coupon code for a member. Owns its transaction and locks the
      * code row, so limited-use caps stay exact under concurrency.
      *

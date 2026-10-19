@@ -18,7 +18,9 @@ let members transfer credits and redeem codes, gate trophies on wealth.
 * **Redeem codes** — coupon codes members redeem at `/credits/redeem`
   (single/multi-use, expiry, one per member).
 * **Paywalled posts** — `[charge=10]…[/charge]` hides content until the reader
-  pays; the author is credited, and authors/staff see it free.
+  pays; the author is credited and sees how many members unlocked it (and what
+  it earned). Staff can bypass, and a lock button is added to the editor
+  toolbar.
 * **Earn alerts** — notified when credits land (per-event admin toggle,
   member opt-out, global kill switch in Setup → Options → Credits).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
