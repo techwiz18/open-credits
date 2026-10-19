@@ -164,7 +164,7 @@ on earn, redeem codes, and admin adjust/take tools, and v0.10.1 followed with
 hardening (reaction-dedup, guarded backfills, event scoping, full i18n, test
 harness). v0.11 added the consolidated profile wallet, a configurable daily
 boundary, snapshot-based history pruning, and the top-holders leaderboard
-widget; v0.12 is adding the `[charge]` BBCode for paywalled content. The
+widget; v0.12 adds the `[charge]` BBCode for paywalled content. The
 remaining epics (interest/tax/paychecks, payments/shop, inflation controls)
 sit in Future. File or vote on issues to shape what lands next.
 
