@@ -1,0 +1,12 @@
+<hr class="formRowSep" />
+
+<xf:numberboxrow name="options[limit]" value="{$options.limit}" min="1"
+	label="{{ phrase('ocadm_widget_limit') }}" />
+
+<xf:selectrow name="options[currency_id]" value="{$options.currency_id}"
+	label="{{ phrase('ocadm_widget_currency') }}">
+	<xf:option value="0">{{ phrase('ocadm_widget_currency_primary') }}</xf:option>
+	<xf:foreach loop="$currencies" value="$currency">
+		<xf:option value="{$currency.currency_id}">{$currency.title}</xf:option>
+	</xf:foreach>
+</xf:selectrow>

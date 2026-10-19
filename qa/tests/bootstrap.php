@@ -33,6 +33,17 @@ namespace XF\Mvc\Entity {
     }
 }
 
+namespace XF\Service {
+    if (!class_exists('XF\Service\AbstractService', false)) {
+        class AbstractService
+        {
+            public function __construct(...$args)
+            {
+            }
+        }
+    }
+}
+
 namespace {
     // Addon root: repo layout (<repo>/addon-src/OpenCredits/Credits) by
     // default; override with OC_ADDON_SRC when the checkout is mounted

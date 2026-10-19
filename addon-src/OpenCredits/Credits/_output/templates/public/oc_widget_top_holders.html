@@ -1,0 +1,26 @@
+<xf:if is="$holders is not empty">
+	<div class="block"{{ widget_data($widget) }}>
+		<div class="block-container">
+			<h3 class="block-minorHeader">{$title}</h3>
+			<div class="block-body">
+				<xf:foreach loop="$holders" value="$row">
+					<div class="block-row">
+						<div class="contentRow">
+							<div class="contentRow-figure">
+								<xf:avatar user="$row.user" size="xxs" />
+							</div>
+							<div class="contentRow-main contentRow-main--close">
+								<h3 class="contentRow-title">
+									<xf:username user="$row.user" />
+								</h3>
+							</div>
+							<div class="contentRow-extra">
+								{$row.formatted}
+							</div>
+						</div>
+					</div>
+				</xf:foreach>
+			</div>
+		</div>
+	</div>
+</xf:if>

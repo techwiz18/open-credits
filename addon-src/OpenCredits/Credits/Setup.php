@@ -118,6 +118,11 @@ class Setup extends AbstractSetup
         $this->createSnapshotTable();
     }
 
+    public function installStep11()
+    {
+        $this->addBalanceLeaderboardIndex();
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -234,6 +239,18 @@ class Setup extends AbstractSetup
     public function upgrade930Step1()
     {
         $this->createSnapshotTable();
+    }
+
+    public function upgrade931Step1()
+    {
+        $this->addBalanceLeaderboardIndex();
+    }
+
+    protected function addBalanceLeaderboardIndex(): void
+    {
+        $this->schemaManager()->alterTable('xf_oc_balance', function (Alter $table) {
+            $table->addKey(['currency_id', 'balance'], 'currency_balance');
+        });
     }
 
     public function upgrade927Step1()

@@ -580,21 +580,37 @@ class Transact extends AbstractService
         $now = \XF::$time;
         $mode = 'utc';
         $offsetHours = 0;
+        $tzName = '';
         try {
             $options = \XF::app()->options();
             $mode = (string)($options->ocDayBoundary ?? 'utc');
             $offsetHours = (int)($options->ocDayOffsetHours ?? 0);
+            $tzName = (string)($options->guestTimeZone ?? '');
         } catch (\Throwable $e) {
             $mode = 'utc';
         }
+        return self::dayStartAt($now, $mode, $offsetHours, $tzName);
+    }
+
+    /**
+     * Pure boundary math, split out of dayStart() so it can be unit-tested
+     * without booting XenForo. Unknown or invalid input falls back to UTC
+     * midnight, the safe, ungameable default.
+     *
+     * @param int $now Unix timestamp to resolve the day start for
+     * @param string $mode 'utc' | 'board' | 'fixed'
+     * @param int $offsetHours Fixed offset hours (clamped to -12..+14)
+     * @param string $tzName Board time zone name (empty = UTC)
+     */
+    public static function dayStartAt(int $now, string $mode, int $offsetHours = 0, string $tzName = ''): int
+    {
         if ($mode === 'board') {
             try {
-                $tzName = (string)(\XF::app()->options()->guestTimeZone ?? '');
                 $tz = new \DateTimeZone($tzName !== '' ? $tzName : 'UTC');
                 $midnight = (new \DateTimeImmutable('@' . $now))->setTimezone($tz)->setTime(0, 0);
                 return (int)$midnight->format('U');
             } catch (\Throwable $e) {
-                $mode = 'utc';
+                // Invalid time zone name: fall through to the UTC default.
             }
         } elseif ($mode === 'fixed') {
             $offsetHours = max(-12, min(14, $offsetHours));

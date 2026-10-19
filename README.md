@@ -21,6 +21,8 @@ let members transfer credits and redeem codes, gate trophies on wealth.
   member opt-out, global kill switch in Setup → Options → Credits).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
   trophies, notices, and user-group promotions.
+* **Leaderboard** — a "Top credit holders" widget admins can place on the
+  forum home/sidebar, ranking members by balance.
 
 ## What admins get
 
@@ -33,6 +35,8 @@ let members transfer credits and redeem codes, gate trophies on wealth.
   ledger; award pre-install content per event and member.
 * **Display control** — per-location toggles in Setup → Options → Credits
   (postbit, account menu, profile stat, profile tab).
+* **Leaderboard widget** — place a "Top credit holders" widget with a
+  configurable count and currency (primary by default).
 * **Built to integrate** — spend/award API plus a change event other add-ons
   can hook (see below).
 
@@ -151,9 +155,11 @@ Full reference (method signatures, trust rules, criteria, worked examples):
 Tracked as [issues and milestones](../../milestones): v0.10 shipped alerts
 on earn, redeem codes, and admin adjust/take tools, and v0.10.1 followed with
 hardening (reaction-dedup, guarded backfills, event scoping, full i18n, test
-harness). Bigger epics (charge BBCode, interest/tax/paychecks, payments/shop,
-profile wallet + log pruning) sit in Future. File or vote on issues to shape
-what lands next.
+harness). v0.11 adds the consolidated profile wallet, a configurable daily
+boundary, snapshot-based history pruning, and the top-holders leaderboard
+widget. Bigger epics (charge BBCode, interest/tax/paychecks, payments/shop,
+inflation controls) sit in Future. File or vote on issues to shape what lands
+next.
 
 ## Built with AI
 

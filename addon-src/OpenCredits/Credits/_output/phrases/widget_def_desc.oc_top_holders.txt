@@ -1,0 +1,1 @@
+Lists the members with the highest credit balances in the chosen currency.
