@@ -71,6 +71,15 @@ Change amounts, add triggers, or add currencies any time in AdminCP → Credits.
 
 [B]Changelog[/B]
 
+[B]0.11.0[/B]
+[LIST]
+[*] [B]Profile wallet[/B] — profile pages show balances, a transfer shortcut, and recent history in one place.
+[*] [B]Configurable daily boundary[/B] — the daily-visit day follows UTC (default), board time, or a fixed UTC offset; registration-day skip uses the same boundary.
+[*] [B]History pruning[/B] — summarize old ledger rows into balance snapshots and delete them; balances and rebuilds stay exact. New retention option and AdminCP tool; redeem/backfill rows are kept.
+[*] [B]Top credit holders widget[/B] — a placeable leaderboard by balance, with a configurable count and currency.
+[*] [B]Tests[/B] — DST/boundary unit tests and a DB-backed prune integration suite.
+[/LIST]
+
 [B]0.10.1[/B] — hardening patch, no new member features. Upgrade the usual way.
 [LIST]
 [*] Reaction re-farming closed (one award per reactor per content).
