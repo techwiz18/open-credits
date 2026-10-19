@@ -84,6 +84,11 @@
         "version_string": "0.10.0",
         "hash": "65d282dd09657ee3718c18ad218f1c79"
     },
+    "public/oc_charge_locked.html": {
+        "version_id": 932,
+        "version_string": "0.11.0",
+        "hash": "f622f43fb474409f25df24b88e74a9cd"
+    },
     "public/oc_widget_top_holders.html": {
         "version_id": 930,
         "version_string": "0.11.0-dev",

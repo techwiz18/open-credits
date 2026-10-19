@@ -123,6 +123,11 @@ class Setup extends AbstractSetup
         $this->addBalanceLeaderboardIndex();
     }
 
+    public function installStep12()
+    {
+        $this->createChargeTable();
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -132,6 +137,7 @@ class Setup extends AbstractSetup
         $sm->dropTable('xf_oc_balance');
         $sm->dropTable('xf_oc_code');
         $sm->dropTable('xf_oc_snapshot');
+        $sm->dropTable('xf_oc_charge');
     }
 
     public function uninstallStep2()
@@ -144,7 +150,7 @@ class Setup extends AbstractSetup
     public function uninstallStep3()
     {
         $db = $this->db();
-        $db->delete('xf_permission_entry', "permission_group_id = 'general' AND permission_id IN ('ocView', 'ocTransfer')");
+        $db->delete('xf_permission_entry', "permission_group_id = 'general' AND permission_id IN ('ocView', 'ocTransfer', 'ocChargeFree')");
         $db->delete('xf_admin_permission_entry', "admin_permission_id = 'ocCredits'");
     }
 
@@ -246,6 +252,11 @@ class Setup extends AbstractSetup
         $this->addBalanceLeaderboardIndex();
     }
 
+    public function upgrade933Step1()
+    {
+        $this->createChargeTable();
+    }
+
     protected function addBalanceLeaderboardIndex(): void
     {
         $this->schemaManager()->alterTable('xf_oc_balance', function (Alter $table) {
@@ -289,6 +300,30 @@ class Setup extends AbstractSetup
             $table->addColumn('balance', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
             $table->addColumn('log_date', 'int')->setDefault(0);
             $table->addPrimaryKey(['user_id', 'currency_id']);
+        });
+    }
+
+    /**
+     * Paid unlocks for the [charge] BBCode. Unique per
+     * content/payer/currency/amount so a member never pays twice for the same
+     * content at the same price.
+     */
+    protected function createChargeTable(): void
+    {
+        $this->createTable('xf_oc_charge', function (Create $table) {
+            $table->addColumn('charge_id', 'int')->autoIncrement();
+            $table->addColumn('content_type', 'varchar', 25);
+            $table->addColumn('content_id', 'int')->setDefault(0);
+            $table->addColumn('user_id', 'int');
+            $table->addColumn('author_user_id', 'int')->setDefault(0);
+            $table->addColumn('currency_id', 'int')->setDefault(1);
+            $table->addColumn('amount', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
+            $table->addColumn('charge_date', 'int')->setDefault(0);
+            $table->addUniqueKey(
+                ['content_type', 'content_id', 'user_id', 'currency_id', 'amount'],
+                'content_user_currency_amount'
+            );
+            $table->addKey(['user_id', 'charge_date'], 'user_date');
         });
     }
 

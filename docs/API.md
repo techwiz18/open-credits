@@ -56,6 +56,27 @@ Double-entry member transfer (`-X` sender / `+X` receiver). Unlike `adjust()`,
 is short. Same user or non-positive amounts also return false.
 
 ```php
+$status = $credits->chargeForContent(
+    int $fromUserId, int $toUserId, int $currencyId,
+    float $amount, string $contentType, int $contentId
+): string
+```
+
+Double-entry paywall charge: debits the reader and credits the author, recording
+one payment per `(content, reader, currency, amount)`. Like `transfer()`, it
+**never overdraws**. Returns `ok`, `already_paid`, `self` (reader is the author),
+`no_funds`, `invalid`, or `invalid_author`. Repeated calls for the same content
+and price return `already_paid` without moving money. The `[charge]` BBCode uses
+this; other add-ons can call it for their own paywalls.
+
+```php
+$paid = $credits->paidAmountsFor(int $userId, string $contentType, int $contentId, int $currencyId): array
+```
+
+Amounts the member has already paid to unlock this content, keyed as two-decimal
+strings (for example `['10.00' => true]`).
+
+```php
 $rows = $credits->rebuildAllBalances(): int
 ```
 
@@ -77,6 +98,20 @@ $credits->adjust($userId, $currencyId, -$price, 'my_addon_entry', $contentId, 'T
 
 Charge with your own trigger key (namespaced, e.g. `my_addon_entry`) so the
 member's history stays readable.
+
+## Paywalled content (`[charge]`)
+
+Forum posts can hide content until the reader pays:
+
+```
+[charge=10]This text is hidden until the reader pays 10 credits.[/charge]
+```
+
+The amount is in the primary currency. Authors, staff, and members with the
+**Bypass charge BBCode** permission see it for free. Paying a given price
+unlocks every `[charge]` block at that price in the post; the reader is charged
+and the author credited (both ledger rows use the `charge` trigger). The
+BBCode renders a form that posts to `/credits/unlock`.
 
 ```php
 $status = $credits->redeem(int $userId, string $code, ?array &$granted = null): string

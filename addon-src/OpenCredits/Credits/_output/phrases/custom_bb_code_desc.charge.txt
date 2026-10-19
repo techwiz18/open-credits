@@ -1,0 +1,1 @@
+Hides content until the reader pays the specified credits; the author is credited.

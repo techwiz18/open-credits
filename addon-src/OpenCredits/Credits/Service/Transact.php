@@ -469,6 +469,130 @@ class Transact extends AbstractService
     }
 
     /**
+     * Charges a member to unlock paywalled content and credits the author.
+     * Idempotent per (content, payer, currency, amount): a repeat returns
+     * 'already_paid' without moving money. Never overdraws.
+     *
+     * Returns 'ok', 'already_paid', 'self', 'no_funds', 'invalid' or
+     * 'invalid_author'.
+     */
+    public function chargeForContent(
+        int $fromUserId,
+        int $toUserId,
+        int $currencyId,
+        float $amount,
+        string $contentType,
+        int $contentId
+    ): string {
+        if ($fromUserId <= 0 || $toUserId <= 0 || $contentId <= 0 || $amount <= 0 || $contentType === '') {
+            return 'invalid';
+        }
+        if ($fromUserId === $toUserId) {
+            return 'self';
+        }
+        $db = $this->db();
+        $db->beginTransaction();
+        try {
+            $first = min($fromUserId, $toUserId);
+            $second = max($fromUserId, $toUserId);
+            $locked = $db->fetchAll('SELECT user_id FROM xf_user WHERE user_id IN (?, ?) FOR UPDATE', [$first, $second]);
+            if (count($locked) !== 2) {
+                $db->rollBack();
+                return 'invalid_author';
+            }
+            $currency = $db->fetchRow(
+                'SELECT decimals, active FROM xf_oc_currency WHERE currency_id = ?',
+                $currencyId
+            );
+            if (!$currency || !(int)$currency['active']) {
+                $db->rollBack();
+                return 'invalid';
+            }
+            $amount = round($amount, (int)$currency['decimals']);
+            if ($amount <= 0) {
+                $db->rollBack();
+                return 'invalid';
+            }
+            $existing = $db->fetchOne(
+                'SELECT charge_id FROM xf_oc_charge WHERE content_type = ? AND content_id = ?'
+                . ' AND user_id = ? AND currency_id = ? AND amount = ?',
+                [$contentType, $contentId, $fromUserId, $currencyId, $amount]
+            );
+            if ($existing) {
+                $db->commit();
+                return 'already_paid';
+            }
+            // Charges never overdraw, regardless of the currency's allow_negative.
+            $senderBalance = (float)$db->fetchOne(
+                'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
+                [$fromUserId, $currencyId]
+            );
+            if ($senderBalance < $amount) {
+                $db->rollBack();
+                return 'no_funds';
+            }
+            $this->applyBalanceDelta($fromUserId, $currencyId, -$amount);
+            $this->applyBalanceDelta($toUserId, $currencyId, $amount);
+            $now = \XF::$time;
+            $type = substr($contentType, 0, 25);
+            $note = 'Charge: ' . $type . ' #' . $contentId;
+            $db->insert('xf_oc_transaction', [
+                'user_id' => $fromUserId, 'currency_id' => $currencyId,
+                'amount' => -$amount, 'trigger' => 'charge',
+                'content_type' => $type, 'content_id' => $contentId,
+                'note' => $note, 'log_date' => $now,
+            ]);
+            $db->insert('xf_oc_transaction', [
+                'user_id' => $toUserId, 'currency_id' => $currencyId,
+                'amount' => $amount, 'trigger' => 'charge',
+                'content_type' => $type, 'content_id' => $contentId,
+                'note' => $note, 'log_date' => $now,
+            ]);
+            $db->insert('xf_oc_charge', [
+                'content_type' => $type,
+                'content_id' => $contentId,
+                'user_id' => $fromUserId,
+                'author_user_id' => $toUserId,
+                'currency_id' => $currencyId,
+                'amount' => $amount,
+                'charge_date' => $now,
+            ]);
+            $db->commit();
+            self::clearBalanceCache($fromUserId);
+            self::clearBalanceCache($toUserId);
+            $this->app->fire('oc_credits_adjust', [$fromUserId, $currencyId, -$amount, 'charge', $contentId]);
+            $this->app->fire('oc_credits_adjust', [$toUserId, $currencyId, $amount, 'charge', $contentId]);
+            return 'ok';
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Amounts a member has already paid to unlock a content item, keyed as
+     * two-decimal strings to match the stored decimal values.
+     *
+     * @return array<string, bool>
+     */
+    public function paidAmountsFor(int $userId, string $contentType, int $contentId, int $currencyId): array
+    {
+        if ($userId <= 0 || $contentId <= 0 || $contentType === '') {
+            return [];
+        }
+        $rows = $this->db()->fetchAll(
+            'SELECT amount FROM xf_oc_charge WHERE user_id = ? AND content_type = ?'
+            . ' AND content_id = ? AND currency_id = ?',
+            [$userId, $contentType, $contentId, $currencyId]
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $out[sprintf('%.2f', (float)$row['amount'])] = true;
+        }
+        return $out;
+    }
+
+    /**
      * Redeems a coupon code for a member. Owns its transaction and locks the
      * code row, so limited-use caps stay exact under concurrency.
      *
