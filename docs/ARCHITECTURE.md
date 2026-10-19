@@ -13,6 +13,8 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
+| `Entity/Charge.php` | Entity structure for paid `[charge]` unlocks |
+| `BbCode/Charge.php` | `[charge=X]` callback: paywall gate + locked box |
 | `Pub/Controller/Credits.php` | `/credits/` history, `/credits/transfer`, `/credits/transfer-save` |
 | `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated) |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
@@ -37,6 +39,10 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
   Append-only ledger. **Both `amount` columns are SIGNED** (`->unsigned(false)`);
   XF defaults numerics to unsigned, which rejects debit rows — see GOTCHAS.
 * `xf_user.oc_credits DECIMAL(10,2)` — denormalized balance, rebuilt from ledger.
+* `xf_oc_charge(charge_id, content_type, content_id, user_id, author_user_id,
+  currency_id, amount, charge_date)` — paid unlocks for `[charge]`. Unique per
+  `(content_type, content_id, user_id, currency_id, amount)`, so a member never
+  pays twice for the same content at the same price.
 
 ## Trigger matrix (listener → service call)
 
@@ -110,6 +116,17 @@ change fires the `oc_credits_adjust` code event with
   to the guest group). One aggregate `xf_oc_balance ⋈ xf_user` query + one user
   fetch. Templates: `oc_widget_top_holders` (public) and
   `widget_def_options_oc_top_holders` (admin options: count, currency, guests).
+* `[charge=X]…[/charge]` (`BbCode/Charge.php`) hides post content until the
+  reader pays X of the primary currency; authors, staff, and `ocChargeFree`
+  holders bypass. Locked content is never rendered into the page. The unlock
+  form posts to `/credits/unlock`, which loads the post, checks `canView()`,
+  re-derives the price from the post's actual `[charge]` blocks (the client
+  cannot set it), calls `Transact::chargeForContent()`, and redirects back. One
+  payment per (post, member, amount) unlocks every block at that price. The
+  author also sees a per-block "Members unlocked: N · total earned" line.
+* The `charge` button is placed in the editor toolbar (`moreText` group, all
+  viewports) by `Setup::syncEditorButton()` on install/upgrade; admins can move
+  or remove it via the BB code button manager.
 
 ## Conventions for new work
 
@@ -120,6 +137,12 @@ change fires the `oc_credits_adjust` code event with
   (only `definition_class`; id comes from the filename), public + admin option
   templates, and the `widget_def.{id}` / `widget_def_desc.{id}` phrases. Version
   bump + upgrade imports it; `_metadata.json` and `_data` are build artifacts.
+* New BBCodes: add `_output/bb_codes/{tag}.json` with `bb_code_mode: callback`
+  and `callback_class`/`callback_method`, a callback class whose static method
+  is `render(array $children, $option, array $tag, array $options, Html $renderer)`
+  (use `$renderer->renderSubTree()` for the body and `$options['entity']` for
+  the content), plus the `custom_bb_code_title|desc|example|output.{tag}`
+  phrases. Version bump + upgrade imports it.
 * New `_output` JSON must follow the per-type filename rules — see `docs/XF-DEV-GOTCHAS.md`.
 * Run `./scripts/dev.sh fix-perms` after any `xf-make:*` (generators run as root).
 * Import new `_output` with a version bump + `xf-addon:upgrade` (not `sync-json`).

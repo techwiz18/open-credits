@@ -55,9 +55,9 @@
         "hash": "38a31a8c6eb3c9814d4ed6ef8eb49cae"
     },
     "admin/widget_def_options_oc_top_holders.html": {
-        "version_id": 930,
-        "version_string": "0.11.0-dev",
-        "hash": "258264e2acf5541239c3a59f087cc138"
+        "version_id": 934,
+        "version_string": "0.12.0-dev",
+        "hash": "0958d8b6c5f61b3a902c3db13eacd801"
     },
     "public/alert_user_oc_earn.html": {
         "version_id": 926,
@@ -83,6 +83,16 @@
         "version_id": 926,
         "version_string": "0.10.0",
         "hash": "65d282dd09657ee3718c18ad218f1c79"
+    },
+    "public/oc_charge_author_stats.html": {
+        "version_id": 934,
+        "version_string": "0.12.0-dev",
+        "hash": "cf1b10ab999fb923e95d2761d2f06815"
+    },
+    "public/oc_charge_locked.html": {
+        "version_id": 935,
+        "version_string": "0.12.0-dev",
+        "hash": "edf39fd49ef3b125cdd936564c2eb47b"
     },
     "public/oc_widget_top_holders.html": {
         "version_id": 930,

@@ -1,0 +1,1 @@
+[charge=10]This text is hidden until paid.[/charge]
