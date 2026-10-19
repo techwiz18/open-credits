@@ -44,10 +44,20 @@
         "version_string": "0.10.0",
         "hash": "6d9949bce62da8894ca160014f1bb6e2"
     },
+    "admin/oc_tools_prune.html": {
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "cf0ddc5333056393d65083d7ce5e55a8"
+    },
     "admin/oc_tools_rebuild.html": {
         "version_id": 926,
         "version_string": "0.10.0",
         "hash": "38a31a8c6eb3c9814d4ed6ef8eb49cae"
+    },
+    "admin/widget_def_options_oc_top_holders.html": {
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "258264e2acf5541239c3a59f087cc138"
     },
     "public/alert_user_oc_earn.html": {
         "version_id": 926,
@@ -73,5 +83,10 @@
         "version_id": 926,
         "version_string": "0.10.0",
         "hash": "65d282dd09657ee3718c18ad218f1c79"
+    },
+    "public/oc_widget_top_holders.html": {
+        "version_id": 930,
+        "version_string": "0.11.0-dev",
+        "hash": "22047a654401e1b9bff491449f1d8b1a"
     }
 }

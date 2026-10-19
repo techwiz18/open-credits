@@ -13,5 +13,14 @@
     },
     "ocShowProfileTab.json": {
         "hash": "3b9f3ee88bbd207b7b007c7e839dc97a"
+    },
+    "ocDayBoundary.json": {
+        "hash": "76d615859f79a20e084957079b1e1dbf"
+    },
+    "ocDayOffsetHours.json": {
+        "hash": "7ea2bf4ceb80516c186d10a058e7283d"
+    },
+    "ocHistoryRetentionDays.json": {
+        "hash": "e7b602df84b4bd911e5adad6dd6a74ef"
     }
 }

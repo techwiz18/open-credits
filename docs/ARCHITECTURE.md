@@ -8,12 +8,13 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 
 | Path | Role |
 |---|---|
-| `addon.json` | Add-on meta. Current: 0.7.0 / 700. Requires XF 2.3.0+, PHP 8.2+ |
+| `addon.json` | Add-on meta. Current: 0.11.0-dev / 931. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
 | `Pub/Controller/Credits.php` | `/credits/` history, `/credits/transfer`, `/credits/transfer-save` |
+| `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated) |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
 | `Job/RebuildBalances.php` | Job wrapper around the same service method |
 | `Cron/DailyLogin.php` | Stub (daily_login is awarded via `visitor_setup`, not cron) |
@@ -26,7 +27,9 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
   main stat + `xf_user.oc_credits` mirror); `visible` currencies list in
   postbit/menu; the profile tab lists all active ones.
 * `xf_oc_balance(user_id, currency_id, balance)` — cached per-currency balances
-  maintained by `Transact` on every write; missing row means 0.
+  maintained by `Transact` on every write; missing row means 0. Keyed
+  `(currency_id, balance)` (`currency_balance`) so the leaderboard widget is a
+  range scan, not a filesort.
 * `xf_oc_event(event_id, currency_id, trigger, amount, forum_ids, usergroup_ids, max_per_day, active)`
   Seeded triggers: `thread 5.00`, `post 1.00`, `reaction_received 2.00`,
   `register 10.00`, `daily_login 5.00`.
@@ -72,9 +75,10 @@ change fires the `oc_credits_adjust` code event with
   currencies. Transfer with an unresolvable `currency_id` errors instead of
   falling back.
 * Awards skip inactive currencies; registration skips banned/rejected/disabled.
-* Daily boundaries are UTC midnights (`Transact::dayStartUtc()`), ignoring
-  forum/user time zones — consistent for all members and ungameable by
-  traveling; registration day skips the daily bonus on the same boundary.
+* Daily boundaries default to UTC midnights (`Transact::dayStart()`),
+  ignoring forum/user time zones — consistent for all members and ungameable
+  by traveling; configurable to board time or a fixed offset via options.
+  Registration day skips the daily bonus on the same boundary.
 * No clawback on content delete (by design); backfill runs per-event inside a
   transaction, quantizes to currency decimals, skips inactive currencies, and
   site-wide runs exclude already per-member-backfilled users;
@@ -99,12 +103,22 @@ change fires the `oc_credits_adjust` code event with
 * Tools (`oc-tools` admin route): rebuild (sync service call + result view),
   one-shot historical backfill (lump sums per member per post/thread event,
   guarded by existing `Historical backfill` rows, then rebuild).
+* Widget `oc_top_holders` (`Widget`/`TopHolders.php`): top N members by balance
+  in one currency (primary by default, or any visible active currency),
+  `ocView`-gated, excludes banned/disabled and zero balances. One aggregate
+  `xf_oc_balance ⋈ xf_user` query + one user fetch. Templates:
+  `oc_widget_top_holders` (public) and `widget_def_options_oc_top_holders`
+  (admin options: count + currency).
 
 ## Conventions for new work
 
 * Never write balances outside `Service/Transact.php`.
 * New triggers: add seed row in `Setup::seedDefaultEvents()`, listener method in
   `Listener.php`, `_output/code_event_listeners/*.json`, version bump + upgrade step.
+* New widgets: add the class under `Widget/`, `_output/widget_definitions/{id}.json`
+  (only `definition_class`; id comes from the filename), public + admin option
+  templates, and the `widget_def.{id}` / `widget_def_desc.{id}` phrases. Version
+  bump + upgrade imports it; `_metadata.json` and `_data` are build artifacts.
 * New `_output` JSON must follow the per-type filename rules — see `docs/XF-DEV-GOTCHAS.md`.
 * Run `./scripts/dev.sh fix-perms` after any `xf-make:*` (generators run as root).
 * Import new `_output` with a version bump + `xf-addon:upgrade` (not `sync-json`).

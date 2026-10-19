@@ -113,6 +113,16 @@ class Setup extends AbstractSetup
         $this->createCodeTable();
     }
 
+    public function installStep10()
+    {
+        $this->createSnapshotTable();
+    }
+
+    public function installStep11()
+    {
+        $this->addBalanceLeaderboardIndex();
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -121,6 +131,7 @@ class Setup extends AbstractSetup
         $sm->dropTable('xf_oc_transaction');
         $sm->dropTable('xf_oc_balance');
         $sm->dropTable('xf_oc_code');
+        $sm->dropTable('xf_oc_snapshot');
     }
 
     public function uninstallStep2()
@@ -225,6 +236,23 @@ class Setup extends AbstractSetup
         $this->createCodeTable();
     }
 
+    public function upgrade930Step1()
+    {
+        $this->createSnapshotTable();
+    }
+
+    public function upgrade931Step1()
+    {
+        $this->addBalanceLeaderboardIndex();
+    }
+
+    protected function addBalanceLeaderboardIndex(): void
+    {
+        $this->schemaManager()->alterTable('xf_oc_balance', function (Alter $table) {
+            $table->addKey(['currency_id', 'balance'], 'currency_balance');
+        });
+    }
+
     public function upgrade927Step1()
     {
         $this->schemaManager()->alterTable('xf_oc_transaction', function (Alter $table) {
@@ -245,6 +273,22 @@ class Setup extends AbstractSetup
             $table->addColumn('expiry_date', 'int')->setDefault(0);
             $table->addColumn('active', 'tinyint')->setDefault(1);
             $table->addUniqueKey('code', 'code');
+        });
+    }
+
+    /**
+     * Prune snapshots: one row per (member, currency) holding the summed
+     * balance of all pruned (deleted) ledger rows. Rebuilds add the snapshot
+     * to the surviving rows, so totals stay exact.
+     */
+    protected function createSnapshotTable(): void
+    {
+        $this->createTable('xf_oc_snapshot', function (Create $table) {
+            $table->addColumn('user_id', 'int');
+            $table->addColumn('currency_id', 'int')->setDefault(1);
+            $table->addColumn('balance', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
+            $table->addColumn('log_date', 'int')->setDefault(0);
+            $table->addPrimaryKey(['user_id', 'currency_id']);
         });
     }
 

@@ -11,19 +11,34 @@ throwaway copy inside the `web` container (gitignored `src/`):
 
 ```bash
 rm -rf src/.qatmp && cp -r qa src/.qatmp
-docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
+docker compose exec -T web bash -c "cd /var/www/html/.qatmp && php -r 'copy(\"https://getcomposer.org/installer\", \"/tmp/cs.php\");' && php /tmp/cs.php --install-dir=/usr/local/bin --filename=composer && composer install && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
 ```
 
 (On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI does exactly that.)
 
-## Integration (DB-backed service matrix)
+## Integration (`qa/tests/Integration`, real XenForo boot)
 
-`Transact::adjust/transfer/redeem/awardByTrigger`, daily limits, scoping,
-dedupe, backfill and rebuild paths are currently verified with scripted CLI
-runs against the dev forum (see session notes), cleaned up by exact
-transaction id with `rebuildAllBalances()` afterwards. The supported path to
-automating these is hampel/xenforo-test-framework v3.x (built for XF 2.3)
-with a dedicated test database.
+DB-backed service tests run against the licensed dev forum. The bootstrap
+(`tests/integration-bootstrap.php`) boots the real app from `OC_XF_ROOT`; when
+that is unset the tests mark themselves skipped, so public CI (no licensed
+runtime) stays green.
+
+```bash
+rm -rf src/.qatmp && cp -r qa src/.qatmp
+docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
+```
+
+Covered today: `PruneHistoryTest` proves the history-pruning invariant
+(#10B) — pruning old ledger rows into snapshots leaves every balance
+unchanged after a rebuild, and redeem/backfill rows are never pruned. It
+writes only under a synthetic user id above every real one and cleans up in
+`tearDown()`.
+
+Why not hampel/xenforo-test-framework? For XF 2.3 on PHP 8.2 it requires
+framework v3.x, which pins PHPUnit 10 (the harness here is on 11) and is a
+mocking unit-test tool, not a DB-integration one. This suite keeps PHPUnit 11,
+adds no dependency, and still cannot run in public CI either way (licensed
+runtime), so it is wired into the local release checklist instead.
 
 ## Composer (dev only, never shipped)
 

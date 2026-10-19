@@ -20,6 +20,20 @@ class CreditEvent extends Entity
         return self::TRIGGER_LABELS[$this->trigger] ?? ucwords(str_replace('_', ' ', (string)$this->trigger));
     }
 
+    protected function getDayBoundaryLabel(): string
+    {
+        $mode = 'utc';
+        try {
+            $mode = (string)(\XF::app()->options()->ocDayBoundary ?? 'utc');
+        } catch (\Throwable $e) {
+            $mode = 'utc';
+        }
+        if (!in_array($mode, ['utc', 'board', 'fixed'], true)) {
+            $mode = 'utc';
+        }
+        return \XF::phrase('ocadm_day_' . $mode)->render();
+    }
+
     public function getDisplayHint(): string
     {
         $currency = $this->Currency;
@@ -28,7 +42,7 @@ class CreditEvent extends Entity
             'amount' => number_format((float)$this->amount, $decimals),
         ])->render();
         if ($this->trigger === 'daily_login') {
-            $hint .= ' · ' . \XF::phrase('ocadm_hint_daily')->render();
+            $hint .= ' · ' . \XF::phrase('ocadm_hint_daily')->render() . ' (' . $this->getDayBoundaryLabel() . ')';
         } elseif ($this->max_per_day > 0) {
             $hint .= ' · ' . \XF::phrase('ocadm_hint_max_x', ['n' => $this->max_per_day])->render();
         } else {

@@ -1,0 +1,1 @@
+Pruned {deleted} rows into {snapshots} snapshots. Balances are unchanged.

@@ -1,0 +1,1 @@
+Summarize old ledger rows into balance snapshots and delete them. Totals stay exact.

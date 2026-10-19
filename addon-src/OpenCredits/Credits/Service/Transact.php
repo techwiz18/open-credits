@@ -571,11 +571,52 @@ class Transact extends AbstractService
     }
 
     /**
-     * UTC start of the current day, matching the UTC log_date values.
+     * Start of the current earning day as a UTC timestamp. Follows the
+     * ocDayBoundary option: shared UTC midnight (default, ungameable),
+     * board time-zone midnight, or a fixed UTC offset in hours.
      */
-    public static function dayStartUtc(): int
+    public static function dayStart(): int
     {
         $now = \XF::$time;
+        $mode = 'utc';
+        $offsetHours = 0;
+        $tzName = '';
+        try {
+            $options = \XF::app()->options();
+            $mode = (string)($options->ocDayBoundary ?? 'utc');
+            $offsetHours = (int)($options->ocDayOffsetHours ?? 0);
+            $tzName = (string)($options->guestTimeZone ?? '');
+        } catch (\Throwable $e) {
+            $mode = 'utc';
+        }
+        return self::dayStartAt($now, $mode, $offsetHours, $tzName);
+    }
+
+    /**
+     * Pure boundary math, split out of dayStart() so it can be unit-tested
+     * without booting XenForo. Unknown or invalid input falls back to UTC
+     * midnight, the safe, ungameable default.
+     *
+     * @param int $now Unix timestamp to resolve the day start for
+     * @param string $mode 'utc' | 'board' | 'fixed'
+     * @param int $offsetHours Fixed offset hours (clamped to -12..+14)
+     * @param string $tzName Board time zone name (empty = UTC)
+     */
+    public static function dayStartAt(int $now, string $mode, int $offsetHours = 0, string $tzName = ''): int
+    {
+        if ($mode === 'board') {
+            try {
+                $tz = new \DateTimeZone($tzName !== '' ? $tzName : 'UTC');
+                $midnight = (new \DateTimeImmutable('@' . $now))->setTimezone($tz)->setTime(0, 0);
+                return (int)$midnight->format('U');
+            } catch (\Throwable $e) {
+                // Invalid time zone name: fall through to the UTC default.
+            }
+        } elseif ($mode === 'fixed') {
+            $offsetHours = max(-12, min(14, $offsetHours));
+            $shifted = $now + $offsetHours * 3600;
+            return $shifted - ($shifted % 86400) - $offsetHours * 3600;
+        }
         return $now - ($now % 86400);
     }
 
@@ -587,7 +628,7 @@ class Transact extends AbstractService
         $count = (int)$this->db()->fetchOne(
             'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND currency_id = ? AND log_date >= ?'
             . ' AND note != ? AND `trigger` = ?',
-            [$userId, $currencyId, self::dayStartUtc(), 'Historical backfill', $trigger]
+            [$userId, $currencyId, self::dayStart(), 'Historical backfill', $trigger]
         );
         return $count < $maxPerDay;
     }
@@ -604,7 +645,7 @@ class Transact extends AbstractService
             return false;
         }
         $db = $this->db();
-        $start = self::dayStartUtc();
+        $start = self::dayStart();
         $already = (int)$db->fetchOne(
             'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
             [$userId, 'daily_login', $start]
@@ -633,7 +674,78 @@ class Transact extends AbstractService
     }
 
     /**
-     * Recomputes cached balances from the transaction log, including the
+     * Summarizes ledger rows at or before $cutoff into per-(member,currency)
+     * snapshot rows and deletes them. Backfill markers and redeem rows are
+     * never deleted (completion guards and one-per-member checks depend on
+     * them). Batched by user-id range like rebuilds; totals stay exact
+     * because each snapshot equals the sum of its deleted rows.
+     * Returns ['snapshots' => upserted, 'deleted' => rows, 'next' => ?].
+     */
+    public function pruneHistory(int $cutoff, int $startAfterUserId = 0, int $batchSize = 0): array
+    {
+        $empty = ['snapshots' => 0, 'deleted' => 0, 'next' => null];
+        if ($cutoff <= 0 || $cutoff >= \XF::$time) {
+            return $empty;
+        }
+        $db = $this->db();
+        $maxUserId = max(
+            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_user'),
+            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_oc_transaction')
+        );
+        $endUserId = $batchSize > 0 ? $startAfterUserId + $batchSize : $maxUserId;
+        $pairs = $db->fetchAll(
+            'SELECT user_id, currency_id FROM xf_oc_transaction'
+            . ' WHERE user_id > ? AND user_id <= ? AND log_date <= ?'
+            . ' GROUP BY user_id, currency_id',
+            [$startAfterUserId, $endUserId, $cutoff]
+        );
+        $snapshots = 0;
+        $deleted = 0;
+        $db->beginTransaction();
+        try {
+            foreach ($pairs as $pair) {
+                $uid = (int)$pair['user_id'];
+                $cid = (int)$pair['currency_id'];
+                $existing = (float)$db->fetchOne(
+                    'SELECT COALESCE(balance, 0) FROM xf_oc_snapshot WHERE user_id = ? AND currency_id = ?',
+                    [$uid, $cid]
+                );
+                $sum = (float)$db->fetchOne(
+                    'SELECT COALESCE(SUM(amount), 0) FROM xf_oc_transaction'
+                    . ' WHERE user_id = ? AND currency_id = ? AND log_date <= ?'
+                    . " AND `trigger` != ? AND note != ?",
+                    [$uid, $cid, $cutoff, 'redeem', 'Historical backfill']
+                );
+                if ($sum == 0.0 && $existing == 0.0) {
+                    continue;
+                }
+                $new = round($existing + $sum, 2);
+                $db->query(
+                    'INSERT INTO xf_oc_snapshot (user_id, currency_id, balance, log_date) VALUES (?, ?, ?, ?)'
+                    . ' ON DUPLICATE KEY UPDATE balance = ?, log_date = ?',
+                    [$uid, $cid, $new, $cutoff, $new, $cutoff]
+                );
+                $snapshots++;
+                $stmt = $db->query(
+                    'DELETE FROM xf_oc_transaction'
+                    . ' WHERE user_id = ? AND currency_id = ? AND log_date <= ?'
+                    . " AND `trigger` != ? AND note != ?",
+                    [$uid, $cid, $cutoff, 'redeem', 'Historical backfill']
+                );
+                $deleted += (int)$stmt->rowsAffected();
+            }
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
+        self::clearBalanceCache();
+        $next = ($batchSize > 0 && $endUserId < $maxUserId) ? $endUserId : null;
+        return ['snapshots' => $snapshots, 'deleted' => $deleted, 'next' => $next];
+    }
+
+    /**
+     * Recomputes cached balances from snapshots plus the transaction log, including the
      * legacy primary-currency column.
      *
      * Single-pass when $batchSize <= 0 (small boards, CLI, tests). With a
@@ -650,7 +762,10 @@ class Transact extends AbstractService
                 $db->query('DELETE FROM xf_oc_balance');
                 $stmt = $db->query(
                     'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
-                    . ' SELECT user_id, currency_id, SUM(amount) FROM xf_oc_transaction GROUP BY user_id, currency_id'
+                    . ' SELECT user_id, currency_id, SUM(amount) FROM ('
+                    . 'SELECT user_id, currency_id, balance AS amount FROM xf_oc_snapshot'
+                    . ' UNION ALL SELECT user_id, currency_id, amount FROM xf_oc_transaction'
+                    . ') AS combined GROUP BY user_id, currency_id'
                 );
                 $rows = (int)$stmt->rowsAffected();
                 $this->resyncPrimaryMirror(null, null);
@@ -665,7 +780,8 @@ class Transact extends AbstractService
 
         $maxUserId = max(
             (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_user'),
-            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_oc_transaction')
+            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_oc_transaction'),
+            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_oc_snapshot')
         );
         $endUserId = $startAfterUserId + $batchSize;
         $db->beginTransaction();
@@ -676,9 +792,11 @@ class Transact extends AbstractService
             );
             $stmt = $db->query(
                 'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
-                . ' SELECT user_id, currency_id, SUM(amount) FROM xf_oc_transaction'
-                . ' WHERE user_id > ? AND user_id <= ? GROUP BY user_id, currency_id',
-                [$startAfterUserId, $endUserId]
+                . ' SELECT user_id, currency_id, SUM(amount) FROM ('
+                . 'SELECT user_id, currency_id, balance AS amount FROM xf_oc_snapshot WHERE user_id > ? AND user_id <= ?'
+                . ' UNION ALL SELECT user_id, currency_id, amount FROM xf_oc_transaction WHERE user_id > ? AND user_id <= ?'
+                . ') AS combined GROUP BY user_id, currency_id',
+                [$startAfterUserId, $endUserId, $startAfterUserId, $endUserId]
             );
             $rows = (int)$stmt->rowsAffected();
             $this->resyncPrimaryMirror($startAfterUserId, $endUserId);

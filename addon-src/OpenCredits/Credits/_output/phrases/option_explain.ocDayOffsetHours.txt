@@ -1,0 +1,1 @@
+Only used when the daily boundary is set to fixed offset. Range -12 to +14.

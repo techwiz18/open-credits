@@ -1,0 +1,13 @@
+{
+    "edit_format_params": "utc={{ phrase('oc_day_utc') }}\nboard={{ phrase('oc_day_board') }}\nfixed={{ phrase('oc_day_fixed') }}",
+    "sub_options": [],
+    "validation_class": "",
+    "validation_method": "",
+    "advanced": false,
+    "edit_format": "radio",
+    "data_type": "string",
+    "default_value": "utc",
+    "relations": {
+        "ocCredits": 60
+    }
+}

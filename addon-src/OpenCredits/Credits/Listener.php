@@ -153,7 +153,7 @@ class Listener
             return;
         }
         // Registration day is covered by the register bonus, not the daily one.
-        if ((int)$user->get('register_date') >= strtotime('today midnight')) {
+        if ((int)$user->get('register_date') >= Service\Transact::dayStart()) {
             return;
         }
         try {
