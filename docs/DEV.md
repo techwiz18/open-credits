@@ -53,6 +53,21 @@ docker compose exec -T web php /var/www/html/cmd.php xf-addon:build-release Open
 ./scripts/dev.sh fix-perms   # after every generator/import/upgrade
 ```
 
+## AI agent guidance
+
+XenForo 2.3.10 ships `xf-dev:install-ai-agents`, which writes the upstream agent
+conventions into the dev root (`src/`). The committed copies live at `AGENTS.md`
+(project preamble) and `.agents/skills/` (XF skills: `xf-shared-policy`,
+`xf-addon-dev`, `xf-core-dev`, `xf-scaffold-make`, `xf-template-phrase`).
+
+- Load `xf-shared-policy` for all XF work and the task-specific skill alongside it.
+- **Do not run `xf-dev:export` manually** — it is destructive and only
+  `xf-addon:build-release` invokes it.
+- Use `xf-make:*` for artifacts that have a command; widgets and BBCodes are
+  manual `_output` artifacts.
+- This project's runner is `docker compose exec -T web php /var/www/html/cmd.php`
+  (the skill's `compose.yaml`/`xf` detection does not apply here).
+
 See `addon-src/OpenCredits/Credits/tests/README.md` for the test setup.
 
 ## Granting the credit permissions (dev shortcut)
