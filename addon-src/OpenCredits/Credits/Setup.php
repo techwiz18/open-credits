@@ -262,16 +262,15 @@ class Setup extends AbstractSetup
         $this->addBalanceLeaderboardIndex();
     }
 
-    public function upgrade933Step1()
-    {
-        $this->createChargeTable();
-    }
-
     public function upgrade934Step1()
     {
-        $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) {
-            $table->addKey(['content_type', 'content_id', 'currency_id', 'amount'], 'content_currency_amount');
-        });
+        // 933 is the released v0.11.1 version, so installs on it skip straight
+        // to 934. Create the table here (not in a 933 step) so both the
+        // 0.11.0 -> 0.12 and 0.11.1 -> 0.12 paths work. The guard keeps the
+        // step safe for any early dev install that already has the table.
+        if (!$this->tableExists('xf_oc_charge')) {
+            $this->createChargeTable();
+        }
         $this->syncEditorButton(true);
     }
 
