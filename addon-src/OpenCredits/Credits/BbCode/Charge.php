@@ -21,6 +21,25 @@ class Charge
     /** @var array<string, array<string, bool>> */
     protected static $paid = [];
 
+    /**
+     * Normalized (2-decimal) charge prices found in a raw message. The unlock
+     * endpoint uses this to verify the submitted price matches a real
+     * [charge=…] block instead of trusting the client.
+     *
+     * @return string[]
+     */
+    public static function amountsForMessage(string $message): array
+    {
+        if (!preg_match_all('/\[charge\s*=\s*([0-9]+(?:\.[0-9]{1,2})?)\s*\]/i', $message, $matches)) {
+            return [];
+        }
+        $amounts = [];
+        foreach ($matches[1] as $amount) {
+            $amounts[sprintf('%.2f', (float)$amount)] = true;
+        }
+        return array_keys($amounts);
+    }
+
     public static function render(array $children, $option, array $tag, array $options, Html $renderer)
     {
         $amount = (float)$option;

@@ -120,9 +120,10 @@ change fires the `oc_credits_adjust` code event with
   reader pays X of the primary currency; authors, staff, and `ocChargeFree`
   holders bypass. Locked content is never rendered into the page. The unlock
   form posts to `/credits/unlock`, which loads the post, checks `canView()`,
-  calls `Transact::chargeForContent()`, and redirects back. One payment per
-  (post, member, amount) unlocks every block at that price. The author also
-  sees a per-block "Members unlocked: N · total earned" line.
+  re-derives the price from the post's actual `[charge]` blocks (the client
+  cannot set it), calls `Transact::chargeForContent()`, and redirects back. One
+  payment per (post, member, amount) unlocks every block at that price. The
+  author also sees a per-block "Members unlocked: N · total earned" line.
 * The `charge` button is placed in the editor toolbar (`moreText` group, all
   viewports) by `Setup::syncEditorButton()` on install/upgrade; admins can move
   or remove it via the BB code button manager.

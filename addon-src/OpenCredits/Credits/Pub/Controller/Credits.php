@@ -336,11 +336,9 @@ class Credits extends AbstractController
 
         $contentType = $this->filter('content_type', 'str');
         $contentId = (int)$this->filter('content_id', 'uint');
-        $amount = (float)$this->filter('amount', 'float');
-        $currencyId = (int)$this->filter('currency_id', 'uint');
 
         $entityClass = ['post' => 'XF:Post'][$contentType] ?? null;
-        if (!$entityClass || $contentId <= 0 || $amount <= 0 || $currencyId <= 0) {
+        if (!$entityClass || $contentId <= 0) {
             return $this->error('Invalid unlock request.');
         }
 
@@ -356,6 +354,18 @@ class Credits extends AbstractController
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
+        $currencyId = $svc->primaryCurrencyId();
+        $currency = $this->em()->find('OpenCredits\Credits:Currency', $currencyId);
+        $decimals = $currency ? (int)$currency->decimals : 2;
+
+        // Never trust the submitted price: it must match a real [charge=…]
+        // block in the post. v1 charges the primary currency only.
+        $amount = round((float)$this->filter('amount', 'float'), $decimals);
+        $validAmounts = \OpenCredits\Credits\BbCode\Charge::amountsForMessage((string)$content->message);
+        if ($amount <= 0 || !in_array(sprintf('%.2f', $amount), $validAmounts, true)) {
+            return $this->error('This content cannot be unlocked at that price.');
+        }
+
         try {
             $result = $svc->chargeForContent(
                 (int)$visitor->user_id,

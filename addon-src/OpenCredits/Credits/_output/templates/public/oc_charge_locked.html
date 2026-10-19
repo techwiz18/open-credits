@@ -13,7 +13,6 @@
 				<xf:form action="{{ link('credits/unlock') }}" class="oc-charge-form">
 					<input type="hidden" name="content_type" value="{$contentType}" />
 					<input type="hidden" name="content_id" value="{$contentId}" />
-					<input type="hidden" name="currency_id" value="{$currencyId}" />
 					<input type="hidden" name="amount" value="{$amount}" />
 					<button type="submit" class="button button--primary">{{ phrase('oc_charge_unlock_for_x', {'price': $price}) }}</button>
 				</xf:form>
