@@ -28,17 +28,10 @@ rm -rf src/.qatmp && cp -r qa src/.qatmp
 docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
 ```
 
-Covered today:
-- `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,
-  and reaction dedupe rows survive; net-zero rows are still pruned; and the
-  current earning day is never touched. It writes only under a synthetic user
-  id above every real one.
-- `ChargeTest` — the `[charge]` service (#5): funds move reader → author, a
-  repeat charge is a no-op, overdrafts are refused, and self-charges are free.
-  It uses two real members (the service locks user rows) plus a synthetic
-  content id.
-
-Both clean up in `tearDown()`.
+Covered today: `PruneHistoryTest` — prune + rebuild keeps balances exact;
+redeem, backfill, and reaction dedupe rows survive; net-zero rows are still
+pruned; and the current earning day is never touched. It writes only under a
+synthetic user id above every real one and cleans up in `tearDown()`.
 
 Why not hampel/xenforo-test-framework? For XF 2.3 on PHP 8.2 it requires
 framework v3.x, which pins PHPUnit 10 (the harness here is on 11) and is a

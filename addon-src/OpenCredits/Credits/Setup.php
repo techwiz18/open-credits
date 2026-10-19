@@ -123,16 +123,6 @@ class Setup extends AbstractSetup
         $this->addBalanceLeaderboardIndex();
     }
 
-    public function installStep12()
-    {
-        $this->createChargeTable();
-    }
-
-    public function installStep13()
-    {
-        $this->syncEditorButton(true);
-    }
-
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -142,7 +132,6 @@ class Setup extends AbstractSetup
         $sm->dropTable('xf_oc_balance');
         $sm->dropTable('xf_oc_code');
         $sm->dropTable('xf_oc_snapshot');
-        $sm->dropTable('xf_oc_charge');
     }
 
     public function uninstallStep2()
@@ -155,13 +144,8 @@ class Setup extends AbstractSetup
     public function uninstallStep3()
     {
         $db = $this->db();
-        $db->delete('xf_permission_entry', "permission_group_id = 'general' AND permission_id IN ('ocView', 'ocTransfer', 'ocChargeFree')");
+        $db->delete('xf_permission_entry', "permission_group_id = 'general' AND permission_id IN ('ocView', 'ocTransfer')");
         $db->delete('xf_admin_permission_entry', "admin_permission_id = 'ocCredits'");
-    }
-
-    public function uninstallStep4()
-    {
-        $this->syncEditorButton(false);
     }
 
     public function upgrade900Step1()
@@ -262,62 +246,6 @@ class Setup extends AbstractSetup
         $this->addBalanceLeaderboardIndex();
     }
 
-    public function upgrade935Step1()
-    {
-        // 933 is v0.11.1 and 934 is v0.11.2, so installs on either skip
-        // straight to 935. Create the table here so every upgrade path works,
-        // and guard it for early dev installs that already have it.
-        if (!$this->tableExists('xf_oc_charge')) {
-            $this->createChargeTable();
-        }
-        $this->syncEditorButton(true);
-    }
-
-    /**
-     * Adds (or removes) the charge BBCode button in the rich-text editor
-     * toolbar's text group, for every viewport configuration. Idempotent and
-     * additive: existing button layout is preserved.
-     */
-    protected function syncEditorButton(bool $add): void
-    {
-        $config = \XF::options()->editorToolbarConfig;
-        if (!is_array($config) || !$config) {
-            return;
-        }
-        $button = 'xfCustom_charge';
-        $changed = false;
-
-        foreach ($config AS $type => &$groups) {
-            if (!is_array($groups)) {
-                continue;
-            }
-            foreach ($groups AS &$group) {
-                if (!is_array($group) || empty($group['buttons']) || !is_array($group['buttons'])) {
-                    continue;
-                }
-                $filtered = array_values(array_filter($group['buttons'], function ($existing) use ($button) {
-                    return $existing !== $button;
-                }));
-                if ($filtered !== $group['buttons']) {
-                    $group['buttons'] = $filtered;
-                    $changed = true;
-                }
-            }
-            unset($group);
-
-            if ($add && isset($groups['moreText']) && is_array($groups['moreText'])) {
-                $groups['moreText']['buttons'][] = $button;
-                $changed = true;
-            }
-        }
-        unset($groups);
-
-        if ($changed) {
-            \XF::repository(\XF\Repository\OptionRepository::class)
-                ->updateOption('editorToolbarConfig', $config);
-        }
-    }
-
     protected function addBalanceLeaderboardIndex(): void
     {
         $this->schemaManager()->alterTable('xf_oc_balance', function (Alter $table) {
@@ -361,31 +289,6 @@ class Setup extends AbstractSetup
             $table->addColumn('balance', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
             $table->addColumn('log_date', 'int')->setDefault(0);
             $table->addPrimaryKey(['user_id', 'currency_id']);
-        });
-    }
-
-    /**
-     * Paid unlocks for the [charge] BBCode. Unique per
-     * content/payer/currency/amount so a member never pays twice for the same
-     * content at the same price.
-     */
-    protected function createChargeTable(): void
-    {
-        $this->createTable('xf_oc_charge', function (Create $table) {
-            $table->addColumn('charge_id', 'int')->autoIncrement();
-            $table->addColumn('content_type', 'varchar', 25);
-            $table->addColumn('content_id', 'int')->setDefault(0);
-            $table->addColumn('user_id', 'int');
-            $table->addColumn('author_user_id', 'int')->setDefault(0);
-            $table->addColumn('currency_id', 'int')->setDefault(1);
-            $table->addColumn('amount', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
-            $table->addColumn('charge_date', 'int')->setDefault(0);
-            $table->addUniqueKey(
-                ['content_type', 'content_id', 'user_id', 'currency_id', 'amount'],
-                'content_user_currency_amount'
-            );
-            $table->addKey(['user_id', 'charge_date'], 'user_date');
-            $table->addKey(['content_type', 'content_id', 'currency_id', 'amount'], 'content_currency_amount');
         });
     }
 

@@ -17,10 +17,6 @@ let members transfer credits and redeem codes, gate trophies on wealth.
   (username autocomplete included; transfers can never overdraw).
 * **Redeem codes** — coupon codes members redeem at `/credits/redeem`
   (single/multi-use, expiry, one per member).
-* **Paywalled posts** — `[charge=10]…[/charge]` hides content until the reader
-  pays; the author is credited and sees how many members unlocked it (and what
-  it earned). Staff can bypass, and a lock button is added to the editor
-  toolbar.
 * **Earn alerts** — notified when credits land (per-event admin toggle,
   member opt-out, global kill switch in Setup → Options → Credits).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
@@ -42,8 +38,6 @@ let members transfer credits and redeem codes, gate trophies on wealth.
 * **Leaderboard widget** — place a "Top credit holders" widget with a
   configurable count and currency (primary by default), optionally visible to
   guests.
-* **Paywall control** — the `[charge]` BBCode plus a "Bypass charge BBCode"
-  permission, so staff can read paywalled posts without paying.
 * **Built to integrate** — spend/award API plus a change event other add-ons
   can hook (see below).
 
@@ -162,11 +156,11 @@ Full reference (method signatures, trust rules, criteria, worked examples):
 Tracked as [issues and milestones](../../milestones): v0.10 shipped alerts
 on earn, redeem codes, and admin adjust/take tools, and v0.10.1 followed with
 hardening (reaction-dedup, guarded backfills, event scoping, full i18n, test
-harness). v0.11 added the consolidated profile wallet, a configurable daily
+harness). v0.11 adds the consolidated profile wallet, a configurable daily
 boundary, snapshot-based history pruning, and the top-holders leaderboard
-widget; v0.12 adds the `[charge]` BBCode for paywalled content. The
-remaining epics (interest/tax/paychecks, payments/shop, inflation controls)
-sit in Future. File or vote on issues to shape what lands next.
+widget. Bigger epics (charge BBCode, interest/tax/paychecks, payments/shop,
+inflation controls) sit in Future. File or vote on issues to shape what lands
+next.
 
 ## Built with AI
 
