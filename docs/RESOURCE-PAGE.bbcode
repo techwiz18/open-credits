@@ -80,22 +80,4 @@ Change amounts, add triggers, or add currencies any time in AdminCP → Credits.
 [*] [B]Tests[/B] — DST/boundary unit tests and a DB-backed prune integration suite.
 [/LIST]
 
-[B]0.10.1[/B] — hardening patch, no new member features. Upgrade the usual way.
-[LIST]
-[*] Reaction re-farming closed (one award per reactor per content).
-[*] Backfills run guarded and transactional, with per-member double-pay fixed.
-[*] Earning events support forum and user-group scoping.
-[*] Service layer fails closed on unknown users and inactive currencies.
-[*] Chunked, resumable balance rebuilds and backfills for large forums.
-[*] Full interface translation support (~110 new phrases).
-[*] Test harness (PHPUnit), stricter CI, dev-docs checklist.
-[/LIST]
 
-[B]0.10.0[/B]
-[LIST]
-[*] [B]Admin adjust/take tools[/B] — grant or remove any member's credits from AdminCP → Credits → Tools, fully logged with a note.
-[*] [B]Earn alerts[/B] — notified on earn (posts, reactions, visits, transfers) with a history link. Per-event toggles, member opt-out, global kill switch.
-[*] [B]Redeem codes[/B] — coupon codes at [I]/credits/redeem[/I]: auto-generated or custom, single/multi-use caps, expiry, one redemption per member.
-[*] [B]Decimal-correct amounts[/B] — all writes round to each currency's decimals, so 0-decimal currencies can't store misleading sub-unit values.
-[*] [B]Review hardening[/B] — tampered transfer currencies error out, ghost-user writes refused, daily limits counted per currency, moderated content pays on approval.
-[/LIST]
