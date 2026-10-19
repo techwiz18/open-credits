@@ -1,4 +1,16 @@
-<div class="oc-charge-stats">
-	<i class="fas fa-chart-bar" aria-hidden="true"></i>
-	{{ phrase('oc_charge_author_stats', {'count': $count, 'total': $total}) }}
+<div class="oc-charge-stats u-muted">
+	<ul class="listInline listInline--bullet">
+		<li>
+			<i class="fas fa-user" aria-hidden="true"></i>
+			<xf:if is="$count == 1">
+				{{ phrase('oc_charge_author_stats_unlocks_one', {'count': $count}) }}
+			<xf:else />
+				{{ phrase('oc_charge_author_stats_unlocks_many', {'count': $count}) }}
+			</xf:if>
+		</li>
+		<li>
+			<i class="fas fa-coins" aria-hidden="true"></i>
+			{{ phrase('oc_charge_author_stats_earned', {'total': $total}) }}
+		</li>
+	</ul>
 </div>
