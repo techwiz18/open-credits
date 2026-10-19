@@ -132,6 +132,20 @@ class Currency extends AbstractController
             return $this->error('This currency still has redeem codes. Delete or reassign them first.');
         }
 
+        // Pruning can leave a currency with no transaction rows but live
+        // balance/snapshot rows. Block deletion rather than orphan them.
+        $balanceCount = (int)$this->app->db()->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_balance WHERE currency_id = ?',
+            $currency->currency_id
+        );
+        $snapshotCount = (int)$this->app->db()->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_snapshot WHERE currency_id = ?',
+            $currency->currency_id
+        );
+        if ($balanceCount || $snapshotCount) {
+            return $this->error('This currency still has balances or pruned snapshots. Deactivate it instead of deleting.');
+        }
+
         /** @var DeletePlugin $plugin */
         $plugin = $this->plugin(DeletePlugin::class);
         return $plugin->actionDelete(

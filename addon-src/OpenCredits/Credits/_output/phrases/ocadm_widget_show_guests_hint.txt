@@ -1,0 +1,1 @@
+Logged-out visitors will see the leaderboard (they still cannot open wallets or history).

@@ -359,7 +359,12 @@ class Tools extends AbstractController
 
     protected function prunePreview(int $days): array
     {
-        $cutoff = \XF::$time - $days * 86400;
+        // Match pruneHistory()'s current-day guard so the preview never
+        // promises to delete rows the service will refuse to touch.
+        $cutoff = min(
+            \XF::$time - $days * 86400,
+            \OpenCredits\Credits\Service\Transact::dayStart() - 1
+        );
         $db = $this->app->db();
         $rows = $db->fetchAll(
             'SELECT c.currency_id, c.title, COUNT(*) AS entry_count FROM xf_oc_transaction AS t'

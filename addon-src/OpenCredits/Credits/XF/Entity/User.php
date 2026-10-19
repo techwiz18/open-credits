@@ -40,7 +40,7 @@ class User extends XFCP_User
      */
     public function getOcPrimary(): ?array
     {
-        foreach ($this->getOcAllBalances() as $row) {
+        foreach ($this->getOcBalances() as $row) {
             if (!empty($row['is_primary'])) {
                 return $row;
             }

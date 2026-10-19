@@ -36,7 +36,8 @@ let members transfer credits and redeem codes, gate trophies on wealth.
 * **Display control** — per-location toggles in Setup → Options → Credits
   (postbit, account menu, profile stat, profile tab).
 * **Leaderboard widget** — place a "Top credit holders" widget with a
-  configurable count and currency (primary by default).
+  configurable count and currency (primary by default), optionally visible to
+  guests.
 * **Built to integrate** — spend/award API plus a change event other add-ons
   can hook (see below).
 
