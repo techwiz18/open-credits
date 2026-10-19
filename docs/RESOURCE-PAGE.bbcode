@@ -53,11 +53,7 @@ To upgrade later: upload the newer zip and click [B]Upgrade[/B] on the add-on.
 
 [B]Changelog[/B]
 
-[B]0.11.0[/B]
+[B]0.11.1[/B] — patch release.
 [LIST]
-[*] [B]Profile wallet[/B] — profile pages show balances, a transfer shortcut, and recent history in one place.
-[*] [B]Configurable daily boundary[/B] — the daily-visit day follows UTC (default), board time, or a fixed UTC offset; registration-day skip uses the same boundary.
-[*] [B]History pruning[/B] — summarize old ledger rows into balance snapshots and delete them; balances and rebuilds stay exact. New retention option and AdminCP tool; redeem/backfill rows are kept.
-[*] [B]Top credit holders widget[/B] — a placeable leaderboard by balance, with a configurable count and currency.
-[*] [B]Tests[/B] — DST/boundary unit tests and a DB-backed prune integration suite.
+[*] Fixes the [B]Prune history[/B] tool page erroring on MySQL 8: the preview query used `rows` as a column alias, which is a reserved word. Pruning itself was unaffected.
 [/LIST]
