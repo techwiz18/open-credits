@@ -331,7 +331,7 @@ class Transact extends AbstractService
             ]);
             $db->commit();
             self::clearBalanceCache($userId);
-            $this->app->fire('oc_credits_adjust', [$userId, $currencyId, $amount, $trigger, $contentId]);
+            $this->fireAdjustEvent([$userId, $currencyId, $amount, $trigger, $contentId]);
             return true;
         } catch (\Throwable $e) {
             $db->rollBack();
@@ -443,8 +443,8 @@ class Transact extends AbstractService
             $db->commit();
             self::clearBalanceCache($fromUserId);
             self::clearBalanceCache($toUserId);
-            $this->app->fire('oc_credits_adjust', [$fromUserId, $currencyId, -$amount, 'transfer', $toUserId]);
-            $this->app->fire('oc_credits_adjust', [$toUserId, $currencyId, $amount, 'transfer', $fromUserId]);
+            $this->fireAdjustEvent([$fromUserId, $currencyId, -$amount, 'transfer', $toUserId]);
+            $this->fireAdjustEvent([$toUserId, $currencyId, $amount, 'transfer', $fromUserId]);
             $sender = $this->app->em()->find('XF:User', $fromUserId);
             $currency = $this->app->em()->find('OpenCredits\Credits:Currency', $currencyId);
             $this->sendEarnAlert(
@@ -474,7 +474,7 @@ class Transact extends AbstractService
      * for the same content, even if its price changes. Never overdraws.
      *
      * Returns 'ok', 'already_paid', 'self', 'no_funds', 'invalid' or
-     * 'invalid_author'.
+     * 'invalid_author' (reader or author is not a valid, non-banned user).
      */
     public function chargeForContent(
         int $fromUserId,
@@ -571,8 +571,8 @@ class Transact extends AbstractService
             $db->commit();
             self::clearBalanceCache($fromUserId);
             self::clearBalanceCache($toUserId);
-            $this->fireChargeEvent([$fromUserId, $currencyId, -$amount, 'charge', $contentId]);
-            $this->fireChargeEvent([$toUserId, $currencyId, $amount, 'charge', $contentId]);
+            $this->fireAdjustEvent([$fromUserId, $currencyId, -$amount, 'charge', $contentId]);
+            $this->fireAdjustEvent([$toUserId, $currencyId, $amount, 'charge', $contentId]);
             return 'ok';
         } catch (\Throwable $e) {
             $db->rollBack();
@@ -584,28 +584,33 @@ class Transact extends AbstractService
      * Fires a post-commit event without letting a listener turn a completed
      * charge into a reported failure.
      */
-    protected function fireChargeEvent(array $args): void
+    protected function fireAdjustEvent(array $args): void
     {
         try {
             $this->app->fire('oc_credits_adjust', $args);
         } catch (\Throwable $e) {
-            \XF::logException($e, false, 'OpenCredits charge event failed: ');
+            \XF::logException($e, false, 'OpenCredits adjust event failed: ');
         }
     }
 
     /**
      * Whether the member has already unlocked this content item (any price).
+     * Pass $currencyId = 0 to ignore the currency (used before resolving the
+     * primary currency so existing buyers keep access).
      */
-    public function hasPaidForContent(int $userId, string $contentType, int $contentId, int $currencyId): bool
+    public function hasPaidForContent(int $userId, string $contentType, int $contentId, int $currencyId = 0): bool
     {
         if ($userId <= 0 || $contentId <= 0 || $contentType === '') {
             return false;
         }
-        return (bool)$this->db()->fetchOne(
-            'SELECT charge_id FROM xf_oc_charge WHERE user_id = ? AND content_type = ?'
-            . ' AND content_id = ? AND currency_id = ? LIMIT 1',
-            [$userId, substr($contentType, 0, 25), $contentId, $currencyId]
-        );
+        $sql = 'SELECT charge_id FROM xf_oc_charge WHERE user_id = ? AND content_type = ? AND content_id = ?';
+        $params = [$userId, substr($contentType, 0, 25), $contentId];
+        if ($currencyId > 0) {
+            $sql .= ' AND currency_id = ?';
+            $params[] = $currencyId;
+        }
+        $sql .= ' LIMIT 1';
+        return (bool)$this->db()->fetchOne($sql, $params);
     }
 
     /**
@@ -717,7 +722,7 @@ class Transact extends AbstractService
             );
             $db->commit();
             self::clearBalanceCache($userId);
-            $this->app->fire('oc_credits_adjust', [$userId, $currencyId, $amount, 'redeem', (int)$row['code_id']]);
+            $this->fireAdjustEvent([$userId, $currencyId, $amount, 'redeem', (int)$row['code_id']]);
             $granted = ['amount' => $amount, 'currency_id' => $currencyId];
             return 'ok';
         } catch (\Throwable $e) {

@@ -40,7 +40,7 @@ Covered today:
 - `ChargeAmountsTest` — the unlock endpoint's parser-based price extractor:
   malformed tags, casing, and `[code]`/`[plain]` contents are ignored.
 
-Both clean up in `tearDown()`.
+All clean up in `tearDown()`.
 
 Why not hampel/xenforo-test-framework? For XF 2.3 on PHP 8.2 it requires
 framework v3.x, which pins PHPUnit 10 (the harness here is on 11) and is a

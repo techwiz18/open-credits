@@ -44,4 +44,9 @@ class ChargeAmountsTest extends TestCase
         $this->assertSame([], Charge::amountsInMessage('[code][charge=10]x[/charge][/code]'));
         $this->assertSame([], Charge::amountsInMessage('[plain][charge=10]x[/charge][/plain]'));
     }
+
+    public function testIncludesRichCode(): void
+    {
+        $this->assertSame(['10'], Charge::amountsInMessage('[code=rich][charge=10]x[/charge][/code]'));
+    }
 }

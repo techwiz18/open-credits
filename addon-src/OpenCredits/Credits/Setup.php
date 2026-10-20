@@ -281,8 +281,10 @@ class Setup extends AbstractSetup
         }
 
         $indexes = $this->schemaManager()->getTableIndexDefinitions('xf_oc_charge');
+        $hasOldKey = isset($indexes['content_user_currency_amount']);
+        $hasNewKey = isset($indexes['content_user_currency']);
 
-        if (isset($indexes['content_user_currency_amount'])) {
+        if ($hasOldKey || !$hasNewKey) {
             // Move from per-price purchases to one purchase per content item.
             // Keep the earliest purchase if a member paid more than one price.
             $this->db()->query(
@@ -291,9 +293,13 @@ class Setup extends AbstractSetup
                 . ' AND c1.content_id = c2.content_id AND c1.user_id = c2.user_id'
                 . ' AND c1.currency_id = c2.currency_id AND c1.charge_id > c2.charge_id'
             );
-            $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) {
-                $table->addUniqueKey(['content_type', 'content_id', 'user_id', 'currency_id'], 'content_user_currency');
-                $table->dropIndexes('content_user_currency_amount');
+            $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) use ($hasOldKey, $hasNewKey) {
+                if (!$hasNewKey) {
+                    $table->addUniqueKey(['content_type', 'content_id', 'user_id', 'currency_id'], 'content_user_currency');
+                }
+                if ($hasOldKey) {
+                    $table->dropIndexes('content_user_currency_amount');
+                }
             });
         }
 
@@ -418,9 +424,9 @@ class Setup extends AbstractSetup
     }
 
     /**
-     * Paid unlocks for the [charge] BBCode. Unique per
-     * content/payer/currency/amount so a member never pays twice for the same
-     * content at the same price.
+     * Premium-content purchases for the [charge] BBCode. Unique per
+     * content/payer/currency so a member never pays twice for the same
+     * content, even if its price changes.
      */
     protected function createChargeTable(): void
     {

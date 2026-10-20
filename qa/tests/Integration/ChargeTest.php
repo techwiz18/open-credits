@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * DB-backed proof for the [charge] BBCode service (#5): a charge moves the
  * amount from the reader to the author, records a single payment, refuses
- * overdrafts, and is idempotent per content/price.
+ * overdrafts, and is idempotent per content (even if the price changes).
  *
  * Runs against the licensed dev forum (see tests/README.md); skips without
  * OC_XF_ROOT. Uses two real members (the service locks xf_user rows) and a

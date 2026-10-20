@@ -76,7 +76,17 @@ class Charge
             || $visitor->is_moderator
             || $visitor->hasPermission('general', 'ocChargeFree');
 
+        $contentType = (string)$entity->getEntityContentType();
+        $contentId = (int)$entity->getEntityId();
+
         try {
+            // Existing buyers keep access even if the primary currency is
+            // deactivated or the block's price later becomes invalid.
+            if ($visitor->user_id
+                && self::hasPaid((int)$visitor->user_id, $contentType, $contentId, 0)) {
+                return self::renderChildren($children, $options, $renderer);
+            }
+
             $currency = self::primaryCurrency();
             if (!$currency) {
                 return $isExempt
@@ -95,8 +105,6 @@ class Charge
                     : self::unavailable('oc_charge_invalid_price');
             }
 
-            $contentType = (string)$entity->getEntityContentType();
-            $contentId = (int)$entity->getEntityId();
             $currencyId = (int)$currency->currency_id;
 
             if ($isExempt) {
@@ -105,11 +113,6 @@ class Charge
                     $html .= self::authorStats($contentType, $contentId, $currencyId, $amount, $currency);
                 }
                 return $html;
-            }
-
-            if ($visitor->user_id
-                && self::hasPaid((int)$visitor->user_id, $contentType, $contentId, $currencyId)) {
-                return self::renderChildren($children, $options, $renderer);
             }
 
             $balance = $visitor->user_id ? self::transact()->getBalance((int)$visitor->user_id, $currencyId) : 0.0;
@@ -149,7 +152,10 @@ class Charge
                 $out[] = (string)($node['option'] ?? '');
                 continue;
             }
-            if ($tag === 'code' || $tag === 'plain') {
+            if ($tag === 'plain') {
+                continue;
+            }
+            if ($tag === 'code' && strtolower((string)($node['option'] ?? '')) !== 'rich') {
                 continue;
             }
             if (!empty($node['children']) && is_array($node['children'])) {

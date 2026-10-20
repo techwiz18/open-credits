@@ -65,16 +65,17 @@ $status = $credits->chargeForContent(
 Double-entry premium-content charge: debits the reader and credits the author,
 recording one purchase per `(content, reader, currency)`. Like `transfer()`, it
 **never overdraws**. Returns `ok`, `already_paid`, `self` (reader is the author),
-`no_funds`, `invalid`, or `invalid_author`. Repeated calls for the same content
-(any price) return `already_paid` without moving money. The `[charge]` BBCode
-uses this; other add-ons can call it for their own premium content.
+`no_funds`, `invalid`, or `invalid_author` (the reader or author is not a valid,
+non-banned user). Repeated calls for the same content (any price) return
+`already_paid` without moving money. The `[charge]` BBCode uses this; other
+add-ons can call it for their own premium content.
 
 ```php
-$paid = $credits->hasPaidForContent(int $userId, string $contentType, int $contentId, int $currencyId): bool
+$paid = $credits->hasPaidForContent(int $userId, string $contentType, int $contentId, int $currencyId = 0): bool
 ```
 
 Whether the member has already unlocked this content item (regardless of the
-price they paid).
+price they paid). Pass `0` for the currency to ignore it.
 
 ```php
 $count = $credits->unlockCountFor(string $contentType, int $contentId, int $currencyId, float $amount): int
