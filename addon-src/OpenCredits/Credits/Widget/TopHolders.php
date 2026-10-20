@@ -61,7 +61,7 @@ class TopHolders extends AbstractWidget
             return '';
         }
 
-        $limit = max(1, (int)($this->options['limit'] ?? 5));
+        $limit = min(100, max(1, (int)($this->options['limit'] ?? 5)));
 
         $rows = $this->app->db()->fetchAll(
             'SELECT b.user_id, b.balance
@@ -119,9 +119,7 @@ class TopHolders extends AbstractWidget
             'currency_id' => 'uint',
             'show_guests' => 'uint',
         ]);
-        if ($options['limit'] < 1) {
-            $options['limit'] = 1;
-        }
+        $options['limit'] = min(100, max(1, (int)$options['limit']));
         $options['show_guests'] = !empty($options['show_guests']) ? 1 : 0;
         return true;
     }

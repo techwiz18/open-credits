@@ -33,7 +33,7 @@ class Credits extends AbstractController
         $finder = $this->finder('OpenCredits\Credits:Transaction')
             ->where('user_id', $visitor->user_id)
             ->where('currency_id', $currency->currency_id)
-            ->order('log_date', 'DESC');
+            ->order('log_date', 'DESC')->order('transaction_id', 'DESC');
 
         $total = $finder->total();
         $transactions = $finder->limitByPage($page, $perPage)->fetch();
@@ -88,6 +88,11 @@ class Credits extends AbstractController
         $threadIds = [];
         $postIds = [];
         foreach ($transactions as $txn) {
+            if (($txn->note ?? '') === 'Historical backfill') {
+                // Backfill rows aggregate many items; content_id is 0 (or the
+                // member id for a per-member run), so never treat it as a link.
+                continue;
+            }
             if ($txn->trigger === 'transfer') {
                 $userIds[] = (int)$txn->content_id;
             } elseif ($txn->trigger === 'thread'
@@ -131,7 +136,9 @@ class Credits extends AbstractController
                 'amount' => $amount,
                 'logDate' => (int)$txn->log_date,
             ];
-            if ($txn->trigger === 'transfer') {
+            if (($txn->note ?? '') === 'Historical backfill') {
+                $entry['label'] = 'Historical backfill';
+            } elseif ($txn->trigger === 'transfer') {
                 $entry['label'] = $amount < 0 ? 'Transfer sent' : 'Transfer received';
                 $otherId = (int)$txn->content_id;
                 if (isset($users[$otherId]) && $users[$otherId]->canViewBasicProfile($profileError)) {
@@ -205,7 +212,7 @@ class Credits extends AbstractController
             $transactions = $this->finder('OpenCredits\Credits:Transaction')
                 ->where('user_id', $visitor->user_id)
                 ->where('currency_id', $currency->currency_id)
-                ->order('log_date', 'DESC')
+                ->order('log_date', 'DESC')->order('transaction_id', 'DESC')
                 ->limit(10)
                 ->fetch();
             $recent = $this->buildHistoryEntries($transactions);
@@ -256,7 +263,9 @@ class Credits extends AbstractController
     public function actionTransfer(ParameterBag $params): AbstractReply
     {
         $visitor = \XF::visitor();
-        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocTransfer')) {
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')
+            || !$visitor->hasPermission('general', 'ocTransfer')
+        ) {
             return $this->noPermission();
         }
 
@@ -289,7 +298,9 @@ class Credits extends AbstractController
         $this->assertPostOnly();
 
         $visitor = \XF::visitor();
-        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocTransfer')) {
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')
+            || !$visitor->hasPermission('general', 'ocTransfer')
+        ) {
             return $this->noPermission();
         }
 

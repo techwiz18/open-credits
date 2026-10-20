@@ -1,0 +1,1 @@
+{"active": true, "callback_class": "OpenCredits\\Credits\\Listener", "callback_method": "postEntityPostDelete", "description": "Removes charge rows when a post is hard-deleted", "event_id": "entity_post_delete", "execute_order": 10, "hint": "XF\\Entity\\Post"}

@@ -175,6 +175,40 @@ class Listener
         }
     }
 
+    /**
+     * Hard-deleted post: drop its unlock rows so they do not point at missing
+     * content. Ledger rows stay as financial history.
+     */
+    public static function postEntityPostDelete(Entity $entity): void
+    {
+        if (!$entity instanceof \XF\Entity\Post) {
+            return;
+        }
+        try {
+            \XF::db()->delete(
+                'xf_oc_charge',
+                "content_type = 'post' AND content_id = ?",
+                [(int)$entity->post_id]
+            );
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits charge cleanup failed: ');
+        }
+    }
+
+    /**
+     * Member deletion: remove unlock rows where they were the payer or the
+     * content author. Ledger rows stay as financial history.
+     *
+     * @param mixed $service
+     */
+    public static function userDeleteCleanInit($service, array &$deletes): void
+    {
+        $deletes['xf_oc_charge'] = [
+            'user_id = ?',
+            'author_user_id = ?',
+        ];
+    }
+
     protected static function applyTrigger(
         string $trigger,
         int $userId,

@@ -34,15 +34,23 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 * `xf_oc_event(event_id, currency_id, trigger, amount, forum_ids, usergroup_ids, max_per_day, active)`
   Seeded triggers: `thread 5.00`, `post 1.00`, `reaction_received 2.00`,
   `register 10.00`, `daily_login 5.00`.
-* `xf_oc_transaction(transaction_id, user_id, currency_id, amount, trigger, content_id, note, log_date)`
-  Append-only ledger. **Both `amount` columns are SIGNED** (`->unsigned(false)`);
-  XF defaults numerics to unsigned, which rejects debit rows — see GOTCHAS.
+* `xf_oc_transaction(transaction_id, user_id, currency_id, amount, trigger, content_type, content_id, event_id, note, log_date)`
+  Append-only ledger. `event_id` links historical-backfill rows to their event
+  (0 for normal rows); `log_date` and `event_id` are indexed for prune/backfill.
+  **Both `amount` columns are SIGNED** (`->unsigned(false)`); XF defaults
+  numerics to unsigned, which rejects debit rows — see GOTCHAS.
 * `xf_user.oc_credits DECIMAL(10,2)` — denormalized balance, rebuilt from ledger.
 * `xf_oc_charge(charge_id, content_type, content_id, user_id, author_user_id,
   currency_id, amount, charge_date)` — premium-content purchases. Unique per
   `(content_type, content_id, user_id, currency_id)`, so a member never pays
   twice for the same content, even if its price changes; `amount` is what that
-  member paid.
+  member paid. Rows are removed when the post or the payer/author is
+  hard-deleted; ledger rows stay as financial history.
+* `xf_oc_backfill(backfill_id, event_id, user_id, last_user_id, started_date,
+  completed_date)` — resumable backfill state, one row per (event, scope).
+  `user_id` is 0 for a site-wide run or the member id for a per-member run;
+  `last_user_id` is the last committed user-id boundary; `completed_date = 0`
+  while running.
 
 ## Trigger matrix (listener → service call)
 
@@ -55,6 +63,8 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 | `visitor_setup` (no hint) | `visitorSetup` | logged-in valid user, via `awardDailyLoginIfNeeded` (once/day) |
 | `entity_structure` (`XF\Entity\User`) | `userEntityStructure` | exposes `oc_credits` on the User entity |
 | `criteria_user` (no hint) | `userCriteria` | rules `oc_credits_more` (>=) / `oc_credits_fewer` (<) |
+| `entity_post_delete` (`XF\Entity\Post`) | `postEntityPostDelete` | removes unlock rows for the deleted post |
+| `user_delete_clean_init` (no hint) | `userDeleteCleanInit` | removes unlock rows where the member was payer/author |
 
 All earning paths funnel into `Transact::awardByTrigger()` (awards EVERY active
 event for the trigger, so overlapping per-currency events stack) → `adjust()`.
@@ -78,19 +88,24 @@ change fires the `oc_credits_adjust` code event with
   currencies only. Revoking hides the addon completely.
 * Transfers always floor at zero; `adjust()` enforces each currency's
   `allow_negative` and refuses unknown users/currencies and inactive
-  currencies. Transfer with an unresolvable `currency_id` errors instead of
-  falling back.
+  currencies. Positive deltas are always allowed so a legacy negative balance
+  can recover; negative deltas still floor. Transfer with an unresolvable
+  `currency_id` errors instead of falling back.
 * Awards skip inactive currencies; registration skips banned/rejected/disabled.
 * Daily boundaries default to UTC midnights (`Transact::dayStart()`),
   ignoring forum/user time zones — consistent for all members and ungameable
   by traveling; configurable to board time or a fixed offset via options.
   Registration day skips the daily bonus on the same boundary.
-* No clawback on content delete (by design); backfill runs per-event inside a
-  transaction, quantizes to currency decimals, skips inactive currencies, and
-  site-wide runs exclude already per-member-backfilled users;
-  `max_per_day` counts per (event, currency) excluding backfill rows and is
-  best-effort under concurrency; no per-day guard races the
-  daily award thanks to the user-row lock.
+* No clawback on content delete (by design; ledger history stays), but unlock
+  rows are removed when a post or member is hard-deleted. Backfill runs
+  per-event, scopes the event's `forum_ids`/`usergroup_ids`, skips first posts
+  for post events, quantizes to currency decimals, and skips inactive
+  currencies. Completion is keyed on `event_id`; each site-wide batch commits
+  its rows and resume marker atomically, so a timeout resumes without
+  double-paying. Site-wide runs also exclude already per-member-backfilled
+  users; `max_per_day` counts per (event, currency) excluding backfill rows and
+  is best-effort under concurrency; no per-day guard races the daily award
+  thanks to the user-row lock.
 
 ## Frontend
 
@@ -101,14 +116,16 @@ change fires the `oc_credits_adjust` code event with
   `oc_credits_account_menu` (`account_visitor_menu`, visitor stats),
   `oc_credits_criteria` (`helper_criteria`, admin trophy/promotion form).
 * Permissions (namespace `general`, own interface tab `ocCredits`):
-  `ocView` (history), `ocTransfer` (transfer form + save). Default deny;
+  `ocView` (history, member pane, transfer), `ocTransfer` (transfer form +
+  save; both permissions are required). Default deny;
   install/upgrade auto-allows both for the group titled `Registered`.
 * Display options (`ocCredits` option group): `ocShowPostbit`, `ocShowMenu`,
   `ocShowProfileStats`, `ocShowProfileTab` — each template mod gates on its
   option; all default on.
 * Tools (`oc-tools` admin route): rebuild (sync service call + result view),
-  one-shot historical backfill (lump sums per member per post/thread event,
-  guarded by existing `Historical backfill` rows, then rebuild).
+  one-shot/resumable historical backfill (lump sums per member per post/thread
+  event, scoped by the event's forum/group restrictions, completion keyed on
+  `event_id`, then rebuild).
 * Widget `oc_top_holders` (`Widget`/`TopHolders.php`): top N members by balance
   in one currency (primary by default, or any visible active currency),
   `ocView`-gated, excludes banned/disabled and zero balances. Guests are hidden

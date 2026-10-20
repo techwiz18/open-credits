@@ -42,6 +42,15 @@ Covered today:
 - `ChargeRenderTest` — the renderer gates and fail-closed states: guest,
   non-paid/paid member, author stats, admin bypass, inactive currency, and
   invalid price.
+- `BackfillTest` — the historical backfill preview/run query applies the
+  event's forum/group scope and skips first posts; the action writes an
+  `event_id` marker, is idempotent, refuses a per-member run after a
+  site-wide run, and the history row is labelled/unlinked.
+- `ChargeCleanupTest` — hard-deleting a post drops its unlock rows; member
+  deletion covers both payer and author charge rows.
+- `NegativeBalanceTest` — a legacy negative balance can still receive a
+  positive award (currency switched to floor-at-zero), while negative awards
+  remain refused.
 
 All clean up in `tearDown()`.
 

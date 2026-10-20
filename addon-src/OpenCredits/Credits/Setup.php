@@ -56,12 +56,15 @@ class Setup extends AbstractSetup
             $table->addColumn('trigger', 'varchar', 50);
             $table->addColumn('content_type', 'varchar', 25)->setDefault('');
             $table->addColumn('content_id', 'int')->setDefault(0);
+            $table->addColumn('event_id', 'int')->setDefault(0);
             $table->addColumn('note', 'varchar', 255)->setDefault('');
             $table->addColumn('log_date', 'int');
             $table->addKey(['user_id', 'log_date']);
             $table->addKey(['user_id', 'currency_id', 'log_date'], 'user_currency_date');
             $table->addKey(['user_id', 'trigger', 'content_id', 'content_type'], 'user_trigger_content');
             $table->addKey(['user_id', 'trigger', 'log_date'], 'user_trigger_date');
+            $table->addKey(['log_date'], 'log_date');
+            $table->addKey(['event_id'], 'event_id');
         });
     }
 
@@ -133,6 +136,11 @@ class Setup extends AbstractSetup
         $this->syncEditorButton(true);
     }
 
+    public function installStep14()
+    {
+        $this->createBackfillTable();
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -143,6 +151,7 @@ class Setup extends AbstractSetup
         $sm->dropTable('xf_oc_code');
         $sm->dropTable('xf_oc_snapshot');
         $sm->dropTable('xf_oc_charge');
+        $sm->dropTable('xf_oc_backfill');
     }
 
     public function uninstallStep2()
@@ -310,6 +319,39 @@ class Setup extends AbstractSetup
         }
     }
 
+    public function upgrade938Step1()
+    {
+        $needColumn = !$this->columnExists('xf_oc_transaction', 'event_id');
+        $indexes = $this->schemaManager()->getTableIndexDefinitions('xf_oc_transaction');
+        $needLogIndex = !isset($indexes['log_date']);
+        $needEventIndex = !isset($indexes['event_id']);
+
+        if ($needColumn || $needLogIndex || $needEventIndex) {
+            $this->schemaManager()->alterTable('xf_oc_transaction', function (Alter $table) use ($needColumn, $needLogIndex, $needEventIndex) {
+                if ($needColumn) {
+                    $table->addColumn('event_id', 'int')->setDefault(0);
+                }
+                if ($needLogIndex) {
+                    $table->addKey(['log_date'], 'log_date');
+                }
+                if ($needEventIndex) {
+                    $table->addKey(['event_id'], 'event_id');
+                }
+            });
+        }
+
+        if (!$this->tableExists('xf_oc_backfill')) {
+            $this->createBackfillTable();
+        }
+
+        $chargeIndexes = $this->schemaManager()->getTableIndexDefinitions('xf_oc_charge');
+        if (!isset($chargeIndexes['author_user_id'])) {
+            $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) {
+                $table->addKey(['author_user_id'], 'author_user_id');
+            });
+        }
+    }
+
     /**
      * Adds (or removes) the charge BBCode button in the rich-text editor
      * toolbar's text group, for every viewport configuration. Idempotent and
@@ -444,7 +486,26 @@ class Setup extends AbstractSetup
                 'content_user_currency'
             );
             $table->addKey(['user_id', 'charge_date'], 'user_date');
+            $table->addKey(['author_user_id'], 'author_user_id');
             $table->addKey(['content_type', 'content_id', 'currency_id', 'amount'], 'content_currency_amount');
+        });
+    }
+
+    /**
+     * Resumable backfill state: one row per (event, scope). user_id is 0 for a
+     * site-wide run or the member id for a per-member run; last_user_id is the
+     * last completed batch boundary; completed_date is 0 while running.
+     */
+    protected function createBackfillTable(): void
+    {
+        $this->createTable('xf_oc_backfill', function (Create $table) {
+            $table->addColumn('backfill_id', 'int')->autoIncrement();
+            $table->addColumn('event_id', 'int');
+            $table->addColumn('user_id', 'int')->setDefault(0);
+            $table->addColumn('last_user_id', 'int')->setDefault(0);
+            $table->addColumn('started_date', 'int')->setDefault(0);
+            $table->addColumn('completed_date', 'int')->setDefault(0);
+            $table->addUniqueKey(['event_id', 'user_id'], 'event_user');
         });
     }
 

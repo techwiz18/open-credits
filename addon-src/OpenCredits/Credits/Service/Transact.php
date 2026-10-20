@@ -358,7 +358,10 @@ class Transact extends AbstractService
             }
             $allowNegative = (int)$currency['allow_negative'];
         }
-        if ($allowNegative) {
+        if ($allowNegative || $delta >= 0) {
+            // Positive deltas are always allowed: if a currency was switched
+            // from allow_negative to the floor-at-zero rule, members with a
+            // legacy negative balance can still earn their way back out.
             return true;
         }
         $balance = (float)$db->fetchOne(
