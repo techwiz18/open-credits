@@ -197,7 +197,8 @@ class Credits extends AbstractController
         $currency = $this->assertViewableCurrency(0);
         $canSend = $visitor->hasPermission('general', 'ocTransfer');
         $lockedTo = $isSelf ? '' : $user->username;
-        $targetReceivable = !in_array($user->user_state, ['banned', 'rejected', 'disabled'], true);
+        $targetReceivable = !$user->is_banned
+            && !in_array($user->user_state, ['rejected', 'disabled'], true);
 
         $senderBalance = 0.0;
         foreach ($visitor->oc_all_balances as $row) {
@@ -263,7 +264,7 @@ class Credits extends AbstractController
     public function actionTransfer(ParameterBag $params): AbstractReply
     {
         $visitor = \XF::visitor();
-        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')
+        if (!$visitor->user_id || $visitor->is_banned || !$visitor->hasPermission('general', 'ocView')
             || !$visitor->hasPermission('general', 'ocTransfer')
         ) {
             return $this->noPermission();
@@ -298,7 +299,7 @@ class Credits extends AbstractController
         $this->assertPostOnly();
 
         $visitor = \XF::visitor();
-        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')
+        if (!$visitor->user_id || $visitor->is_banned || !$visitor->hasPermission('general', 'ocView')
             || !$visitor->hasPermission('general', 'ocTransfer')
         ) {
             return $this->noPermission();
@@ -322,10 +323,10 @@ class Credits extends AbstractController
         if ((int)$target->user_id === (int)$visitor->user_id) {
             return $this->error('You cannot transfer credits to yourself.');
         }
-        if (in_array($target->user_state, ['banned', 'rejected', 'disabled'], true)) {
+        if ($target->is_banned || in_array($target->user_state, ['rejected', 'disabled'], true)) {
             return $this->error('Credits cannot be transferred to that account.');
         }
-        if (in_array($visitor->user_state, ['banned', 'rejected', 'disabled'], true)) {
+        if ($visitor->is_banned || in_array($visitor->user_state, ['rejected', 'disabled'], true)) {
             return $this->error('Credits cannot be transferred from that account.');
         }
 
@@ -355,6 +356,11 @@ class Credits extends AbstractController
 
         $visitor = \XF::visitor();
         if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
+            return $this->noPermission();
+        }
+        if ($visitor->is_banned
+            || in_array($visitor->user_state, ['rejected', 'disabled', 'email_confirm', 'email_confirm_edit'], true)
+        ) {
             return $this->noPermission();
         }
 

@@ -41,7 +41,8 @@ Covered today:
   malformed tags, casing, `[code]`/`[code=rich]`, and `[plain]` contents.
 - `ChargeRenderTest` — the renderer gates and fail-closed states: guest,
   non-paid/paid member, author stats, admin bypass, inactive currency, and
-  invalid price.
+  invalid price; blocked (banned/email-confirm) payers cannot unlock via the
+  controller.
 - `BackfillTest` — the historical backfill preview/run query applies the
   event's forum/group scope and skips first posts; the action writes an
   `event_id` marker, is idempotent, refuses a per-member run after a

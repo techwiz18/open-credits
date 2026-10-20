@@ -90,7 +90,10 @@ change fires the `oc_credits_adjust` code event with
   `allow_negative` and refuses unknown users/currencies and inactive
   currencies. Positive deltas are always allowed so a legacy negative balance
   can recover; negative deltas still floor. Transfer with an unresolvable
-  `currency_id` errors instead of falling back.
+  `currency_id` errors instead of falling back. Transfer and unlock
+  controllers refuse banned members and non-valid account states (email
+  confirmation, rejected, disabled); the transfer form/save needs `ocView` +
+  `ocTransfer`.
 * Awards skip inactive currencies; registration skips banned/rejected/disabled.
 * Daily boundaries default to UTC midnights (`Transact::dayStart()`),
   ignoring forum/user time zones — consistent for all members and ungameable
@@ -139,7 +142,8 @@ change fires the `oc_credits_adjust` code event with
   **credits-gated display, not content protection**: the body remains in the
   post message and can appear in raw post output, snippets, quotes, and the
   API. The unlock form posts to `/credits/unlock`, which loads the post,
-  checks `canView()`, re-derives the price from the post's parsed `[charge]`
+  checks `canView()` and the visitor's account state (banned/email-confirm are
+  refused), re-derives the price from the post's parsed `[charge]`
   blocks (the client cannot set it), calls `Transact::chargeForContent()`, and
   redirects back. One purchase per (post, member) unlocks every block in that
   post. The author also sees a per-block "Members unlocked: N · total earned"

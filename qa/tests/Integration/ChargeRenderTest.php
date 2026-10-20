@@ -6,6 +6,7 @@ namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\BbCode\Charge;
 use OpenCredits\Credits\Service\Transact;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -188,6 +189,37 @@ class ChargeRenderTest extends TestCase
 
         $authorHtml = $this->render($this->authorId, $message);
         $this->assertStringContainsString('RENDER_SECRET', $authorHtml);
+    }
+
+    #[DataProvider('blockedPayerStates')]
+    public function testBlockedMemberCannotUnlock(bool $banned, string $state): void
+    {
+        $user = \XF::em()->find('XF:User', $this->memberId);
+        $this->assertNotNull($user);
+        $user->is_banned = $banned;
+        $user->user_state = $state;
+        \XF::setVisitor($user);
+
+        $request = new \XF\Http\Request(
+            \XF::app()->inputFilterer(),
+            ['content_type' => 'post', 'content_id' => $this->postId, 'amount' => 5],
+            [],
+            [],
+            ['REQUEST_METHOD' => 'POST']
+        );
+        $controller = \XF::app()->controller(\OpenCredits\Credits\Pub\Controller\Credits::class, $request);
+        $reply = $controller->actionUnlock(new \XF\Mvc\ParameterBag([]));
+
+        $this->assertInstanceOf(\XF\Mvc\Reply\Error::class, $reply);
+        $this->assertSame(403, $reply->getResponseCode());
+    }
+
+    public static function blockedPayerStates(): array
+    {
+        return [
+            [true, 'valid'],
+            [false, 'email_confirm'],
+        ];
     }
 
     protected function render(?int $userId, string $message = self::MESSAGE): string
