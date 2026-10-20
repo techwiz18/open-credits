@@ -119,7 +119,8 @@ The amount is in the primary currency. Authors, staff/admins/moderators, and
 members with the **Bypass charge BBCode** permission see it for free. One
 purchase unlocks every `[charge]` block in the post; the reader is charged and
 the author credited (both ledger rows use the `charge` trigger). The BBCode
-renders a form that posts to `/credits/unlock`.
+renders a form that posts to `/credits/unlock`; the endpoint refuses banned
+and non-valid accounts (email confirmation, rejected, disabled).
 
 This is a **credits-gated display, not content protection**: the text remains
 in the post message, so it can still appear in raw post output, snippets,
