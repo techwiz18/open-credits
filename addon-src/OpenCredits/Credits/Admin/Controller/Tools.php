@@ -369,9 +369,9 @@ class Tools extends AbstractController
         $rows = $db->fetchAll(
             'SELECT c.currency_id, c.title, COUNT(*) AS entry_count FROM xf_oc_transaction AS t'
             . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = t.currency_id'
-            . ' WHERE t.log_date <= ? AND t.`trigger` != ? AND t.note != ?'
+            . ' WHERE t.log_date <= ? AND t.`trigger` != ? AND t.note != ? AND t.note NOT LIKE ?'
             . ' GROUP BY c.currency_id, c.title ORDER BY c.currency_id',
-            [$cutoff, 'redeem', 'Historical backfill']
+            [$cutoff, 'redeem', 'Historical backfill', 'reaction:%']
         );
         $preview = [];
         foreach ($rows as $row) {

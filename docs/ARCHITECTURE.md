@@ -13,8 +13,7 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
-| `Entity/Charge.php` | Entity structure for paid `[charge]` unlocks |
-| `BbCode/Charge.php` | `[charge=X]` callback: paywall gate + locked box |
+| `BbCode/Charge.php` | `[charge=X]` callback: premium-content gate + locked box |
 | `Pub/Controller/Credits.php` | `/credits/` history, `/credits/transfer`, `/credits/transfer-save` |
 | `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated) |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
@@ -40,9 +39,10 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
   XF defaults numerics to unsigned, which rejects debit rows — see GOTCHAS.
 * `xf_user.oc_credits DECIMAL(10,2)` — denormalized balance, rebuilt from ledger.
 * `xf_oc_charge(charge_id, content_type, content_id, user_id, author_user_id,
-  currency_id, amount, charge_date)` — paid unlocks for `[charge]`. Unique per
-  `(content_type, content_id, user_id, currency_id, amount)`, so a member never
-  pays twice for the same content at the same price.
+  currency_id, amount, charge_date)` — premium-content purchases. Unique per
+  `(content_type, content_id, user_id, currency_id)`, so a member never pays
+  twice for the same content, even if its price changes; `amount` is what that
+  member paid.
 
 ## Trigger matrix (listener → service call)
 
@@ -116,17 +116,21 @@ change fires the `oc_credits_adjust` code event with
   to the guest group). One aggregate `xf_oc_balance ⋈ xf_user` query + one user
   fetch. Templates: `oc_widget_top_holders` (public) and
   `widget_def_options_oc_top_holders` (admin options: count, currency, guests).
-* `[charge=X]…[/charge]` (`BbCode/Charge.php`) hides post content until the
-  reader pays X of the primary currency; authors, staff, and `ocChargeFree`
-  holders bypass. Locked content is never rendered into the page. The unlock
-  form posts to `/credits/unlock`, which loads the post, checks `canView()`,
-  re-derives the price from the post's actual `[charge]` blocks (the client
-  cannot set it), calls `Transact::chargeForContent()`, and redirects back. One
-  payment per (post, member, amount) unlocks every block at that price. The
-  author also sees a per-block "Members unlocked: N · total earned" line.
-* The `charge` button is placed in the editor toolbar (`moreText` group, all
-  viewports) by `Setup::syncEditorButton()` on install/upgrade; admins can move
-  or remove it via the BB code button manager.
+* `[charge=X]…[/charge]` (`BbCode/Charge.php`) shows a locked box in place of
+  the post content until the reader pays X of the primary currency; authors,
+  staff/admins/moderators, and `ocChargeFree` holders bypass. This is a
+  **credits-gated display, not content protection**: the body remains in the
+  post message and can appear in raw post output, snippets, quotes, and the
+  API. The unlock form posts to `/credits/unlock`, which loads the post,
+  checks `canView()`, re-derives the price from the post's parsed `[charge]`
+  blocks (the client cannot set it), calls `Transact::chargeForContent()`, and
+  redirects back. One purchase per (post, member) unlocks every block in that
+  post. The author also sees a per-block "Members unlocked: N · total earned"
+  line.
+* The `charge` button is added once to the editor toolbar (`moreText` group,
+  all viewports) by `Setup::syncEditorButton()` on install/upgrade; existing
+  placements are left alone, and admins can move or remove it via the BB code
+  button manager.
 
 ## Conventions for new work
 

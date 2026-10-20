@@ -75,7 +75,7 @@ class PruneHistoryTest extends TestCase
         $before = $this->transact->getBalance($this->userId, $this->currencyId);
         $this->assertEqualsWithDelta(42.00, $before, 0.0001, 'Seeded ledger should total 42.00');
 
-        $result = $this->transact->pruneHistory(2);
+        $result = $this->transact->pruneHistory(2, $this->userId - 1, 1);
         $this->assertSame(3, $result['deleted'], 'Only the three pre-cutoff rows are pruned');
         $this->assertSame(1, $result['snapshots'], 'One snapshot for the synthetic member');
 
@@ -110,7 +110,7 @@ class PruneHistoryTest extends TestCase
         $before = $this->transact->getBalance($this->userId, $this->currencyId);
         $this->assertEqualsWithDelta(55.00, $before, 0.0001);
 
-        $result = $this->transact->pruneHistory(2);
+        $result = $this->transact->pruneHistory(2, $this->userId - 1, 1);
         $this->assertSame(1, $result['deleted'], 'Redeem and backfill rows are excluded');
 
         $kept = (int)$this->db->fetchOne(
@@ -135,7 +135,7 @@ class PruneHistoryTest extends TestCase
         $this->transact->rebuildAllBalancesFully();
         $before = $this->transact->getBalance($this->userId, $this->currencyId);
 
-        $result = $this->transact->pruneHistory(2);
+        $result = $this->transact->pruneHistory(2, $this->userId - 1, 1);
         $this->assertSame(1, $result['deleted'], 'Only the normal row is pruned');
 
         $kept = $this->db->fetchAll(
@@ -158,7 +158,7 @@ class PruneHistoryTest extends TestCase
         $this->transact->rebuildAllBalancesFully();
         $this->assertEqualsWithDelta(0.00, $this->transact->getBalance($this->userId, $this->currencyId), 0.0001);
 
-        $result = $this->transact->pruneHistory(2);
+        $result = $this->transact->pruneHistory(2, $this->userId - 1, 1);
         $this->assertSame(2, $result['deleted'], 'Net-zero rows are still pruned');
 
         $remaining = (int)$this->db->fetchOne(

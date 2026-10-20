@@ -95,8 +95,9 @@ class ChargeTest extends TestCase
         $this->assertEqualsWithDelta($payerBefore - 10.00, $this->transact->getBalance($this->payerId, $this->currencyId), 0.0001);
         $this->assertEqualsWithDelta($authorBefore + 10.00, $this->transact->getBalance($this->authorId, $this->currencyId), 0.0001);
 
-        $paid = $this->transact->paidAmountsFor($this->payerId, self::CONTENT_TYPE, self::CONTENT_ID, $this->currencyId);
-        $this->assertArrayHasKey('10.00', $paid);
+        $this->assertTrue(
+            $this->transact->hasPaidForContent($this->payerId, self::CONTENT_TYPE, self::CONTENT_ID, $this->currencyId)
+        );
     }
 
     public function testChargeIsIdempotent(): void
@@ -123,6 +124,18 @@ class ChargeTest extends TestCase
 
         $this->assertSame('already_paid', $second);
         $this->assertEqualsWithDelta($payerAfterFirst, $this->transact->getBalance($this->payerId, $this->currencyId), 0.0001);
+
+        // A price change must not re-charge or re-lock an existing buyer.
+        $third = $this->transact->chargeForContent(
+            $this->payerId,
+            $this->authorId,
+            $this->currencyId,
+            25.00,
+            self::CONTENT_TYPE,
+            self::CONTENT_ID
+        );
+        $this->assertSame('already_paid', $third);
+        $this->assertEqualsWithDelta($payerAfterFirst, $this->transact->getBalance($this->payerId, $this->currencyId), 0.0001);
     }
 
     public function testChargeRefusesOverdraft(): void
@@ -137,9 +150,8 @@ class ChargeTest extends TestCase
         );
 
         $this->assertSame('no_funds', $result);
-        $this->assertSame(
-            [],
-            $this->transact->paidAmountsFor($this->payerId, self::CONTENT_TYPE, self::CONTENT_ID, $this->currencyId)
+        $this->assertFalse(
+            $this->transact->hasPaidForContent($this->payerId, self::CONTENT_TYPE, self::CONTENT_ID, $this->currencyId)
         );
     }
 

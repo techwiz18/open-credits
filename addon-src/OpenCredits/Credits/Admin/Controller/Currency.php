@@ -142,8 +142,12 @@ class Currency extends AbstractController
             'SELECT COUNT(*) FROM xf_oc_snapshot WHERE currency_id = ?',
             $currency->currency_id
         );
-        if ($balanceCount || $snapshotCount) {
-            return $this->error('This currency still has balances or pruned snapshots. Deactivate it instead of deleting.');
+        $chargeCount = (int)$this->app->db()->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_charge WHERE currency_id = ?',
+            $currency->currency_id
+        );
+        if ($balanceCount || $snapshotCount || $chargeCount) {
+            return $this->error('This currency still has balances, pruned snapshots, or premium-content purchases. Deactivate it instead of deleting.');
         }
 
         /** @var DeletePlugin $plugin */

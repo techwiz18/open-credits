@@ -469,9 +469,9 @@ class Transact extends AbstractService
     }
 
     /**
-     * Charges a member to unlock paywalled content and credits the author.
-     * Idempotent per (content, payer, currency, amount): a repeat returns
-     * 'already_paid' without moving money. Never overdraws.
+     * Charges a member to unlock premium content and credits the author.
+     * Idempotent per (content, payer, currency): a member never pays twice
+     * for the same content, even if its price changes. Never overdraws.
      *
      * Returns 'ok', 'already_paid', 'self', 'no_funds', 'invalid' or
      * 'invalid_author'.
@@ -490,15 +490,26 @@ class Transact extends AbstractService
         if ($fromUserId === $toUserId) {
             return 'self';
         }
+        $type = substr($contentType, 0, 25);
         $db = $this->db();
         $db->beginTransaction();
         try {
             $first = min($fromUserId, $toUserId);
             $second = max($fromUserId, $toUserId);
-            $locked = $db->fetchAll('SELECT user_id FROM xf_user WHERE user_id IN (?, ?) FOR UPDATE', [$first, $second]);
+            $locked = $db->fetchAll(
+                'SELECT user_id, user_state, is_banned FROM xf_user'
+                . ' WHERE user_id IN (?, ?) ORDER BY user_id FOR UPDATE',
+                [$first, $second]
+            );
             if (count($locked) !== 2) {
                 $db->rollBack();
                 return 'invalid_author';
+            }
+            foreach ($locked AS $row) {
+                if ((string)$row['user_state'] !== 'valid' || !empty($row['is_banned'])) {
+                    $db->rollBack();
+                    return 'invalid_author';
+                }
             }
             $currency = $db->fetchRow(
                 'SELECT decimals, active FROM xf_oc_currency WHERE currency_id = ?',
@@ -513,10 +524,11 @@ class Transact extends AbstractService
                 $db->rollBack();
                 return 'invalid';
             }
+            // One purchase per content item, regardless of the price paid.
             $existing = $db->fetchOne(
                 'SELECT charge_id FROM xf_oc_charge WHERE content_type = ? AND content_id = ?'
-                . ' AND user_id = ? AND currency_id = ? AND amount = ?',
-                [$contentType, $contentId, $fromUserId, $currencyId, $amount]
+                . ' AND user_id = ? AND currency_id = ?',
+                [$type, $contentId, $fromUserId, $currencyId]
             );
             if ($existing) {
                 $db->commit();
@@ -534,7 +546,6 @@ class Transact extends AbstractService
             $this->applyBalanceDelta($fromUserId, $currencyId, -$amount);
             $this->applyBalanceDelta($toUserId, $currencyId, $amount);
             $now = \XF::$time;
-            $type = substr($contentType, 0, 25);
             $note = 'Charge: ' . $type . ' #' . $contentId;
             $db->insert('xf_oc_transaction', [
                 'user_id' => $fromUserId, 'currency_id' => $currencyId,
@@ -560,8 +571,8 @@ class Transact extends AbstractService
             $db->commit();
             self::clearBalanceCache($fromUserId);
             self::clearBalanceCache($toUserId);
-            $this->app->fire('oc_credits_adjust', [$fromUserId, $currencyId, -$amount, 'charge', $contentId]);
-            $this->app->fire('oc_credits_adjust', [$toUserId, $currencyId, $amount, 'charge', $contentId]);
+            $this->fireChargeEvent([$fromUserId, $currencyId, -$amount, 'charge', $contentId]);
+            $this->fireChargeEvent([$toUserId, $currencyId, $amount, 'charge', $contentId]);
             return 'ok';
         } catch (\Throwable $e) {
             $db->rollBack();
@@ -570,26 +581,31 @@ class Transact extends AbstractService
     }
 
     /**
-     * Amounts a member has already paid to unlock a content item, keyed as
-     * two-decimal strings to match the stored decimal values.
-     *
-     * @return array<string, bool>
+     * Fires a post-commit event without letting a listener turn a completed
+     * charge into a reported failure.
      */
-    public function paidAmountsFor(int $userId, string $contentType, int $contentId, int $currencyId): array
+    protected function fireChargeEvent(array $args): void
+    {
+        try {
+            $this->app->fire('oc_credits_adjust', $args);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits charge event failed: ');
+        }
+    }
+
+    /**
+     * Whether the member has already unlocked this content item (any price).
+     */
+    public function hasPaidForContent(int $userId, string $contentType, int $contentId, int $currencyId): bool
     {
         if ($userId <= 0 || $contentId <= 0 || $contentType === '') {
-            return [];
+            return false;
         }
-        $rows = $this->db()->fetchAll(
-            'SELECT amount FROM xf_oc_charge WHERE user_id = ? AND content_type = ?'
-            . ' AND content_id = ? AND currency_id = ?',
-            [$userId, $contentType, $contentId, $currencyId]
+        return (bool)$this->db()->fetchOne(
+            'SELECT charge_id FROM xf_oc_charge WHERE user_id = ? AND content_type = ?'
+            . ' AND content_id = ? AND currency_id = ? LIMIT 1',
+            [$userId, substr($contentType, 0, 25), $contentId, $currencyId]
         );
-        $out = [];
-        foreach ($rows as $row) {
-            $out[sprintf('%.2f', (float)$row['amount'])] = true;
-        }
-        return $out;
     }
 
     /**
@@ -908,6 +924,10 @@ class Transact extends AbstractService
         if ($batchSize <= 0) {
             $db->beginTransaction();
             try {
+                // Lock users first (ascending) so concurrent awards, which lock
+                // the user row then the balance row, cannot deadlock with this
+                // rebuild (which used to lock balances first).
+                $db->query('SELECT user_id FROM xf_user ORDER BY user_id FOR UPDATE');
                 $db->query('DELETE FROM xf_oc_balance');
                 $stmt = $db->query(
                     'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
@@ -935,6 +955,10 @@ class Transact extends AbstractService
         $endUserId = $startAfterUserId + $batchSize;
         $db->beginTransaction();
         try {
+            $db->query(
+                'SELECT user_id FROM xf_user WHERE user_id > ? AND user_id <= ? ORDER BY user_id FOR UPDATE',
+                [$startAfterUserId, $endUserId]
+            );
             $db->query(
                 'DELETE FROM xf_oc_balance WHERE user_id > ? AND user_id <= ?',
                 [$startAfterUserId, $endUserId]

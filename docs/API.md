@@ -62,19 +62,19 @@ $status = $credits->chargeForContent(
 ): string
 ```
 
-Double-entry paywall charge: debits the reader and credits the author, recording
-one payment per `(content, reader, currency, amount)`. Like `transfer()`, it
+Double-entry premium-content charge: debits the reader and credits the author,
+recording one purchase per `(content, reader, currency)`. Like `transfer()`, it
 **never overdraws**. Returns `ok`, `already_paid`, `self` (reader is the author),
 `no_funds`, `invalid`, or `invalid_author`. Repeated calls for the same content
-and price return `already_paid` without moving money. The `[charge]` BBCode uses
-this; other add-ons can call it for their own paywalls.
+(any price) return `already_paid` without moving money. The `[charge]` BBCode
+uses this; other add-ons can call it for their own premium content.
 
 ```php
-$paid = $credits->paidAmountsFor(int $userId, string $contentType, int $contentId, int $currencyId): array
+$paid = $credits->hasPaidForContent(int $userId, string $contentType, int $contentId, int $currencyId): bool
 ```
 
-Amounts the member has already paid to unlock this content, keyed as two-decimal
-strings (for example `['10.00' => true]`).
+Whether the member has already unlocked this content item (regardless of the
+price they paid).
 
 ```php
 $count = $credits->unlockCountFor(string $contentType, int $contentId, int $currencyId, float $amount): int
@@ -106,19 +106,23 @@ $credits->adjust($userId, $currencyId, -$price, 'my_addon_entry', $contentId, 'T
 Charge with your own trigger key (namespaced, e.g. `my_addon_entry`) so the
 member's history stays readable.
 
-## Paywalled content (`[charge]`)
+## Premium content (`[charge]`)
 
-Forum posts can hide content until the reader pays:
+Forum posts can show a locked box in place of content until the reader pays:
 
 ```
-[charge=10]This text is hidden until the reader pays 10 credits.[/charge]
+[charge=10]This text is shown after the reader pays 10 credits.[/charge]
 ```
 
-The amount is in the primary currency. Authors, staff, and members with the
-**Bypass charge BBCode** permission see it for free. Paying a given price
-unlocks every `[charge]` block at that price in the post; the reader is charged
-and the author credited (both ledger rows use the `charge` trigger). The
-BBCode renders a form that posts to `/credits/unlock`.
+The amount is in the primary currency. Authors, staff/admins/moderators, and
+members with the **Bypass charge BBCode** permission see it for free. One
+purchase unlocks every `[charge]` block in the post; the reader is charged and
+the author credited (both ledger rows use the `charge` trigger). The BBCode
+renders a form that posts to `/credits/unlock`.
+
+This is a **credits-gated display, not content protection**: the text remains
+in the post message, so it can still appear in raw post output, snippets,
+quotes, and the API. Treat it as a premium teaser, not DRM.
 
 ```php
 $status = $credits->redeem(int $userId, string $code, ?array &$granted = null): string

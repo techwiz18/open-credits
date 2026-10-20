@@ -1,1 +1,1 @@
-Hides content until the reader pays the specified credits; the author is credited.
+Shows a locked box in place of the content until the reader pays credits; the author is credited.

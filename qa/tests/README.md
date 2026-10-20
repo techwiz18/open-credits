@@ -34,9 +34,11 @@ Covered today:
   current earning day is never touched. It writes only under a synthetic user
   id above every real one.
 - `ChargeTest` — the `[charge]` service (#5): funds move reader → author, a
-  repeat charge is a no-op, overdrafts are refused, and self-charges are free.
-  It uses two real members (the service locks user rows) plus a synthetic
-  content id.
+  repeat charge (including a changed price) is a no-op, overdrafts are refused,
+  and self-charges are free. It uses two real members (the service locks user
+  rows) plus a synthetic content id.
+- `ChargeAmountsTest` — the unlock endpoint's parser-based price extractor:
+  malformed tags, casing, and `[code]`/`[plain]` contents are ignored.
 
 Both clean up in `tearDown()`.
 

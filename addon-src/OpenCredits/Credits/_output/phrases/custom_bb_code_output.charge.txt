@@ -1,1 +1,1 @@
-This text is hidden until paid.
+This text is shown after payment.

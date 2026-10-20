@@ -94,6 +94,11 @@
         "version_string": "0.12.0-dev",
         "hash": "edf39fd49ef3b125cdd936564c2eb47b"
     },
+    "public/oc_charge_unavailable.html": {
+        "version_id": 936,
+        "version_string": "0.12.0-dev",
+        "hash": "9c837f251e5c5beedb944e05ebe47683"
+    },
     "public/oc_widget_top_holders.html": {
         "version_id": 930,
         "version_string": "0.11.0-dev",

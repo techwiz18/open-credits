@@ -273,6 +273,37 @@ class Setup extends AbstractSetup
         $this->syncEditorButton(true);
     }
 
+    public function upgrade937Step1()
+    {
+        if (!$this->tableExists('xf_oc_charge')) {
+            $this->createChargeTable();
+            return;
+        }
+
+        $indexes = $this->schemaManager()->getTableIndexDefinitions('xf_oc_charge');
+
+        if (isset($indexes['content_user_currency_amount'])) {
+            // Move from per-price purchases to one purchase per content item.
+            // Keep the earliest purchase if a member paid more than one price.
+            $this->db()->query(
+                'DELETE c1 FROM xf_oc_charge AS c1'
+                . ' INNER JOIN xf_oc_charge AS c2 ON c1.content_type = c2.content_type'
+                . ' AND c1.content_id = c2.content_id AND c1.user_id = c2.user_id'
+                . ' AND c1.currency_id = c2.currency_id AND c1.charge_id > c2.charge_id'
+            );
+            $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) {
+                $table->addUniqueKey(['content_type', 'content_id', 'user_id', 'currency_id'], 'content_user_currency');
+                $table->dropIndexes('content_user_currency_amount');
+            });
+        }
+
+        if (!isset($indexes['content_currency_amount'])) {
+            $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) {
+                $table->addKey(['content_type', 'content_id', 'currency_id', 'amount'], 'content_currency_amount');
+            });
+        }
+    }
+
     /**
      * Adds (or removes) the charge BBCode button in the rich-text editor
      * toolbar's text group, for every viewport configuration. Idempotent and
@@ -287,30 +318,52 @@ class Setup extends AbstractSetup
         $button = 'xfCustom_charge';
         $changed = false;
 
-        foreach ($config AS $type => &$groups) {
-            if (!is_array($groups)) {
-                continue;
-            }
-            foreach ($groups AS &$group) {
-                if (!is_array($group) || empty($group['buttons']) || !is_array($group['buttons'])) {
+        if ($add) {
+            // Only add when it is missing; never move an existing placement
+            // (admins may have rearranged the toolbar).
+            foreach ($config AS $groups) {
+                if (!is_array($groups)) {
                     continue;
                 }
-                $filtered = array_values(array_filter($group['buttons'], function ($existing) use ($button) {
-                    return $existing !== $button;
-                }));
-                if ($filtered !== $group['buttons']) {
-                    $group['buttons'] = $filtered;
+                foreach ($groups AS $group) {
+                    if (is_array($group) && !empty($group['buttons']) && is_array($group['buttons'])
+                        && in_array($button, $group['buttons'], true)) {
+                        return;
+                    }
+                }
+            }
+
+            foreach ($config AS &$groups) {
+                if (!is_array($groups)) {
+                    continue;
+                }
+                if (isset($groups['moreText']) && is_array($groups['moreText'])) {
+                    $groups['moreText']['buttons'][] = $button;
                     $changed = true;
                 }
             }
-            unset($group);
-
-            if ($add && isset($groups['moreText']) && is_array($groups['moreText'])) {
-                $groups['moreText']['buttons'][] = $button;
-                $changed = true;
+            unset($groups);
+        } else {
+            foreach ($config AS &$groups) {
+                if (!is_array($groups)) {
+                    continue;
+                }
+                foreach ($groups AS &$group) {
+                    if (!is_array($group) || empty($group['buttons']) || !is_array($group['buttons'])) {
+                        continue;
+                    }
+                    $filtered = array_values(array_filter($group['buttons'], function ($existing) use ($button) {
+                        return $existing !== $button;
+                    }));
+                    if ($filtered !== $group['buttons']) {
+                        $group['buttons'] = $filtered;
+                        $changed = true;
+                    }
+                }
+                unset($group);
             }
+            unset($groups);
         }
-        unset($groups);
 
         if ($changed) {
             \XF::repository(\XF\Repository\OptionRepository::class)
@@ -381,8 +434,8 @@ class Setup extends AbstractSetup
             $table->addColumn('amount', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
             $table->addColumn('charge_date', 'int')->setDefault(0);
             $table->addUniqueKey(
-                ['content_type', 'content_id', 'user_id', 'currency_id', 'amount'],
-                'content_user_currency_amount'
+                ['content_type', 'content_id', 'user_id', 'currency_id'],
+                'content_user_currency'
             );
             $table->addKey(['user_id', 'charge_date'], 'user_date');
             $table->addKey(['content_type', 'content_id', 'currency_id', 'amount'], 'content_currency_amount');

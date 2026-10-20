@@ -68,7 +68,7 @@ conventions into the dev root (`src/`). The committed copies live at `AGENTS.md`
 - This project's runner is `docker compose exec -T web php /var/www/html/cmd.php`
   (the skill's `compose.yaml`/`xf` detection does not apply here).
 
-See `addon-src/OpenCredits/Credits/tests/README.md` for the test setup.
+See `qa/tests/README.md` for the test setup.
 
 ## Granting the credit permissions (dev shortcut)
 

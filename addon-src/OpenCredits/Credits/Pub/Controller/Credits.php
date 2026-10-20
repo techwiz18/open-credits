@@ -66,6 +66,7 @@ class Credits extends AbstractController
         'register' => 'Registration',
         'daily_login' => 'Daily visit',
         'redeem' => 'Redeem code',
+        'charge' => 'Premium content',
     ];
 
     /**
@@ -96,6 +97,8 @@ class Credits extends AbstractController
             } elseif ($txn->trigger === 'post'
                 || ($txn->trigger === 'reaction_received' && $txn->content_type === 'post')
             ) {
+                $postIds[] = (int)$txn->content_id;
+            } elseif ($txn->trigger === 'charge' && $txn->content_type === 'post') {
                 $postIds[] = (int)$txn->content_id;
             }
         }
@@ -153,6 +156,16 @@ class Credits extends AbstractController
                     if (isset($postThreads[$threadId]) && $postThreads[$threadId]->canView()) {
                         $entry['detailThread'] = $postThreads[$threadId];
                         $entry['detail'] = $txn->trigger === 'reaction_received' ? 'on your reply in' : 'in reply to';
+                    }
+                }
+            } elseif ($txn->trigger === 'charge') {
+                $entry['label'] = $amount < 0 ? 'Premium content unlocked' : 'Premium content sold';
+                $postId = (int)$txn->content_id;
+                if (isset($posts[$postId]) && $posts[$postId]->canView()) {
+                    $threadId = (int)$posts[$postId]->thread_id;
+                    if (isset($postThreads[$threadId]) && $postThreads[$threadId]->canView()) {
+                        $entry['detailThread'] = $postThreads[$threadId];
+                        $entry['detail'] = 'in';
                     }
                 }
             }
@@ -352,17 +365,40 @@ class Credits extends AbstractController
             return $this->error('This content cannot be unlocked.');
         }
 
+        // Authors, staff, and bypass-permission holders never pay, even via a
+        // crafted POST.
+        if ((int)$visitor->user_id === $authorId
+            || $visitor->is_staff
+            || $visitor->is_admin
+            || $visitor->is_moderator
+            || $visitor->hasPermission('general', 'ocChargeFree')) {
+            return $this->redirect($content->getContentUrl());
+        }
+
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
         $currencyId = $svc->primaryCurrencyId();
         $currency = $this->em()->find('OpenCredits\Credits:Currency', $currencyId);
-        $decimals = $currency ? (int)$currency->decimals : 2;
+        if (!$currency || !$currency->active) {
+            return $this->error('This content cannot be unlocked right now.');
+        }
+        $decimals = (int)$currency->decimals;
 
         // Never trust the submitted price: it must match a real [charge=…]
-        // block in the post. v1 charges the primary currency only.
-        $amount = round((float)$this->filter('amount', 'float'), $decimals);
-        $validAmounts = \OpenCredits\Credits\BbCode\Charge::amountsForMessage((string)$content->message);
-        if ($amount <= 0 || !in_array(sprintf('%.2f', $amount), $validAmounts, true)) {
+        // block in the post and be valid for the currency's precision.
+        $requested = (float)$this->filter('amount', 'float');
+        $amount = 0.0;
+        foreach (\OpenCredits\Credits\BbCode\Charge::amountsInMessage((string)$content->message) AS $raw) {
+            $candidate = (float)$raw;
+            if ($candidate <= 0 || abs($candidate - round($candidate, $decimals)) > 0.00001) {
+                continue;
+            }
+            if (abs($candidate - $requested) < 0.00001) {
+                $amount = $candidate;
+                break;
+            }
+        }
+        if ($amount <= 0) {
             return $this->error('This content cannot be unlocked at that price.');
         }
 
@@ -387,6 +423,7 @@ class Credits extends AbstractController
             return $this->error('This content cannot be unlocked right now.');
         }
 
+        \OpenCredits\Credits\BbCode\Charge::clearPaidCache();
         return $this->redirect($content->getContentUrl());
     }
 
