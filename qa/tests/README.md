@@ -38,7 +38,10 @@ Covered today:
   and self-charges are free. It uses two real members (the service locks user
   rows) plus a synthetic content id.
 - `ChargeAmountsTest` — the unlock endpoint's parser-based price extractor:
-  malformed tags, casing, and `[code]`/`[plain]` contents are ignored.
+  malformed tags, casing, `[code]`/`[code=rich]`, and `[plain]` contents.
+- `ChargeRenderTest` — the renderer gates and fail-closed states: guest,
+  non-paid/paid member, author stats, admin bypass, inactive currency, and
+  invalid price.
 
 All clean up in `tearDown()`.
 

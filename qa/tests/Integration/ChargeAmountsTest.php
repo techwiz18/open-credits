@@ -49,4 +49,15 @@ class ChargeAmountsTest extends TestCase
     {
         $this->assertSame(['10'], Charge::amountsInMessage('[code=rich][charge=10]x[/charge][/code]'));
     }
+
+    public function testMatchAmountValidatesAgainstParsedBlocks(): void
+    {
+        $this->assertSame(10.0, Charge::matchAmount('[charge=10]x[/charge]', 10, 2));
+        $this->assertNull(Charge::matchAmount('[charge=10]x[/charge]', 5, 2));
+        $this->assertNull(Charge::matchAmount('[charge = 3]x[/charge]', 3, 2));
+        $this->assertNull(Charge::matchAmount('[code][charge=10]x[/charge][/code]', 10, 2));
+        $this->assertSame(10.0, Charge::matchAmount('[code=rich][charge=10]x[/charge][/code]', 10, 2));
+        $this->assertNull(Charge::matchAmount('[charge=1.5]x[/charge]', 1.5, 0));
+        $this->assertSame(2.0, Charge::matchAmount('[charge=2]x[/charge]', 2, 0));
+    }
 }

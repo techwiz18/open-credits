@@ -386,19 +386,12 @@ class Credits extends AbstractController
 
         // Never trust the submitted price: it must match a real [charge=…]
         // block in the post and be valid for the currency's precision.
-        $requested = (float)$this->filter('amount', 'float');
-        $amount = 0.0;
-        foreach (\OpenCredits\Credits\BbCode\Charge::amountsInMessage((string)$content->message) AS $raw) {
-            $candidate = (float)$raw;
-            if ($candidate <= 0 || abs($candidate - round($candidate, $decimals)) > 0.00001) {
-                continue;
-            }
-            if (abs($candidate - $requested) < 0.00001) {
-                $amount = $candidate;
-                break;
-            }
-        }
-        if ($amount <= 0) {
+        $amount = \OpenCredits\Credits\BbCode\Charge::matchAmount(
+            (string)$content->message,
+            (float)$this->filter('amount', 'float'),
+            $decimals
+        );
+        if ($amount === null) {
             return $this->error('This content cannot be unlocked at that price.');
         }
 

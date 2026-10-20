@@ -48,6 +48,24 @@ class Charge
         return array_values(array_unique($amounts));
     }
 
+    /**
+     * The server-side price for a requested amount: the first parsed charge
+     * tag whose amount matches and is valid for the currency's precision.
+     */
+    public static function matchAmount(string $message, float $requested, int $decimals): ?float
+    {
+        foreach (self::amountsInMessage($message) AS $raw) {
+            $candidate = (float)$raw;
+            if ($candidate <= 0 || abs($candidate - round($candidate, $decimals)) > 0.00001) {
+                continue;
+            }
+            if (abs($candidate - $requested) < 0.00001) {
+                return $candidate;
+            }
+        }
+        return null;
+    }
+
     public static function render(array $children, $option, array $tag, array $options, Html $renderer)
     {
         $visitor = \XF::visitor();
