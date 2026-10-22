@@ -268,6 +268,7 @@ class Credits extends AbstractController
     public function actionTransferSave(ParameterBag $params): AbstractReply
     {
         $this->assertPostOnly();
+        $ocInTab = (bool)$this->filter('oc_in_tab', 'bool');
 
         $visitor = \XF::visitor();
         if (!$visitor->user_id || $visitor->is_banned || !$visitor->hasPermission('general', 'ocView')
@@ -424,7 +425,6 @@ class Credits extends AbstractController
     public function actionRedeemSave(ParameterBag $params): AbstractReply
     {
         $this->assertPostOnly();
-        $ocInTab = (bool)$this->filter('oc_in_tab', 'bool');
 
         $visitor = \XF::visitor();
         if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {

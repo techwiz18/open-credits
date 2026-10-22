@@ -147,6 +147,45 @@ class MemberCreditsTest extends TestCase
         $this->assertSame($this->otherId, (int)$params['user']->user_id);
     }
 
+    public function testTabSendFormRedirectsToRecipientTab(): void
+    {
+        $sender = \XF::em()->find('XF:User', $this->otherId);
+        $recipient = \XF::em()->find('XF:User', $this->memberId);
+        $this->assertNotNull($sender);
+        $this->assertNotNull($recipient);
+        \XF::setVisitor($sender);
+
+        $before = (int)$this->db->fetchOne(
+            'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
+        );
+        $svc = \XF::app()->service('OpenCredits\Credits:Transact');
+        $svc->adjust($this->otherId, $this->currencyId, 10.00, 'octest_wallet_seed', 0, 'test');
+
+        try {
+            $request = new \XF\Http\Request(
+                \XF::app()->inputFilterer(),
+                [
+                    'to' => $recipient->username,
+                    'amount' => 1,
+                    'currency_id' => $this->currencyId,
+                    'oc_in_tab' => 1,
+                ],
+                [],
+                [],
+                ['REQUEST_METHOD' => 'POST']
+            );
+            $controller = \XF::app()->controller(Credits::class, $request);
+            $reply = $controller->actionTransferSave(new \XF\Mvc\ParameterBag([]));
+
+            $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $reply);
+            $this->assertStringContainsString($recipient->username, $reply->getUrl());
+            $this->assertStringContainsString('#credits', $reply->getUrl());
+        } finally {
+            $this->db->delete('xf_oc_transaction', 'transaction_id > ?', [$before]);
+            $svc->rebuildAllBalancesFully();
+        }
+    }
+
     protected function callIndex(int $page, int $currencyId = 0): \XF\Mvc\Reply\AbstractReply
     {
         $request = new \XF\Http\Request(
