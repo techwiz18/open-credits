@@ -113,7 +113,7 @@ change fires the `oc_credits_adjust` code event with
 ## Frontend
 
 * Route prefix `credits` → `Pub\Controller\Credits`: `actionIndex` (the wallet:
-  balance, compact redeem/transfer, history paged 20), `actionMember` (the
+  balance, compact redeem/transfer, history paged 10 with a 10/20/50 selector), `actionMember` (the
   per-member profile tab), `actionTransferSave` / `actionRedeemSave` (POST,
   CSRF via `xf:form`). The legacy `actionTransfer` / `actionRedeem` GETs
   redirect to the wallet. The route's context is `ocCredits`, which marks the

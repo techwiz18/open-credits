@@ -29,7 +29,18 @@ class Credits extends AbstractController
 
         $canSend = $visitor->hasPermission('general', 'ocTransfer');
         $page = $this->filter('page', 'uint');
-        $perPage = 20;
+
+        $perPageOptions = [10, 20, 50];
+        $requestedPerPage = $this->filter('per_page', 'uint');
+        if ($requestedPerPage && in_array($requestedPerPage, $perPageOptions, true)) {
+            $perPage = $requestedPerPage;
+            \XF::app()->session()->set('ocWalletPerPage', $perPage);
+        } else {
+            $perPage = (int)\XF::app()->session()->get('ocWalletPerPage');
+            if (!in_array($perPage, $perPageOptions, true)) {
+                $perPage = 10;
+            }
+        }
 
         $finder = $this->finder('OpenCredits\Credits:Transaction')
             ->where('user_id', $visitor->user_id)
@@ -50,6 +61,7 @@ class Credits extends AbstractController
             'entries' => $this->buildHistoryEntries($transactions),
             'page' => $page,
             'perPage' => $perPage,
+            'perPageOptions' => $perPageOptions,
             'total' => $total,
             'canSend' => $canSend,
             'amountStep' => self::amountStep((int)$currency->decimals),

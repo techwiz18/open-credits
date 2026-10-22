@@ -72,6 +72,24 @@
 <div class="block">
 	<div class="block-container">
 		<h3 class="block-header">{{ phrase('oc_credits_history') }}</h3>
+		<div class="block-filterBar">
+			<div class="filterBar">
+				<form method="get" action="{{ link('credits') }}">
+					<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
+					<label for="oc-per-page">{{ phrase('oc_per_page') }}:</label>
+					<select name="per_page" id="oc-per-page" class="input oc-per-page-select">
+						<xf:foreach loop="$perPageOptions" value="$option">
+							<xf:if is="$option == $perPage">
+								<option value="{$option}" selected="selected">{$option}</option>
+							<xf:else />
+								<option value="{$option}">{$option}</option>
+							</xf:if>
+						</xf:foreach>
+					</select>
+					<button type="submit" class="button button--small">{{ phrase('oc_go') }}</button>
+				</form>
+			</div>
+		</div>
 		<div class="block-body">
 			<xf:if is="$entries is not empty">
 				<xf:foreach loop="$entries" value="$entry">
@@ -100,8 +118,17 @@
 		</div>
 		<xf:if is="$total > $perPage">
 			<div class="block-footer">
-				<xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="credits" params="{{ {'currency_id': $currency.currency_id} }}" />
+				<xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="credits" params="{{ {'currency_id': $currency.currency_id, 'per_page': $perPage} }}" />
 			</div>
 		</xf:if>
 	</div>
 </div>
+<xf:js>
+	XF.onDelegated(document, 'change', 'select.oc-per-page-select', function ()
+	{
+		if (this.form)
+		{
+			this.form.submit();
+		}
+	});
+</xf:js>

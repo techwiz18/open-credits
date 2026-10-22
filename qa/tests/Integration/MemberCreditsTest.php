@@ -46,6 +46,7 @@ class MemberCreditsTest extends TestCase
         $this->otherId = (int)$ids[1];
 
         $this->cleanup();
+        \XF::app()->session()->remove('ocWalletPerPage');
     }
 
     protected function tearDown(): void
@@ -54,30 +55,33 @@ class MemberCreditsTest extends TestCase
         \XF::setVisitor(null);
     }
 
-    public function testWalletPaginatesAtTwentyRows(): void
+    public function testWalletPaginatesAtTenByDefault(): void
     {
         \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
-
-        for ($i = 0; $i < 25; $i++) {
-            $this->db->insert('xf_oc_transaction', [
-                'user_id' => $this->memberId,
-                'currency_id' => $this->currencyId,
-                'amount' => 1,
-                'trigger' => self::SEED_TRIGGER,
-                'content_type' => '',
-                'content_id' => 0,
-                'event_id' => 0,
-                'note' => 'test',
-                'log_date' => \XF::$time + $i,
-            ]);
-        }
+        $this->seedWalletRows(25);
 
         $page1 = $this->callIndex(1)->getParams();
-        $this->assertCount(20, $page1['entries']);
+        $this->assertCount(10, $page1['entries']);
         $this->assertGreaterThanOrEqual(25, (int)$page1['total']);
 
         $page2 = $this->callIndex(2)->getParams();
-        $this->assertGreaterThanOrEqual(5, count($page2['entries']));
+        $this->assertCount(10, $page2['entries']);
+
+        $larger = $this->callIndex(1, 0, 50)->getParams();
+        $this->assertGreaterThanOrEqual(25, count($larger['entries']));
+    }
+
+    public function testWalletPerPageSelectionPersists(): void
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+        $this->seedWalletRows(25);
+
+        $first = $this->callIndex(1, 0, 20)->getParams();
+        $this->assertCount(20, $first['entries']);
+
+        // No per_page param: the session value (20) is reused.
+        $second = $this->callIndex(1)->getParams();
+        $this->assertCount(20, $second['entries']);
     }
 
     public function testWalletCurrencySwitcher(): void
@@ -186,11 +190,16 @@ class MemberCreditsTest extends TestCase
         }
     }
 
-    protected function callIndex(int $page, int $currencyId = 0): \XF\Mvc\Reply\AbstractReply
+    protected function callIndex(int $page, int $currencyId = 0, ?int $perPage = null): \XF\Mvc\Reply\AbstractReply
     {
+        $input = ['page' => $page, 'currency_id' => $currencyId];
+        if ($perPage !== null) {
+            $input['per_page'] = $perPage;
+        }
+
         $request = new \XF\Http\Request(
             \XF::app()->inputFilterer(),
-            ['page' => $page, 'currency_id' => $currencyId],
+            $input,
             [],
             [],
             ['REQUEST_METHOD' => 'GET']
@@ -210,6 +219,23 @@ class MemberCreditsTest extends TestCase
         );
         $controller = \XF::app()->controller(Credits::class, $request);
         return $controller->actionMember(new \XF\Mvc\ParameterBag([]));
+    }
+
+    protected function seedWalletRows(int $count): void
+    {
+        for ($i = 0; $i < $count; $i++) {
+            $this->db->insert('xf_oc_transaction', [
+                'user_id' => $this->memberId,
+                'currency_id' => $this->currencyId,
+                'amount' => 1,
+                'trigger' => self::SEED_TRIGGER,
+                'content_type' => '',
+                'content_id' => 0,
+                'event_id' => 0,
+                'note' => 'test',
+                'log_date' => \XF::$time + $i,
+            ]);
+        }
     }
 
     protected function cleanup(): void
