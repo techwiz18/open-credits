@@ -173,14 +173,15 @@ through the transaction service.
 * Reject currency-precision changes that would silently round existing
   balances.
 
-**Planned: the economy epics** ([Future milestone](../../milestone/2)):
+**Planned: inflation control** ([#8](../../issues/8)) — the last core economy
+epic: an on/off toggle plus a balance cap, a daily faucet limit, and
+demurrage/decay so admins can keep the money supply in check.
 
-1. [Interest, taxation, and paycheck schedules](../../issues/6) — scheduled flows
-   that keep credits circulating without manual admin work.
-2. [Payment profiles and shop integration](../../issues/7) — buy credits and
-   spend them on add-on purchases.
-3. [Inflation control](../../issues/8) — admin-tunable levers to keep the
-   economy from drifting.
+**Extension points, not core** — interest/tax/paychecks ([#6](../../issues/6))
+and payments/shop ([#7](../../issues/7)) are deliberately not bundled. They fit
+better as separate add-ons on the transaction service and the
+`oc_credits_adjust` event; see
+[Integrating other add-ons](#integrating-other-add-ons).
 
 **1.0 cycle** — the compatibility and i18n pass:
 
