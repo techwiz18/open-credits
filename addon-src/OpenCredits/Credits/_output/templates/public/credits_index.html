@@ -28,6 +28,10 @@
 	<div class="block-container">
 		<h3 class="block-header">{{ phrase('oc_redeem_a_code') }}</h3>
 		<xf:form action="{{ link('credits/redeem-save') }}" ajax="true">
+			<xf:if is="$inProfileTab">
+				<input type="hidden" name="oc_in_tab" value="1" />
+				<input type="hidden" name="oc_return_user_id" value="{$returnUserId}" />
+			</xf:if>
 			<div class="block-body">
 				<div class="block-row">
 					<div class="inputGroup">
@@ -52,6 +56,10 @@
 			</h3>
 			<xf:form action="{{ link('credits/transfer-save') }}" ajax="true">
 				<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
+				<xf:if is="$inProfileTab">
+					<input type="hidden" name="oc_in_tab" value="1" />
+					<input type="hidden" name="oc_return_user_id" value="{$returnUserId}" />
+				</xf:if>
 				<div class="block-body">
 					<div class="block-row">
 						<div class="inputGroup">

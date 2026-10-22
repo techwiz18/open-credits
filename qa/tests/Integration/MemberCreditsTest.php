@@ -190,6 +190,47 @@ class MemberCreditsTest extends TestCase
         }
     }
 
+    public function testWalletTransferInProfileTabReturnsToSender(): void
+    {
+        $sender = \XF::em()->find('XF:User', $this->otherId);
+        $recipient = \XF::em()->find('XF:User', $this->memberId);
+        $this->assertNotNull($sender);
+        $this->assertNotNull($recipient);
+        \XF::setVisitor($sender);
+
+        $before = (int)$this->db->fetchOne(
+            'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
+        );
+        $svc = \XF::app()->service('OpenCredits\Credits:Transact');
+        $svc->adjust($this->otherId, $this->currencyId, 10.00, 'octest_wallet_seed', 0, 'test');
+
+        try {
+            $request = new \XF\Http\Request(
+                \XF::app()->inputFilterer(),
+                [
+                    'to' => $recipient->username,
+                    'amount' => 1,
+                    'currency_id' => $this->currencyId,
+                    'oc_in_tab' => 1,
+                    'oc_return_user_id' => $this->otherId,
+                ],
+                [],
+                [],
+                ['REQUEST_METHOD' => 'POST']
+            );
+            $controller = \XF::app()->controller(Credits::class, $request);
+            $reply = $controller->actionTransferSave(new \XF\Mvc\ParameterBag([]));
+
+            $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $reply);
+            $this->assertStringContainsString(strtolower($sender->username), strtolower($reply->getUrl()));
+            $this->assertStringContainsString('#credits', $reply->getUrl());
+            $this->assertStringNotContainsString(strtolower($recipient->username), strtolower($reply->getUrl()));
+        } finally {
+            $this->db->delete('xf_oc_transaction', 'transaction_id > ?', [$before]);
+            $svc->rebuildAllBalancesFully();
+        }
+    }
+
     public function testSelfTabUsesWalletWithOneCurrency(): void
     {
         $others = $this->db->fetchAll(

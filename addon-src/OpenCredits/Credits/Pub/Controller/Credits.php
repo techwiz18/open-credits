@@ -27,7 +27,7 @@ class Credits extends AbstractController
     /**
      * View params for the wallet page: balance, compact actions, paged history.
      */
-    protected function buildWalletParams(): array
+    protected function buildWalletParams(bool $inProfileTab = false): array
     {
         $visitor = \XF::visitor();
         $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
@@ -79,6 +79,8 @@ class Credits extends AbstractController
             'canSend' => $canSend,
             'showRedeem' => (bool)\XF::app()->options()->ocShowWalletRedeem,
             'showTransfer' => (bool)\XF::app()->options()->ocShowTransfer,
+            'inProfileTab' => $inProfileTab,
+            'returnUserId' => (int)$visitor->user_id,
             'amountStep' => self::amountStep((int)$currency->decimals),
         ];
     }
@@ -235,7 +237,7 @@ class Credits extends AbstractController
                 return $this->view(
                     'OpenCredits\Credits:Credits\Index',
                     'credits_index',
-                    $this->buildWalletParams()
+                    $this->buildWalletParams(true)
                 );
             }
         }
@@ -361,7 +363,11 @@ class Credits extends AbstractController
         }
 
         if ($ocInTab) {
-            return $this->redirect($this->buildLink('members', $target) . '#credits');
+            $returnId = (int)$this->filter('oc_return_user_id', 'uint');
+            $returnUser = $returnId > 0 ? $this->em()->find('XF:User', $returnId) : $target;
+            if ($returnUser) {
+                return $this->redirect($this->buildLink('members', $returnUser) . '#credits');
+            }
         }
         return $this->redirect($this->buildLink('credits', null, ['currency_id' => $currency->currency_id]));
     }
@@ -470,6 +476,8 @@ class Credits extends AbstractController
     public function actionRedeemSave(ParameterBag $params): AbstractReply
     {
         $this->assertPostOnly();
+        $ocInTab = (bool)$this->filter('oc_in_tab', 'bool');
+        $ocReturnUserId = (int)$this->filter('oc_return_user_id', 'uint');
 
         $visitor = \XF::visitor();
         if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
@@ -503,8 +511,15 @@ class Credits extends AbstractController
             return $this->error($messages[$status] ?? 'That code cannot be redeemed.');
         }
 
-        return $this->redirect($this->buildLink('credits', null, [
+        $redirect = $this->buildLink('credits', null, [
             'currency_id' => (int)$granted['currency_id'],
-        ]));
+        ]);
+        if ($ocInTab) {
+            $returnUser = $ocReturnUserId > 0 ? $this->em()->find('XF:User', $ocReturnUserId) : null;
+            if ($returnUser) {
+                $redirect = $this->buildLink('members', $returnUser) . '#credits';
+            }
+        }
+        return $this->redirect($redirect);
     }
 }

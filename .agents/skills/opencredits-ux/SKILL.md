@@ -46,6 +46,7 @@ One option per surface/component, fixed order, defaults preserve current behavio
 
 - `actionMember` passes `canSend`, `lockedTo`, `targetReceivable`, `senderBalance`, `currency`, `amountStep`; balances come from `$user.oc_balances`.
 - The per-member send form posts `oc_in_tab=1`; `actionTransferSave` redirects back to the **recipient's** profile tab (`#credits`).
+- When the wallet is embedded in the profile tab, its redeem/transfer forms post `oc_in_tab=1` + `oc_return_user_id` (the profile owner) so the action returns to `members/<owner>/#credits`, not `/credits`.
 - Wallet paging defaults to 10/page; the 10/20/50 per-page options are **links** in the history footer (below the pager), built with `link('credits', '', {'currency_id': ..., 'per_page': N})`. The choice persists in the session (`ocWalletPerPage`). Use `xf:pagenav` and keep `per_page` in its `params`; XF's pager class is `pageNav` (capital N).
 - Never submit a GET form to an XF route URL (`index.php?credits/`): the form replaces the route query and lands on the forum index. Use `link()` URLs/links or a POST.
 - The `credits` route's `context` is `ocCredits`; that is what marks the Credits nav tab active. Keep it in sync with the nav entry id.
