@@ -1,47 +1,22 @@
 <xf:title>{{ phrase('oc_credits_history') }}</xf:title>
 
-<div class="block">
-	<div class="block-container">
-		<div class="block-body">
-			<div class="block-row">
-				<div class="pairs pairs--justified">
-					<dt>{$currency.title}</dt>
-					<dd>{$currency.prefix}{$viewedBalance|number($currency.decimals)}{$currency.suffix}</dd>
-				</div>
-				<xf:if is="$currencies|count > 1">
-					<div class="contentRow-minor">
-						{{ phrase('oc_switch_currency') }}:
-						<xf:foreach loop="$currencies" value="$c">
-							<xf:if is="$c.currency_id != $currency.currency_id">
-								<a href="{{ link('credits/member', '', {'user_id': $user.user_id, 'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
-							</xf:if>
-						</xf:foreach>
-					</div>
-				</xf:if>
-			</div>
-		</div>
-	</div>
-</div>
-
 <xf:if is="$isSelf">
 	<div class="block">
 		<div class="block-container">
-			<h3 class="block-formSectionHeader">
-				<span class="collapseTrigger collapseTrigger--block" data-xf-click="toggle" data-target="< :up:next">
-					<span class="block-formSectionHeader-aligner">{{ phrase('oc_redeem_a_code') }}</span>
-				</span>
-			</h3>
-			<div class="block-body block-body--collapsible">
-				<xf:form action="{{ link('credits/redeem-save') }}" ajax="true">
-					<input type="hidden" name="oc_in_tab" value="1" />
-					<div class="block-row block-row--separated">
-						{{ phrase('oc_redeem_explain') }}
+			<h3 class="block-header">{{ phrase('oc_redeem_a_code') }}</h3>
+			<xf:form action="{{ link('credits/redeem-save') }}" ajax="true">
+				<input type="hidden" name="oc_in_tab" value="1" />
+				<div class="block-body">
+					<div class="block-row">
+						<div class="inputGroup">
+							<input type="text" name="code" class="input" placeholder="XXXX-XXXX-XXXX"
+								required="required" maxlength="32" aria-label="{{ phrase('oc_code') }}" />
+							<span class="inputGroup-splitter"></span>
+							<button type="submit" class="button button--primary">{{ phrase('oc_redeem') }}</button>
+						</div>
 					</div>
-					<xf:textboxrow name="code" label="{{ phrase('oc_code') }}"
-						placeholder="XXXX-XXXX-XXXX" required="required" maxlength="32" />
-					<xf:submitrow submit="{{ phrase('oc_redeem') }}" />
-				</xf:form>
-			</div>
+				</div>
+			</xf:form>
 		</div>
 	</div>
 </xf:if>
@@ -49,33 +24,34 @@
 <xf:if is="$canSend and (!$lockedTo or $targetReceivable)">
 	<div class="block">
 		<div class="block-container">
-			<h3 class="block-formSectionHeader">
-				<span class="collapseTrigger collapseTrigger--block" data-xf-click="toggle" data-target="< :up:next">
-					<span class="block-formSectionHeader-aligner">{{ phrase('oc_transfer') }}</span>
-				</span>
+			<h3 class="block-header">
+				{{ phrase('oc_transfer') }}
+				<span class="u-pullRight">{$currency.prefix}{$senderBalance|number($currency.decimals)}{$currency.suffix}</span>
 			</h3>
-			<div class="block-body block-body--collapsible">
-				<xf:form action="{{ link('credits/transfer-save') }}" ajax="true">
-					<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
-					<input type="hidden" name="oc_in_tab" value="1" />
-					<div class="block-row block-row--separated">
-						{$currency.title}: <strong>{$currency.prefix}{$senderBalance|number($currency.decimals)}{$currency.suffix}</strong>
+			<xf:form action="{{ link('credits/transfer-save') }}" ajax="true">
+				<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
+				<input type="hidden" name="oc_in_tab" value="1" />
+				<div class="block-body">
+					<div class="block-row">
+						<div class="inputGroup">
+							<xf:if is="$lockedTo">
+								<input type="hidden" name="to" value="{$lockedTo}" />
+								<span class="inputGroup-text">{$lockedTo}</span>
+								<span class="inputGroup-splitter"></span>
+							<xf:else />
+								<input type="text" name="to" class="input" placeholder="{{ phrase('oc_to_user') }}"
+									required="required" data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
+									data-single="true" minlength="2" aria-label="{{ phrase('oc_to_user') }}" />
+								<span class="inputGroup-splitter"></span>
+							</xf:if>
+							<input type="number" name="amount" class="input" step="{$amountStep}" min="{$amountStep}"
+								placeholder="{{ phrase('oc_amount') }}" required="required" aria-label="{{ phrase('oc_amount') }}" />
+							<span class="inputGroup-splitter"></span>
+							<button type="submit" class="button button--primary">{{ phrase('oc_transfer') }}</button>
+						</div>
 					</div>
-					<xf:if is="$lockedTo">
-						<input type="hidden" name="to" value="{$lockedTo}" />
-						<xf:formrow label="{{ phrase('oc_to_user') }}">{$lockedTo}</xf:formrow>
-					<xf:else />
-						<xf:textboxrow name="to" label="{{ phrase('oc_to_user') }}"
-							placeholder="Username" required="true"
-							data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
-							data-single="true" minlength="2" />
-					</xf:if>
-					<xf:textboxrow name="amount" type="number" step="{$amountStep}" min="{$amountStep}" label="{{ phrase('oc_amount') }}"
-						placeholder="0.00" required="true"
-						hint="{{ phrase('oc_smallest_unit_x', {'currency': $currency.title, 'step': $amountStep}) }}" />
-					<xf:submitrow submit="{{ phrase('oc_transfer') }}" />
-				</xf:form>
-			</div>
+				</div>
+			</xf:form>
 		</div>
 	</div>
 <xf:elseif is="$lockedTo and !$targetReceivable" />
@@ -85,7 +61,19 @@
 <xf:if is="$isSelf and $total > 0">
 	<div class="block">
 		<div class="block-container">
-			<h3 class="block-header">{{ phrase('oc_credits_history') }}</h3>
+			<h3 class="block-header">
+				{{ phrase('oc_credits_history') }}
+				<xf:if is="$currencies|count > 1">
+					<span class="u-pullRight">
+						{{ phrase('oc_switch_currency') }}:
+						<xf:foreach loop="$currencies" value="$c">
+							<xf:if is="$c.currency_id != $currency.currency_id">
+								<a href="{{ link('credits/member', '', {'user_id': $user.user_id, 'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
+							</xf:if>
+						</xf:foreach>
+					</span>
+				</xf:if>
+			</h3>
 			<div class="block-body">
 				<xf:if is="$entries is not empty">
 					<xf:foreach loop="$entries" value="$entry">

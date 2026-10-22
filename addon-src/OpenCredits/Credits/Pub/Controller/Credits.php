@@ -212,13 +212,6 @@ class Credits extends AbstractController
                 break;
             }
         }
-        $viewedBalance = 0.0;
-        foreach ($user->oc_balances as $row) {
-            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
-                $viewedBalance = (float)$row['balance'];
-                break;
-            }
-        }
 
         $page = $this->filter('page', 'uint');
         $perPage = 10;
@@ -242,7 +235,6 @@ class Credits extends AbstractController
                 'isSelf' => $isSelf,
                 'currency' => $currency,
                 'currencies' => $currencies,
-                'viewedBalance' => $viewedBalance,
                 'senderBalance' => $senderBalance,
                 'canSend' => $canSend,
                 'lockedTo' => $lockedTo,
