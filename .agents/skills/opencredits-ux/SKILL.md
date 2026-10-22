@@ -54,6 +54,10 @@ One option per surface/component, fixed order, defaults preserve current behavio
 - The profile stat link goes to the profile page's Credits tab (`link('members', $user)` + `#credits`), not the standalone tab page.
 - Prefer a normal form/redirect for core navigation. Add add-on JS only when an interaction genuinely must stay in place.
 
+## Charge pricing
+
+One purchase unlocks the whole post, so the price is the **highest valid `[charge]` block** (`Charge::maxAmount()`). Never charge the cheapest block: a crafted POST or a cheap locked box would otherwise unlock the expensive blocks too. The unlock form's amount is informational; the server derives the price from the post.
+
 ## Checks before finishing
 
 - `php -l` changed PHP.
