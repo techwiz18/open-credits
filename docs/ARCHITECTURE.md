@@ -8,7 +8,7 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 
 | Path | Role |
 |---|---|
-| `addon.json` | Add-on meta. Current: 0.12.0-dev / 939. Requires XF 2.3.0+, PHP 8.2+ |
+| `addon.json` | Add-on meta. Current: 0.12.0 / 939. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
