@@ -1,9 +1,10 @@
 (function () {
     'use strict';
 
-    // Keep the profile Credits tab's pagination in place: clicking a page
-    // number re-loads the tab pane via AJAX instead of leaving the profile.
-    XF.on(document, 'click', 'li[data-oc-credits-pane] .pagenav a', function (e) {
+    // Keep the profile Credits tab in place: clicking a page number or a
+    // currency switch re-loads the tab pane via AJAX instead of leaving the
+    // profile.
+    XF.on(document, 'click', 'li[data-oc-credits-pane] .pagenav a, li[data-oc-credits-pane] .oc-credits-switch', function (e) {
         e.preventDefault();
 
         const link = e.currentTarget;

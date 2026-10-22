@@ -318,6 +318,7 @@ class Credits extends AbstractController
     public function actionTransferSave(ParameterBag $params): AbstractReply
     {
         $this->assertPostOnly();
+        $ocInTab = (bool)$this->filter('oc_in_tab', 'bool');
 
         $visitor = \XF::visitor();
         if (!$visitor->user_id || $visitor->is_banned || !$visitor->hasPermission('general', 'ocView')
@@ -364,6 +365,9 @@ class Credits extends AbstractController
             return $this->error('Insufficient credits for this transfer.');
         }
 
+        if ($ocInTab) {
+            return $this->redirect($this->buildLink('members', $visitor) . '#credits');
+        }
         return $this->redirect($this->buildLink('credits', null, ['currency_id' => $currency->currency_id]));
     }
 
