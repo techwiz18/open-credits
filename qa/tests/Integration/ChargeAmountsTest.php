@@ -50,6 +50,17 @@ class ChargeAmountsTest extends TestCase
         $this->assertSame(['10'], Charge::amountsInMessage('[code=rich][charge=10]x[/charge][/code]'));
     }
 
+    public function testMaxAmountPicksHighestValidPrice(): void
+    {
+        $this->assertSame(50.0, Charge::maxAmount('[charge=5]a[/charge][charge=50]b[/charge]', 2));
+        $this->assertSame(20.0, Charge::maxAmount('[charge=20]a[/charge][charge=1.5]b[/charge]', 0));
+        $this->assertSame(2.5, Charge::maxAmount('[charge=2.50]a[/charge]', 2));
+        $this->assertNull(Charge::maxAmount('[charge=0]a[/charge]', 2));
+        $this->assertNull(Charge::maxAmount('[charge=1.5]a[/charge]', 0));
+        $this->assertNull(Charge::maxAmount('no charge', 2));
+        $this->assertNull(Charge::maxAmount('[code][charge=10]x[/charge][/code]', 2));
+    }
+
     public function testMatchAmountValidatesAgainstParsedBlocks(): void
     {
         $this->assertSame(10.0, Charge::matchAmount('[charge=10]x[/charge]', 10, 2));

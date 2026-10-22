@@ -49,7 +49,7 @@ docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install 
 docker compose exec -T web bash -c "cd /var/www/html/.qatmp && OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
 docker compose exec -T web php /var/www/html/cmd.php xf-addon:build-release OpenCredits/Credits
 # fresh-install smoke on a scratch copy, then upgrade smoke 0.9.x → current
-# (for pre-release 0.12 dev installs, also verify the 936 old-key → 937 migration)
+# (for pre-release 0.12 dev installs, also verify the 937 charge-key migration)
 # also confirm the Top credit holders widget renders when placed and a balance exists
 ./scripts/dev.sh fix-perms   # after every generator/import/upgrade
 ```

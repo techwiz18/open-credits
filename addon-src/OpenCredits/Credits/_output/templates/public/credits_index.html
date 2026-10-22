@@ -5,10 +5,10 @@
 	<div class="block-container">
 		<div class="block-body">
 			<div class="block-row block-row--separated">
-				<div class="pairs pairs--justified">
+				<dl class="pairs pairs--justified">
 					<dt>{$currency.title}</dt>
 					<dd><strong>{$currency.prefix}{$balance|number($currency.decimals)}{$currency.suffix}</strong></dd>
-				</div>
+				</dl>
 				<xf:if is="$currencies|count > 1">
 					<div class="contentRow-minor">
 						{{ phrase('oc_switch_currency') }}:
@@ -119,11 +119,11 @@
 				<xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="{$pagerLink}" params="{{ $pagerParams }}" />
 			</xf:if>
 			<span class="contentRow-minor">{{ phrase('oc_per_page') }}:</span>
-			<xf:foreach loop="$perPageOptions" value="$option">
+			<xf:foreach loop="$perPageUrls" key="$option" value="$url">
 				<xf:if is="$option == $perPage">
 					<span class="button button--small button--primary">{$option}</span>
 				<xf:else />
-					<a href="{$perPageBaseUrl}&per_page={$option}" class="button button--small oc-credits-per-page">{$option}</a>
+					<a href="{$url}" class="button button--small oc-credits-per-page">{$option}</a>
 				</xf:if>
 			</xf:foreach>
 		</div>

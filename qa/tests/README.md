@@ -38,11 +38,14 @@ Covered today:
   and self-charges are free. It uses two real members (the service locks user
   rows) plus a synthetic content id.
 - `ChargeAmountsTest` — the unlock endpoint's parser-based price extractor:
-  malformed tags, casing, `[code]`/`[code=rich]`, and `[plain]` contents.
+  malformed tags, casing, `[code]`/`[code=rich]`, `[plain]` contents, and
+  `maxAmount` picking the highest valid block.
 - `ChargeRenderTest` — the renderer gates and fail-closed states: guest,
-  non-paid/paid member, author stats, admin bypass, inactive currency, and
-  invalid price; blocked (banned/email-confirm) payers cannot unlock via the
-  controller.
+  non-paid/paid member, author stats, admin bypass, inactive currency,
+  invalid price, and two-price posts using the highest price; blocked
+  (banned/email-confirm) payers cannot unlock via the controller.
+- `ChargeUnlockTest` — a crafted cheap `amount` still charges the post's
+  highest valid `[charge]` block.
 - `BackfillTest` — the historical backfill preview/run query applies the
   event's forum/group scope and skips first posts; the action writes an
   `event_id` marker, is idempotent, refuses a per-member run after a

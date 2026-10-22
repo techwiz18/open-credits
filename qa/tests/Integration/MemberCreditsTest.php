@@ -134,11 +134,52 @@ class MemberCreditsTest extends TestCase
     {
         \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
 
-        $params = $this->callMember($this->memberId)->getParams();
-        $this->assertTrue($params['isSelf']);
-        $this->assertSame('', $params['lockedTo']);
-        $this->assertArrayNotHasKey('entries', $params);
-        $this->assertArrayNotHasKey('page', $params);
+        $restore = $this->ensureTwoVisibleCurrencies();
+        try {
+            $params = $this->callMember($this->memberId)->getParams();
+            $this->assertTrue($params['isSelf']);
+            $this->assertSame('', $params['lockedTo']);
+            $this->assertArrayNotHasKey('entries', $params);
+            $this->assertArrayNotHasKey('page', $params);
+        } finally {
+            if ($restore) {
+                $this->db->update(
+                    'xf_oc_currency',
+                    ['active' => (int)$restore['active'], 'visible' => (int)$restore['visible']],
+                    'currency_id = ?',
+                    [(int)$restore['currency_id']]
+                );
+                \XF::em()->clearEntityCache();
+            }
+        }
+    }
+
+    protected function ensureTwoVisibleCurrencies(): array
+    {
+        $count = (int)$this->db->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_currency WHERE active = 1 AND visible = 1'
+        );
+        if ($count > 1) {
+            return [];
+        }
+
+        $row = $this->db->fetchRow(
+            'SELECT currency_id, active, visible FROM xf_oc_currency WHERE currency_id <> ? ORDER BY currency_id LIMIT 1',
+            [$this->currencyId]
+        );
+        if (!$row) {
+            $this->markTestSkipped('Need a second currency to test the per-member tab.');
+        }
+
+        $this->db->update(
+            'xf_oc_currency',
+            ['active' => 1, 'visible' => 1],
+            'currency_id = ?',
+            [(int)$row['currency_id']]
+        );
+        \XF::em()->clearEntityCache();
+
+        return $row;
     }
 
     public function testOtherMemberTabLocksSendForm(): void

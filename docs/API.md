@@ -85,11 +85,14 @@ Number of members who have unlocked the content at that price. Used by the
 `[charge]` BBCode's author-only stats line.
 
 ```php
-$rows = $credits->rebuildAllBalances(): int
+$result = $credits->rebuildAllBalances(int $startAfterUserId = 0, int $batchSize = 0): array
+$rows = $credits->rebuildAllBalancesFully(int $batchSize = 5000): int
 ```
 
-Recomputes every cached balance from the ledger (also available as
-`oc-credits:rebuild` and AdminCP → Credits → Rebuild balances).
+`rebuildAllBalances()` processes one user-id batch and returns
+`['rows' => int, 'next' => int|null]` (loop while `next !== null`);
+`rebuildAllBalancesFully()` runs the whole rebuild and returns the row count.
+Also available as `oc-credits:rebuild` and AdminCP → Credits → Rebuild balances.
 
 ## Worked example: spend-to-play entry fee
 
@@ -117,10 +120,11 @@ Forum posts can show a locked box in place of content until the reader pays:
 
 The amount is in the primary currency. Authors, staff/admins/moderators, and
 members with the **Bypass charge BBCode** permission see it for free. One
-purchase unlocks every `[charge]` block in the post; the reader is charged and
-the author credited (both ledger rows use the `charge` trigger). The BBCode
-renders a form that posts to `/credits/unlock`; the endpoint refuses banned
-and non-valid accounts (email confirmation, rejected, disabled).
+purchase unlocks every `[charge]` block in the post; the post's price is the
+**highest** valid block, the reader is charged and the author credited (both
+ledger rows use the `charge` trigger). The BBCode renders a form that posts to
+`/credits/unlock`; the endpoint refuses banned and non-valid accounts (email
+confirmation, rejected, disabled).
 
 This is a **credits-gated display, not content protection**: the text remains
 in the post message, so it can still appear in raw post output, snippets,

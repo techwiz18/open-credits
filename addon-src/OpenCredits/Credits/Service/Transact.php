@@ -149,13 +149,13 @@ class Transact extends AbstractService
 
     /**
      * Whether an event row's forum/usergroup restrictions admit this award.
-     * Empty restrictions always pass; forum scoping passes when there is no
-     * forum context (non-content triggers).
+     * Empty restrictions always pass; a forum restriction requires the content
+     * to live in one of the listed forums.
      */
     protected function eventAppliesTo(array $row, int $nodeId, array $userGroupIds): bool
     {
         $forumIds = $this->decodeIdList($row['forum_ids'] ?? null);
-        if ($forumIds && $nodeId > 0 && !in_array($nodeId, $forumIds, true)) {
+        if ($forumIds && ($nodeId <= 0 || !in_array($nodeId, $forumIds, true))) {
             return false;
         }
         $groupIds = $this->decodeIdList($row['usergroup_ids'] ?? null);
@@ -716,7 +716,7 @@ class Transact extends AbstractService
                 'trigger' => 'redeem',
                 'content_type' => 'code',
                 'content_id' => (int)$row['code_id'],
-                'note' => substr($code, 0, 255),
+                'note' => 'code #' . (int)$row['code_id'],
                 'log_date' => \XF::$time,
             ]);
             $db->query(

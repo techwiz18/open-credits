@@ -25,6 +25,9 @@ class Charge
     /** @var array<string, int> */
     protected static $unlockCounts = [];
 
+    /** @var array<string, float|null> */
+    protected static $maxAmounts = [];
+
     /**
      * Charge prices found in a message, using XenForo's own parser/AST so the
      * result matches what actually renders: `[code]`/`[plain]` contents are
@@ -66,25 +69,41 @@ class Charge
         return null;
     }
 
+    /**
+     * The highest valid charge price in a message. Because one purchase
+     * unlocks the whole post, the post's price is the most expensive block —
+     * otherwise a reader could pay the cheapest block and read the rest.
+     */
+    public static function maxAmount(string $message, int $decimals): ?float
+    {
+        $max = null;
+        foreach (self::amountsInMessage($message) AS $raw) {
+            $candidate = (float)$raw;
+            if ($candidate <= 0 || abs($candidate - round($candidate, $decimals)) > 0.00001) {
+                continue;
+            }
+            $candidate = round($candidate, $decimals);
+            if ($max === null || $candidate > $max) {
+                $max = $candidate;
+            }
+        }
+        return $max;
+    }
+
     public static function render(array $children, $option, array $tag, array $options, Html $renderer)
     {
         $visitor = \XF::visitor();
-
-        // Members without the Credits view permission should not see the
-        // premium-content UI at all. Guests still get the "log in" box.
-        if ($visitor->user_id && !$visitor->hasPermission('general', 'ocView')) {
-            return '';
-        }
+        $canViewAddOn = !$visitor->user_id || $visitor->hasPermission('general', 'ocView');
 
         $entity = $options['entity'] ?? null;
         // Only forum posts carry the content identity this feature charges for.
         if (!$entity instanceof \XF\Entity\Post) {
-            return self::renderChildren($children, $options, $renderer);
+            return $canViewAddOn ? self::renderChildren($children, $options, $renderer) : '';
         }
 
         $authorId = self::authorId($options, $entity);
         if ($authorId <= 0) {
-            return self::renderChildren($children, $options, $renderer);
+            return $canViewAddOn ? self::renderChildren($children, $options, $renderer) : '';
         }
 
         $isAuthor = $visitor->user_id && (int)$visitor->user_id === $authorId;
@@ -93,6 +112,12 @@ class Charge
             || $visitor->is_admin
             || $visitor->is_moderator
             || $visitor->hasPermission('general', 'ocChargeFree');
+
+        // Exempt users see the post even if they lack ocView; everyone else
+        // without the permission gets no premium UI (and no body leak).
+        if (!$canViewAddOn && !$isExempt) {
+            return '';
+        }
 
         $contentType = (string)$entity->getEntityContentType();
         $contentId = (int)$entity->getEntityId();
@@ -112,18 +137,31 @@ class Charge
                     : self::unavailable('oc_charge_unavailable');
             }
 
-            $rawAmount = (float)$option;
-            $amount = round($rawAmount, (int)$currency->decimals);
-            $validPrice = $rawAmount > 0
-                && $amount > 0
-                && abs($rawAmount - $amount) < 0.00001;
-            if (!$validPrice) {
+            $currencyId = (int)$currency->currency_id;
+            $decimals = (int)$currency->decimals;
+
+            $maxKey = $contentType . ':' . $contentId . ':' . $decimals;
+            if (!array_key_exists($maxKey, self::$maxAmounts)) {
+                self::$maxAmounts[$maxKey] = self::maxAmount((string)$entity->message, $decimals);
+            }
+            $amount = self::$maxAmounts[$maxKey];
+
+            // Previews/quotes can render a message different from the stored
+            // post; fall back to the block's own price when the entity message
+            // has no valid charge blocks.
+            if ($amount === null) {
+                $rawAmount = (float)$option;
+                $candidate = round($rawAmount, $decimals);
+                if ($rawAmount > 0 && $candidate > 0 && abs($rawAmount - $candidate) < 0.00001) {
+                    $amount = $candidate;
+                }
+            }
+
+            if ($amount === null || $amount <= 0) {
                 return $isExempt
                     ? self::renderChildren($children, $options, $renderer)
                     : self::unavailable('oc_charge_invalid_price');
             }
-
-            $currencyId = (int)$currency->currency_id;
 
             if ($isExempt) {
                 $html = self::renderChildren($children, $options, $renderer);
@@ -157,6 +195,7 @@ class Charge
     {
         self::$paid = [];
         self::$unlockCounts = [];
+        self::$maxAmounts = [];
     }
 
     protected static function collectAmounts(array $tree, array &$out): void

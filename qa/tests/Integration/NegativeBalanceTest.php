@@ -25,6 +25,9 @@ class NegativeBalanceTest extends TestCase
     protected int $userId = 0;
     protected int $currencyId = 0;
 
+    /** @var array{currency_id: int, active: int, visible: int}|null */
+    protected ?array $currencyRestore = null;
+
     protected function setUp(): void
     {
         if (!class_exists('XF', false) || !\XF::app()) {
@@ -37,12 +40,22 @@ class NegativeBalanceTest extends TestCase
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
 
         $currency = $this->db->fetchRow(
-            'SELECT currency_id FROM xf_oc_currency WHERE allow_negative = 0 AND active = 1 ORDER BY currency_id LIMIT 1'
+            'SELECT currency_id, active, visible FROM xf_oc_currency WHERE allow_negative = 0 ORDER BY currency_id LIMIT 1'
         );
         if (!$currency) {
-            $this->markTestSkipped('No active floor-at-zero currency to test.');
+            $this->markTestSkipped('No floor-at-zero currency to test.');
         }
         $this->currencyId = (int)$currency['currency_id'];
+        if (!(int)$currency['active'] || !(int)$currency['visible']) {
+            $this->currencyRestore = $currency;
+            $this->db->update(
+                'xf_oc_currency',
+                ['active' => 1, 'visible' => 1],
+                'currency_id = ?',
+                [$this->currencyId]
+            );
+            \XF::em()->clearEntityCache();
+        }
 
         $this->userId = (int)$this->db->fetchOne(
             "SELECT user_id FROM xf_user WHERE user_state = 'valid' ORDER BY user_id LIMIT 1"
@@ -63,6 +76,18 @@ class NegativeBalanceTest extends TestCase
     {
         $this->cleanup();
         $this->transact->rebuildAllBalancesFully();
+        if ($this->currencyRestore) {
+            $this->db->update(
+                'xf_oc_currency',
+                [
+                    'active' => (int)$this->currencyRestore['active'],
+                    'visible' => (int)$this->currencyRestore['visible'],
+                ],
+                'currency_id = ?',
+                [(int)$this->currencyRestore['currency_id']]
+            );
+            \XF::em()->clearEntityCache();
+        }
     }
 
     public function testPositiveAwardRecoversLegacyNegativeBalance(): void

@@ -31,7 +31,7 @@ class ChargeRenderTest extends TestCase
     protected int $adminId = 0;
     protected int $currencyId = 0;
 
-    /** @var array<int, array{is_primary: int, active: int}> */
+    /** @var array<int, array{is_primary: int, active: int, visible: int}> */
     protected array $originalCurrencies = [];
 
     protected function setUp(): void
@@ -45,11 +45,12 @@ class ChargeRenderTest extends TestCase
         $this->db = \XF::db();
         $this->currencyId = \XF::app()->service('OpenCredits\Credits:Transact')->primaryCurrencyId();
 
-        $rows = $this->db->fetchAll('SELECT currency_id, is_primary, active FROM xf_oc_currency');
+        $rows = $this->db->fetchAll('SELECT currency_id, is_primary, active, visible FROM xf_oc_currency');
         foreach ($rows AS $row) {
             $this->originalCurrencies[(int)$row['currency_id']] = [
                 'is_primary' => (int)$row['is_primary'],
                 'active' => (int)$row['active'],
+                'visible' => (int)$row['visible'],
             ];
         }
 
@@ -101,7 +102,11 @@ class ChargeRenderTest extends TestCase
         foreach ($this->originalCurrencies AS $currencyId => $flags) {
             $this->db->update(
                 'xf_oc_currency',
-                ['is_primary' => $flags['is_primary'], 'active' => $flags['active']],
+                [
+                    'is_primary' => $flags['is_primary'],
+                    'active' => $flags['active'],
+                    'visible' => $flags['visible'],
+                ],
                 'currency_id = ?',
                 [$currencyId]
             );
@@ -170,13 +175,15 @@ class ChargeRenderTest extends TestCase
     public function testInvalidPriceFailsClosedForNonPaid(): void
     {
         $zeroDecimal = (int)$this->db->fetchOne(
-            'SELECT currency_id FROM xf_oc_currency WHERE decimals = 0 AND active = 1 AND currency_id <> ? LIMIT 1',
+            'SELECT currency_id FROM xf_oc_currency WHERE decimals = 0 AND currency_id <> ? ORDER BY currency_id LIMIT 1',
             [$this->currencyId]
         );
         if ($zeroDecimal <= 0) {
             $this->markTestSkipped('No 0-decimal currency available.');
         }
 
+        // [charge=1.5] is a valid tag but invalid for a 0-decimal currency.
+        $this->db->update('xf_oc_currency', ['active' => 1, 'visible' => 1], 'currency_id = ?', [$zeroDecimal]);
         $this->db->update('xf_oc_currency', ['is_primary' => 0], 'currency_id = ?', [$this->currencyId]);
         $this->db->update('xf_oc_currency', ['is_primary' => 1], 'currency_id = ?', [$zeroDecimal]);
         Transact::clearPrimaryCache();
@@ -222,13 +229,31 @@ class ChargeRenderTest extends TestCase
         ];
     }
 
+    public function testTwoPricesUseTheHighestPrice(): void
+    {
+        $html = $this->render(
+            $this->memberId,
+            '[charge=5]CHEAP_SECRET[/charge][charge=50]EXPENSIVE_SECRET[/charge]'
+        );
+
+        $this->assertStringNotContainsString('CHEAP_SECRET', $html);
+        $this->assertStringNotContainsString('EXPENSIVE_SECRET', $html);
+        $this->assertStringContainsString('50.00', $html);
+    }
+
     protected function render(?int $userId, string $message = self::MESSAGE): string
     {
         \XF::setVisitor($userId ? \XF::em()->find('XF:User', $userId) : null);
         Charge::clearPaidCache();
 
         $post = \XF::em()->find('XF:Post', $this->postId);
-        return (string)\XF::app()->bbCode()->render($message, 'html', 'post:post', $post);
+        $originalMessage = $post->message;
+        $post->message = $message;
+        try {
+            return (string)\XF::app()->bbCode()->render($message, 'html', 'post:post', $post);
+        } finally {
+            $post->message = $originalMessage;
+        }
     }
 
     protected function seedCharge(int $userId, float $amount): void

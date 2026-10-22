@@ -8,16 +8,15 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 
 | Path | Role |
 |---|---|
-| `addon.json` | Add-on meta. Current: 0.11.0-dev / 931. Requires XF 2.3.0+, PHP 8.2+ |
+| `addon.json` | Add-on meta. Current: 0.12.0-dev / 939. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
 | `BbCode/Charge.php` | `[charge=X]` callback: premium-content gate + locked box |
-| `Pub/Controller/Credits.php` | `/credits/` history, `/credits/transfer`, `/credits/transfer-save` |
+| `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect |
 | `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated) |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
-| `Job/RebuildBalances.php` | Job wrapper around the same service method |
 | `Cron/DailyLogin.php` | Stub (daily_login is awarded via `visitor_setup`, not cron) |
 | `_output/` | Dev-output JSON/HTML/TXT synced into XF on install/upgrade |
 
@@ -46,6 +45,9 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
   twice for the same content, even if its price changes; `amount` is what that
   member paid. Rows are removed when the post or the payer/author is
   hard-deleted; ledger rows stay as financial history.
+* `xf_oc_code(code_id, code, currency_id, amount, max_uses, uses, expiry_date,
+  active)` — redeem codes. Codes are normalized on lookup; `uses`/`max_uses`
+  enforce caps; `expiry_date` is a Unix timestamp (0 = never).
 * `xf_oc_backfill(backfill_id, event_id, user_id, last_user_id, started_date,
   completed_date)` — resumable backfill state, one row per (event, scope).
   `user_id` is 0 for a site-wide run or the member id for a per-member run;
@@ -143,7 +145,8 @@ change fires the `oc_credits_adjust` code event with
 * Tools (`oc-tools` admin route): rebuild (sync service call + result view),
   one-shot/resumable historical backfill (lump sums per member per post/thread
   event, scoped by the event's forum/group restrictions, completion keyed on
-  `event_id`, then rebuild).
+  `event_id`, then rebuild), prune (batched snapshots, current day protected),
+  and adjust (grant/remove a member's credits).
 * Widget `oc_top_holders` (`Widget`/`TopHolders.php`): top N members by balance
   in one currency (primary by default, or any visible active currency),
   `ocView`-gated, excludes banned/disabled and zero balances. Guests are hidden
@@ -158,10 +161,10 @@ change fires the `oc_credits_adjust` code event with
   post message and can appear in raw post output, snippets, quotes, and the
   API. The unlock form posts to `/credits/unlock`, which loads the post,
   checks `canView()` and the visitor's account state (banned/email-confirm are
-  refused), re-derives the price from the post's parsed `[charge]`
-  blocks (the client cannot set it), calls `Transact::chargeForContent()`, and
-  redirects back. One purchase per (post, member) unlocks every block in that
-  post. The author also sees a per-block "Members unlocked: N · total earned"
+  refused), derives the price from the post's parsed `[charge]` blocks (the
+  **highest** valid block, since one purchase unlocks the post; the client
+  cannot set it), calls `Transact::chargeForContent()`, and redirects back.
+  One purchase per (post, member) unlocks every block in that post. The author also sees a per-block "Members unlocked: N · total earned"
   line.
 * The `charge` button is added once to the editor toolbar (`moreText` group,
   all viewports) by `Setup::syncEditorButton()` on install/upgrade; existing

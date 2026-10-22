@@ -71,6 +71,10 @@ class Currency extends AbstractController
         ]);
         $input['decimals'] = max(0, min(2, $input['decimals']));
 
+        if ($input['is_primary'] && (!$input['active'] || !$input['visible'])) {
+            return $this->error('The primary currency must be active and visible.');
+        }
+
         if (!$input['is_primary'] && $currency->is_primary) {
             $otherPrimary = $this->finder('OpenCredits\Credits:Currency')
                 ->where('currency_id', '!=', $currency->currency_id ?: 0)
@@ -81,10 +85,12 @@ class Currency extends AbstractController
             }
         }
 
+        $wasPrimary = (bool)$currency->is_primary;
+
         $form = $this->formAction();
         $form->basicEntitySave($currency, $input);
-        $form->apply(function () use ($currency, $input) {
-            if ($input['is_primary']) {
+        $form->apply(function () use ($currency, $input, $wasPrimary) {
+            if ($input['is_primary'] && !$wasPrimary) {
                 // Exactly one primary: clear the flag everywhere else and
                 // resync the legacy balance column to the new primary.
                 $this->app->db()->query(

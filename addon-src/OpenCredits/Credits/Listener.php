@@ -51,7 +51,8 @@ class Listener
         if ((!$isNewVisible && !$becameVisible)) {
             return;
         }
-        self::applyTrigger('thread', (int)$entity->user_id, (int)$entity->thread_id, 'thread', (int)$entity->get('node_id'));
+        self::applyTrigger('thread', (int)$entity->user_id, (int)$entity->thread_id, 'thread', (int)$entity->get('node_id'),
+            'thread:' . (int)$entity->thread_id);
     }
 
     public static function postEntityPostSave(Entity $entity)
@@ -76,7 +77,8 @@ class Listener
                 \XF::logException($e, false, 'OpenCredits post forum lookup failed: ');
             }
         }
-        self::applyTrigger('post', (int)$entity->user_id, (int)$entity->post_id, 'post', $nodeId);
+        self::applyTrigger('post', (int)$entity->user_id, (int)$entity->post_id, 'post', $nodeId,
+            'post:' . (int)$entity->post_id);
     }
 
     public static function userEntityPostSave(Entity $entity)
@@ -207,6 +209,8 @@ class Listener
             'user_id = ?',
             'author_user_id = ?',
         ];
+        $deletes['xf_oc_balance'] = 'user_id = ?';
+        $deletes['xf_oc_snapshot'] = 'user_id = ?';
     }
 
     protected static function applyTrigger(

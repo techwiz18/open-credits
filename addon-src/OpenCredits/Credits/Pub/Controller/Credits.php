@@ -61,6 +61,10 @@ class Credits extends AbstractController
             ->order('log_date', 'DESC')->order('transaction_id', 'DESC');
 
         $total = $finder->total();
+        $pages = max(1, (int)ceil($total / $perPage));
+        if ($page > $pages) {
+            $page = $pages;
+        }
         $transactions = $finder->limitByPage($page, $perPage)->fetch();
 
         $currencies = $this->finder('OpenCredits\Credits:Currency')
@@ -73,13 +77,22 @@ class Credits extends AbstractController
         // links go through the member route so they can reload the pane.
         $pagerLink = $inProfileTab ? 'credits/member' : 'credits';
         $pagerBaseParams = $inProfileTab
-            ? ['user_id' => (int)$visitor->user_id]
+            ? ['user_id' => (int)$visitor->user_id, 'currency_id' => (int)$currency->currency_id]
             : ['currency_id' => (int)$currency->currency_id];
+        $perPageUrls = [];
+        foreach ($perPageOptions AS $option) {
+            $perPageUrls[$option] = $this->buildLink(
+                $pagerLink,
+                null,
+                $pagerBaseParams + ['per_page' => $option]
+            );
+        }
 
         return [
             'currency' => $currency,
             'currencies' => $currencies,
-            'showBalance' => !$inProfileTab || count($currencies) > 1,
+            'showBalance' => !$inProfileTab || count($currencies) > 1
+                || !\XF::app()->options()->ocShowProfileStats,
             'balance' => $balance,
             'entries' => $this->buildHistoryEntries($transactions),
             'page' => $page,
@@ -93,7 +106,7 @@ class Credits extends AbstractController
             'returnUserId' => (int)$visitor->user_id,
             'pagerLink' => $pagerLink,
             'pagerParams' => $pagerBaseParams + ['per_page' => $perPage],
-            'perPageBaseUrl' => $this->buildLink($pagerLink, null, $pagerBaseParams),
+            'perPageUrls' => $perPageUrls,
             'amountStep' => self::amountStep((int)$currency->decimals),
         ];
     }
@@ -224,6 +237,9 @@ class Credits extends AbstractController
     {
         $visitor = \XF::visitor();
         if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
+            return $this->noPermission();
+        }
+        if (!\XF::app()->options()->ocShowProfileTab) {
             return $this->noPermission();
         }
         $user = $this->em()->find('XF:User', $this->filter('user_id', 'uint'));
@@ -379,7 +395,7 @@ class Credits extends AbstractController
             $returnId = (int)$this->filter('oc_return_user_id', 'uint');
             $returnUser = $returnId > 0 ? $this->em()->find('XF:User', $returnId) : $target;
             if ($returnUser) {
-                return $this->redirect($this->buildLink('members', $returnUser) . '#credits');
+                return $this->redirect($this->buildLink('members', $returnUser, ['currency_id' => (int)$currency->currency_id]) . '#credits');
             }
         }
         return $this->redirect($this->buildLink('credits', null, ['currency_id' => $currency->currency_id]));
@@ -440,15 +456,14 @@ class Credits extends AbstractController
         }
         $decimals = (int)$currency->decimals;
 
-        // Never trust the submitted price: it must match a real [charge=…]
-        // block in the post and be valid for the currency's precision.
-        $amount = \OpenCredits\Credits\BbCode\Charge::matchAmount(
+        // One purchase unlocks the whole post, so the post's price is the
+        // most expensive valid block. Never trust the submitted amount.
+        $amount = \OpenCredits\Credits\BbCode\Charge::maxAmount(
             (string)$content->message,
-            (float)$this->filter('amount', 'float'),
             $decimals
         );
         if ($amount === null) {
-            return $this->error('This content cannot be unlocked at that price.');
+            return $this->error('This content cannot be unlocked right now.');
         }
 
         try {
@@ -496,6 +511,11 @@ class Credits extends AbstractController
         if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
             return $this->noPermission();
         }
+        if ($visitor->is_banned
+            || in_array($visitor->user_state, ['rejected', 'disabled', 'email_confirm', 'email_confirm_edit'], true)
+        ) {
+            return $this->noPermission();
+        }
 
         $code = trim($this->filter('code', 'str'));
         if ($code === '') {
@@ -530,7 +550,9 @@ class Credits extends AbstractController
         if ($ocInTab) {
             $returnUser = $ocReturnUserId > 0 ? $this->em()->find('XF:User', $ocReturnUserId) : null;
             if ($returnUser) {
-                $redirect = $this->buildLink('members', $returnUser) . '#credits';
+                $redirect = $this->buildLink('members', $returnUser, [
+                    'currency_id' => (int)$granted['currency_id'],
+                ]) . '#credits';
             }
         }
         return $this->redirect($redirect);

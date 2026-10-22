@@ -6,10 +6,10 @@
 		<div class="block-body">
 			<xf:foreach loop="$user.oc_balances" value="$ocBalance">
 				<div class="block-row">
-					<div class="pairs pairs--justified">
+					<dl class="pairs pairs--justified">
 						<dt>{$ocBalance.title}</dt>
 						<dd>{$ocBalance.prefix}{$ocBalance.balance|number($ocBalance.decimals)}{$ocBalance.suffix}</dd>
-					</div>
+					</dl>
 				</div>
 			</xf:foreach>
 		</div>

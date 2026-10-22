@@ -11,11 +11,11 @@ let members transfer credits and redeem codes, gate trophies on wealth.
   and daily visits — amounts managed in AdminCP → Credits → Earning events.
 * **Multiple currencies** with a primary and per-currency visibility.
 * **Wallet everywhere** — balances in postbit, in the account menu, and on
-  member profiles (primary stat plus a full currencies tab); per-currency
-  history at `/credits/`, reachable from the Credits nav tab.
-* **Transfers** — send credits to another member at `/credits/transfer`
-  (username autocomplete included; transfers can never overdraw).
-* **Redeem codes** — coupon codes members redeem at `/credits/redeem`
+  member profiles (primary stat plus a currencies tab); the `/credits` wallet
+  has redeem, transfer, and paged history, reachable from the Credits nav tab.
+* **Transfers** — send credits from the `/credits` wallet (username
+  autocomplete included; transfers can never overdraw).
+* **Redeem codes** — coupon codes members redeem from the `/credits` wallet
   (single/multi-use, expiry, one per member).
 * **Premium posts** — `[charge=10]…[/charge]` shows a locked box in place of
   the content until the reader pays credits; the author is credited and sees
@@ -23,7 +23,7 @@ let members transfer credits and redeem codes, gate trophies on wealth.
   toolbar. This is a credits-gated display (the text stays in the post source),
   not content protection.
 * **Earn alerts** — notified when credits land (per-event admin toggle,
-  member opt-out, global kill switch in Setup → Options → Credits).
+  member opt-out, global kill switch in Setup → Options → OpenCredits).
 * **Trophies** — "has at least / fewer than X credits" criteria work with
   trophies, notices, and user-group promotions.
 * **Leaderboard** — a "Top credit holders" widget admins can place on the
@@ -38,8 +38,9 @@ let members transfer credits and redeem codes, gate trophies on wealth.
 * **Adjust tools** — grant or remove any member's credits, fully logged.
 * **Rebuild & backfill** — recompute every balance from the append-only
   ledger; award pre-install content per event and member.
-* **Display control** — per-location toggles in Setup → Options → Credits
-  (postbit, account menu, profile stat, profile tab).
+* **Display control** — per-location toggles in Setup → Options → OpenCredits
+  (postbit, account menu, profile stat, profile tab, wallet redeem, transfer;
+  profile tab mode: auto/wallet/member).
 * **Leaderboard widget** — place a "Top credit holders" widget with a
   configurable count and currency (primary by default), optionally visible to
   guests.
