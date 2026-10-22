@@ -193,8 +193,13 @@ class Credits extends AbstractController
         }
         $isSelf = (int)$user->user_id === (int)$visitor->user_id;
 
-        // Profile wallet: balances + compact transfer form + own recent history.
-        $currency = $this->assertViewableCurrency(0);
+        // Profile wallet: balances, compact transfer form, and full (paged) history.
+        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
+        $currencies = $this->finder('OpenCredits\Credits:Currency')
+            ->where('active', 1)
+            ->where('visible', 1)
+            ->order('currency_id')
+            ->fetch();
         $canSend = $visitor->hasPermission('general', 'ocTransfer');
         $lockedTo = $isSelf ? '' : $user->username;
         $targetReceivable = !$user->is_banned
@@ -207,16 +212,26 @@ class Credits extends AbstractController
                 break;
             }
         }
+        $viewedBalance = 0.0;
+        foreach ($user->oc_balances as $row) {
+            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
+                $viewedBalance = (float)$row['balance'];
+                break;
+            }
+        }
 
-        $recent = [];
+        $page = $this->filter('page', 'uint');
+        $perPage = 10;
+        $entries = [];
+        $total = 0;
         if ($isSelf) {
-            $transactions = $this->finder('OpenCredits\Credits:Transaction')
+            $finder = $this->finder('OpenCredits\Credits:Transaction')
                 ->where('user_id', $visitor->user_id)
                 ->where('currency_id', $currency->currency_id)
-                ->order('log_date', 'DESC')->order('transaction_id', 'DESC')
-                ->limit(10)
-                ->fetch();
-            $recent = $this->buildHistoryEntries($transactions);
+                ->order('log_date', 'DESC')->order('transaction_id', 'DESC');
+            $total = $finder->total();
+            $transactions = $finder->limitByPage($page, $perPage)->fetch();
+            $entries = $this->buildHistoryEntries($transactions);
         }
 
         return $this->view(
@@ -226,15 +241,21 @@ class Credits extends AbstractController
                 'user' => $user,
                 'isSelf' => $isSelf,
                 'currency' => $currency,
+                'currencies' => $currencies,
+                'viewedBalance' => $viewedBalance,
                 'senderBalance' => $senderBalance,
                 'canSend' => $canSend,
                 'lockedTo' => $lockedTo,
                 'targetReceivable' => $targetReceivable,
-                'recent' => $recent,
+                'entries' => $entries,
+                'page' => $page,
+                'perPage' => $perPage,
+                'total' => $total,
                 'amountStep' => self::amountStep((int)$currency->decimals),
             ]
         );
     }
+
 
     protected function assertViewableCurrency(int $currencyId, bool $fallback = true): \XF\Mvc\Entity\Entity
     {
@@ -454,6 +475,7 @@ class Credits extends AbstractController
     public function actionRedeemSave(ParameterBag $params): AbstractReply
     {
         $this->assertPostOnly();
+        $ocInTab = (bool)$this->filter('oc_in_tab', 'bool');
 
         $visitor = \XF::visitor();
         if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
@@ -496,8 +518,8 @@ class Credits extends AbstractController
         }
 
         return $this->view(
-            'OpenCredits\Credits:Credits\Redeem',
-            'credits_redeem',
+            $ocInTab ? 'OpenCredits\Credits:Credits\RedeemBlock' : 'OpenCredits\Credits:Credits\Redeem',
+            $ocInTab ? 'oc_redeem_block' : 'credits_redeem',
             [
                 'ran' => true,
                 'code' => $code,

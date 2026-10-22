@@ -49,9 +49,9 @@ Covered today:
   site-wide run, and the history row is labelled/unlinked.
 - `ChargeCleanupTest` — hard-deleting a post drops its unlock rows; member
   deletion covers both payer and author charge rows.
-- `NegativeBalanceTest` — a legacy negative balance can still receive a
-  positive award (currency switched to floor-at-zero), while negative awards
-  remain refused.
+- `MemberCreditsTest` — the profile Credits tab: currency switcher, slim
+  balance line, paginated (10/page) full history for self, no history for
+  other members, and the banned-viewer guard.
 
 All clean up in `tearDown()`.
 
