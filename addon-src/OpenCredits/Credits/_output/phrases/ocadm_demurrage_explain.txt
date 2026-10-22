@@ -1,0 +1,1 @@
+Demurrage burns a percentage of each member's primary-currency balance. The cron applies it once per period; this tool runs a pass immediately.

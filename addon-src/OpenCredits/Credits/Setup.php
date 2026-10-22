@@ -141,6 +141,11 @@ class Setup extends AbstractSetup
         $this->createBackfillTable();
     }
 
+    public function installStep15()
+    {
+        $this->createInflationTable();
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -152,6 +157,7 @@ class Setup extends AbstractSetup
         $sm->dropTable('xf_oc_snapshot');
         $sm->dropTable('xf_oc_charge');
         $sm->dropTable('xf_oc_backfill');
+        $sm->dropTable('xf_oc_inflation');
     }
 
     public function uninstallStep2()
@@ -352,6 +358,13 @@ class Setup extends AbstractSetup
         }
     }
 
+    public function upgrade940Step1()
+    {
+        if (!$this->tableExists('xf_oc_inflation')) {
+            $this->createInflationTable();
+        }
+    }
+
     /**
      * Adds (or removes) the charge BBCode button in the rich-text editor
      * toolbar's text group, for every viewport configuration. Idempotent and
@@ -506,6 +519,21 @@ class Setup extends AbstractSetup
             $table->addColumn('started_date', 'int')->setDefault(0);
             $table->addColumn('completed_date', 'int')->setDefault(0);
             $table->addUniqueKey(['event_id', 'user_id'], 'event_user');
+        });
+    }
+
+    /**
+     * Resumable demurrage state for the primary currency: last_run is the
+     * last completed pass, cursor_user_id resumes an in-flight pass.
+     */
+    protected function createInflationTable(): void
+    {
+        $this->createTable('xf_oc_inflation', function (Create $table) {
+            $table->addColumn('currency_id', 'int');
+            $table->addColumn('last_run', 'int')->setDefault(0);
+            $table->addColumn('cursor_user_id', 'int')->setDefault(0);
+            $table->addColumn('pass_started', 'int')->setDefault(0);
+            $table->addPrimaryKey('currency_id');
         });
     }
 

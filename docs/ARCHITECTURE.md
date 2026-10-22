@@ -8,7 +8,7 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 
 | Path | Role |
 |---|---|
-| `addon.json` | Add-on meta. Current: 0.12.0 / 939. Requires XF 2.3.0+, PHP 8.2+ |
+| `addon.json` | Add-on meta. Current: 0.13.0-dev / 940. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
@@ -17,7 +17,9 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 | `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect |
 | `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated) |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
+| `Cli/Command/Demurrage.php` | `oc-credits:demurrage` CLI (`--preview` or run now) |
 | `Cron/DailyLogin.php` | Stub (daily_login is awarded via `visitor_setup`, not cron) |
+| `Cron/Demurrage.php` | Daily demurrage cron; 10s budget per tick, resumable |
 | `_output/` | Dev-output JSON/HTML/TXT synced into XF on install/upgrade |
 
 ## Database
@@ -53,6 +55,11 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
   `user_id` is 0 for a site-wide run or the member id for a per-member run;
   `last_user_id` is the last committed user-id boundary; `completed_date = 0`
   while running.
+* `xf_oc_inflation(currency_id, last_run, cursor_user_id, pass_started)` —
+  resumable demurrage state for the primary currency. `last_run` is the last
+  completed pass; `cursor_user_id` resumes an in-flight pass; each burn and
+  cursor advance commit in one transaction (a concurrent runner that loses the
+  cursor race rolls back instead of double-burning).
 
 ## Trigger matrix (listener → service call)
 
@@ -111,6 +118,16 @@ change fires the `oc_credits_adjust` code event with
   users; `max_per_day` counts per (event, currency) excluding backfill rows and
   is best-effort under concurrency; no per-day guard races the daily award
   thanks to the user-row lock.
+* Inflation control is primary-currency only and off by default. A balance cap
+  and a daily faucet **amount** clamp member mints (earnings through
+  `awardByTrigger`, redemptions) to the headroom / remaining allowance.
+  Transfers and charges are supply-neutral and never clamped. The public
+  `adjust()` is privileged and bypasses both; member-facing callers pass
+  `$respectInflation = true`. Demurrage burns `rate%` of positive primary
+  balances once per `days`, rounds to the currency, floors at zero, and runs
+  from a resumable cron or Tools run-now; the legacy `xf_user.oc_credits`
+  mirror follows the same deltas. These are economy controls, not a security
+  boundary.
 
 ## Frontend
 
@@ -142,11 +159,16 @@ change fires the `oc_credits_adjust` code event with
   forums). When the profile tab is off, the profile stat links to the wallet;
   the transfer/redeem toggles hide their wallet blocks (transfer also hides the
   per-member send form).
+* Inflation options (`ocCredits` group): `ocInflationEnabled` (off),
+  `ocInflationBalanceCap`, `ocInflationFaucetDaily`,
+  `ocInflationDemurrageRate` (0 disables each lever), and
+  `ocInflationDemurrageDays` (default 7). Primary currency only.
 * Tools (`oc-tools` admin route): rebuild (sync service call + result view),
   one-shot/resumable historical backfill (lump sums per member per post/thread
   event, scoped by the event's forum/group restrictions, completion keyed on
   `event_id`, then rebuild), prune (batched snapshots, current day protected),
-  and adjust (grant/remove a member's credits).
+  adjust (grant/remove a member's credits), and demurrage (preview + run-now;
+  the daily `ocDemurrage` cron applies the configured rate once per period).
 * Widget `oc_top_holders` (`Widget`/`TopHolders.php`): top N members by balance
   in one currency (primary by default, or any visible active currency),
   `ocView`-gated, excludes banned/disabled and zero balances. Guests are hidden

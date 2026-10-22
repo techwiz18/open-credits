@@ -1,0 +1,80 @@
+<xf:title>{{ phrase('ocadm_demurrage_title') }}</xf:title>
+
+<div class="block">
+	<div class="block-container">
+		<xf:if is="$ran">
+			<div class="block-body">
+				<div class="block-row block-row--separated">
+					<xf:if is="$result.accounts > 0">
+						{{ phrase('ocadm_demurrage_done', {
+							'accounts': $result.accounts|number,
+							'amount': $result.burned|number($preview.currency.decimals),
+							'currency': $preview.currency.title
+						}) }}
+					<xf:else />
+						{{ phrase('ocadm_demurrage_none') }}
+					</xf:if>
+				</div>
+				<div class="block-row block-row--separated">
+					<xf:if is="$preview.lastRun">
+						{{ phrase('ocadm_demurrage_last_run', {'date': date($preview.lastRun)}) }}
+					<xf:else />
+						{{ phrase('ocadm_demurrage_last_run_never') }}
+					</xf:if>
+				</div>
+			</div>
+			<div class="block-footer">
+				<a href="{{ link('oc-tools') }}" class="button">{{ phrase('ocadm_back_to_tools') }}</a>
+			</div>
+		<xf:else />
+			<xf:if is="!$preview.enabled or $preview.rate <= 0 or !$preview.currency">
+				<div class="block-body">
+					<div class="block-row block-row--separated">
+						{{ phrase('ocadm_demurrage_disabled') }}
+					</div>
+				</div>
+				<div class="block-footer">
+					<a href="{{ link('oc-tools') }}" class="button">{{ phrase('ocadm_back_to_tools') }}</a>
+				</div>
+			<xf:else />
+				<xf:form action="{{ link('oc-tools/demurrage-save') }}" class="block" ajax="true">
+					<div class="block-body">
+						<div class="block-row block-row--separated">
+							{{ phrase('ocadm_demurrage_explain') }}
+						</div>
+						<div class="block-row block-row--separated">
+							{{ phrase('ocadm_demurrage_rate', {'rate': $preview.rate, 'days': $preview.days|number}) }}
+						</div>
+						<div class="block-row block-row--separated">
+							<xf:if is="$preview.lastRun">
+								{{ phrase('ocadm_demurrage_last_run', {'date': date($preview.lastRun)}) }}
+							<xf:else />
+								{{ phrase('ocadm_demurrage_last_run_never') }}
+							</xf:if>
+						</div>
+						<xf:if is="$preview.nextRun">
+							<div class="block-row block-row--separated">
+								{{ phrase('ocadm_demurrage_next_run', {'date': date($preview.nextRun)}) }}
+							</div>
+						</xf:if>
+						<div class="block-row block-row--separated">
+							<xf:if is="$preview.accounts > 0">
+								{{ phrase('ocadm_demurrage_preview', {
+									'accounts': $preview.accounts|number,
+									'amount': $preview.total|number($preview.currency.decimals),
+									'currency': $preview.currency.title
+								}) }}
+							<xf:else />
+								{{ phrase('ocadm_demurrage_none') }}
+							</xf:if>
+						</div>
+						<div class="block-row block-row--separated">
+							{{ phrase('ocadm_demurrage_force_note') }}
+						</div>
+					</div>
+					<xf:submitrow submit="{{ phrase('ocadm_demurrage_run') }}" />
+				</xf:form>
+			</xf:if>
+		</xf:if>
+	</div>
+</div>

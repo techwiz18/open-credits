@@ -1,0 +1,1 @@
+Percentage of each primary-currency balance burned per period. 0 disables.

@@ -137,10 +137,11 @@ class Transact extends AbstractService
             if ($dedupeKey !== null && $dedupeKey !== '' && $this->dedupeKeyUsed($userId, $trigger, $contentType, $contentId, $dedupeKey)) {
                 continue;
             }
-            if ($this->adjust($userId, (int)$row['currency_id'], (float)$row['amount'], $trigger, $contentId, (string)$dedupeKey, $contentType)) {
+            $credited = null;
+            if ($this->adjust($userId, (int)$row['currency_id'], (float)$row['amount'], $trigger, $contentId, (string)$dedupeKey, $contentType, true, $credited)) {
                 $applied = true;
                 if (!empty($row['send_alert'])) {
-                    $this->sendEarnAlert($userId, $row, $trigger);
+                    $this->sendEarnAlert($userId, $row, $trigger, null, null, $credited);
                 }
             }
         }
@@ -227,7 +228,8 @@ class Transact extends AbstractService
         array $eventRow,
         string $trigger,
         ?\XF\Entity\User $sender = null,
-        ?string $reason = null
+        ?string $reason = null,
+        ?float $amount = null
     ): void {
         if (empty($this->app->options()->ocSendEarnAlerts)) {
             return;
@@ -243,7 +245,7 @@ class Transact extends AbstractService
                     ?? ucwords(str_replace('_', ' ', $trigger));
             }
             $extra = [
-                'amount' => round((float)$eventRow['amount'], $decimals),
+                'amount' => round($amount ?? (float)$eventRow['amount'], $decimals),
                 'currency_id' => (int)$eventRow['currency_id'],
                 'currency_title' => (string)($eventRow['currency_title'] ?? 'Credits'),
                 'prefix' => (string)($eventRow['currency_prefix'] ?? ''),
@@ -282,7 +284,13 @@ class Transact extends AbstractService
         );
     }
 
-    public function adjust(int $userId, int $currencyId, float $amount, string $trigger, int $contentId = 0, string $note = '', string $contentType = ''): bool
+    /**
+     * Apply a balance change. $respectInflation is used by member-facing
+     * earning paths: it clamps the credit to the primary currency's balance
+     * cap and daily faucet. Admin/integrator calls leave it false (trusted).
+     * $credited receives the amount actually credited (after clamping).
+     */
+    public function adjust(int $userId, int $currencyId, float $amount, string $trigger, int $contentId = 0, string $note = '', string $contentType = '', bool $respectInflation = false, &$credited = null): bool
     {
         if ($userId <= 0 || $amount == 0.0) {
             return false;
@@ -314,6 +322,38 @@ class Transact extends AbstractService
                 $db->rollBack();
                 return false;
             }
+            if ($respectInflation && $amount > 0 && $this->inflationApplies($currencyId)) {
+                $settings = $this->inflationSettings();
+                if ($settings['enabled']) {
+                    $balance = (float)$db->fetchOne(
+                        'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
+                        [$userId, $currencyId]
+                    );
+                    $faucetRemaining = PHP_FLOAT_MAX;
+                    if ($settings['faucet'] > 0) {
+                        $earned = (float)$db->fetchOne(
+                            'SELECT COALESCE(SUM(t.amount), 0) FROM xf_oc_transaction AS t'
+                            . ' INNER JOIN xf_oc_event AS e ON e.`trigger` = t.`trigger`'
+                            . ' AND e.currency_id = t.currency_id AND e.active = 1'
+                            . ' WHERE t.user_id = ? AND t.currency_id = ? AND t.log_date >= ?'
+                            . ' AND t.amount > 0 AND t.note != ?',
+                            [$userId, $currencyId, self::dayStart(), 'Historical backfill']
+                        );
+                        $faucetRemaining = max(0.0, $settings['faucet'] - $earned);
+                    }
+                    $amount = self::calculateCredit(
+                        $amount,
+                        $balance,
+                        $settings['cap'],
+                        $faucetRemaining,
+                        (int)$currency['decimals']
+                    );
+                    if ($amount <= 0.0) {
+                        $db->rollBack();
+                        return false;
+                    }
+                }
+            }
             if (!$this->allowsResultingBalance($userId, $currencyId, $amount, (int)$currency['allow_negative'])) {
                 $db->rollBack();
                 return false;
@@ -330,6 +370,7 @@ class Transact extends AbstractService
                 'log_date' => \XF::$time,
             ]);
             $db->commit();
+            $credited = $amount;
             self::clearBalanceCache($userId);
             $this->fireAdjustEvent([$userId, $currencyId, $amount, $trigger, $contentId]);
             return true;
@@ -637,8 +678,9 @@ class Transact extends AbstractService
      * code row, so limited-use caps stay exact under concurrency.
      *
      * Returns 'ok' or a failure code: 'not_found', 'inactive', 'expired',
-     * 'exhausted', 'already_redeemed', 'invalid_amount'. On 'ok', $granted
-     * receives ['amount', 'currency_id'] for the result view.
+     * 'exhausted', 'already_redeemed', 'invalid_amount', 'capped'. On 'ok',
+     * $granted receives ['amount', 'currency_id'] for the result view.
+     * 'capped' leaves the code unused so it can be redeemed after spending.
      */
     public function redeem(int $userId, string $code, ?array &$granted = null): string
     {
@@ -703,6 +745,19 @@ class Transact extends AbstractService
                 $db->rollBack();
                 return 'invalid_amount';
             }
+            if ($this->inflationApplies($currencyId)) {
+                $settings = $this->inflationSettings();
+                if ($settings['enabled'] && $settings['cap'] > 0) {
+                    $balance = (float)$db->fetchOne(
+                        'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
+                        [$userId, $currencyId]
+                    );
+                    if ($balance + $amount > $settings['cap']) {
+                        $db->rollBack();
+                        return 'capped';
+                    }
+                }
+            }
             if (!$this->allowsResultingBalance($userId, $currencyId, $amount, (int)$currency['allow_negative'])) {
                 $db->rollBack();
                 return 'invalid_amount';
@@ -732,6 +787,231 @@ class Transact extends AbstractService
             $db->rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Snapshot for the admin Tools page: current rate, last/next run, and
+     * what a pass would burn right now.
+     */
+    public function demurragePreview(): array
+    {
+        $settings = $this->inflationSettings();
+        $currencyId = $this->primaryCurrencyId();
+        $db = $this->db();
+        $currency = $db->fetchRow(
+            'SELECT currency_id, title, prefix, suffix, decimals, active FROM xf_oc_currency WHERE currency_id = ?',
+            [$currencyId]
+        );
+        $state = $db->fetchRow(
+            'SELECT last_run, cursor_user_id, pass_started FROM xf_oc_inflation WHERE currency_id = ?',
+            [$currencyId]
+        );
+        $lastRun = $state ? (int)$state['last_run'] : 0;
+        $result = [
+            'enabled' => $settings['enabled'],
+            'rate' => $settings['rate'],
+            'days' => $settings['days'],
+            'currency' => $currency ?: null,
+            'lastRun' => $lastRun,
+            'nextRun' => $lastRun > 0 ? $lastRun + $settings['days'] * 86400 : 0,
+            'accounts' => 0,
+            'total' => 0.0,
+        ];
+        if (!$settings['enabled'] || $settings['rate'] <= 0 || !$currency || !(int)$currency['active']) {
+            return $result;
+        }
+        $decimals = (int)$currency['decimals'];
+        $row = $db->fetchRow(
+            'SELECT SUM(CASE WHEN ROUND(balance * ? / 100, ?) > 0 THEN 1 ELSE 0 END) AS accounts,'
+            . ' COALESCE(SUM(LEAST(balance, ROUND(balance * ? / 100, ?))), 0) AS total'
+            . ' FROM xf_oc_balance WHERE currency_id = ? AND balance > 0',
+            [$settings['rate'], $decimals, $settings['rate'], $decimals, $currencyId]
+        );
+        $result['accounts'] = (int)($row['accounts'] ?? 0);
+        $result['total'] = (float)($row['total'] ?? 0);
+        return $result;
+    }
+
+    /**
+     * One resumable demurrage batch. The cursor lives in xf_oc_inflation and
+     * is advanced in the same transaction as each burn; a concurrent runner
+     * that loses the cursor race rolls back instead of double-burning.
+     */
+    public function demurrageStep(int $batchSize = 500, bool $ignoreInterval = false): array
+    {
+        $batchSize = max(1, min(5000, $batchSize));
+        $settings = $this->inflationSettings();
+        $currencyId = $this->primaryCurrencyId();
+        $result = [
+            'ran' => false, 'done' => true, 'processed' => 0,
+            'burned' => 0.0, 'accounts' => 0, 'lastRun' => 0, 'nextRun' => 0,
+        ];
+        if (!$settings['enabled'] || $settings['rate'] <= 0) {
+            return $result;
+        }
+        $db = $this->db();
+        $currency = $db->fetchRow(
+            'SELECT decimals, active FROM xf_oc_currency WHERE currency_id = ?',
+            [$currencyId]
+        );
+        if (!$currency || !(int)$currency['active']) {
+            return $result;
+        }
+        $decimals = (int)$currency['decimals'];
+        $now = \XF::$time;
+        $state = $db->fetchRow(
+            'SELECT last_run, cursor_user_id, pass_started FROM xf_oc_inflation WHERE currency_id = ?',
+            [$currencyId]
+        );
+        if (!$state) {
+            $db->insert('xf_oc_inflation', [
+                'currency_id' => $currencyId,
+                'last_run' => 0,
+                'cursor_user_id' => 0,
+                'pass_started' => 0,
+            ]);
+            $state = ['last_run' => 0, 'cursor_user_id' => 0, 'pass_started' => 0];
+        }
+        $lastRun = (int)$state['last_run'];
+        $cursor = (int)$state['cursor_user_id'];
+        $resuming = $cursor > 0;
+        $interval = $settings['days'] * 86400;
+        if (!$resuming && !$ignoreInterval && $lastRun > 0 && ($now - $lastRun) < $interval) {
+            return array_merge($result, ['lastRun' => $lastRun, 'nextRun' => $lastRun + $interval]);
+        }
+        if (!$resuming) {
+            $db->update('xf_oc_inflation', [
+                'cursor_user_id' => 0,
+                'pass_started' => $now,
+            ], 'currency_id = ?', [$currencyId]);
+        }
+        $rows = $db->fetchAll(
+            'SELECT user_id FROM xf_oc_balance WHERE currency_id = ? AND user_id > ? AND balance > 0'
+            . ' ORDER BY user_id LIMIT ' . (int)$batchSize,
+            [$currencyId, $cursor]
+        );
+        if (!$rows) {
+            $db->update('xf_oc_inflation', [
+                'last_run' => $now,
+                'cursor_user_id' => 0,
+                'pass_started' => 0,
+            ], 'currency_id = ?', [$currencyId]);
+            return array_merge($result, ['ran' => true, 'done' => true, 'lastRun' => $now]);
+        }
+        $processed = 0;
+        $burned = 0.0;
+        $accounts = 0;
+        $lastUserId = $cursor;
+        foreach ($rows as $balanceRow) {
+            $userId = (int)$balanceRow['user_id'];
+            $burn = 0.0;
+            $db->beginTransaction();
+            try {
+                $userExists = $db->fetchOne('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
+                $advanced = $db->update(
+                    'xf_oc_inflation',
+                    ['cursor_user_id' => $userId],
+                    'currency_id = ? AND cursor_user_id = ?',
+                    [$currencyId, $lastUserId]
+                );
+                if (!$advanced) {
+                    $db->rollBack();
+                    return array_merge($result, [
+                        'ran' => true, 'done' => false, 'processed' => $processed,
+                        'burned' => $burned, 'accounts' => $accounts, 'lastRun' => $lastRun,
+                    ]);
+                }
+                if ($userExists) {
+                    $balance = (float)$db->fetchOne(
+                        'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
+                        [$userId, $currencyId]
+                    );
+                    $burn = self::calculateDemurrage($balance, $settings['rate'], $decimals);
+                    if ($burn > 0) {
+                        $this->applyBalanceDelta($userId, $currencyId, -$burn);
+                        $db->insert('xf_oc_transaction', [
+                            'user_id' => $userId,
+                            'currency_id' => $currencyId,
+                            'amount' => -$burn,
+                            'trigger' => 'demurrage',
+                            'content_type' => '',
+                            'content_id' => 0,
+                            'note' => 'Demurrage',
+                            'log_date' => $now,
+                        ]);
+                    }
+                }
+                $db->commit();
+            } catch (\Throwable $e) {
+                $db->rollBack();
+                throw $e;
+            }
+            $lastUserId = $userId;
+            $processed++;
+            if ($burn > 0) {
+                $burned += $burn;
+                $accounts++;
+                self::clearBalanceCache($userId);
+                $this->fireAdjustEvent([$userId, $currencyId, -$burn, 'demurrage', 0]);
+            }
+        }
+        $done = count($rows) < $batchSize;
+        if ($done) {
+            $db->update('xf_oc_inflation', [
+                'last_run' => $now,
+                'cursor_user_id' => 0,
+                'pass_started' => 0,
+            ], 'currency_id = ?', [$currencyId]);
+        }
+        return array_merge($result, [
+            'ran' => true,
+            'done' => $done,
+            'processed' => $processed,
+            'burned' => $burned,
+            'accounts' => $accounts,
+            'lastRun' => $done ? $now : $lastRun,
+        ]);
+    }
+
+    /**
+     * Run demurrage batches until the pass completes or the optional time
+     * budget is hit. The cron uses a budget; the admin/CLI run full.
+     */
+    public function runDemurrage(int $batchSize = 500, bool $ignoreInterval = false, ?int $timeBudget = null): array
+    {
+        $start = microtime(true);
+        $processed = 0;
+        $burned = 0.0;
+        $accounts = 0;
+        $done = false;
+        $ran = false;
+        do {
+            $step = $this->demurrageStep($batchSize, $ignoreInterval);
+            if (!$step['ran']) {
+                return [
+                    'ran' => $ran,
+                    'done' => $step['done'],
+                    'processed' => $processed,
+                    'burned' => $burned,
+                    'accounts' => $accounts,
+                ];
+            }
+            $ran = true;
+            $processed += $step['processed'];
+            $burned += $step['burned'];
+            $accounts += $step['accounts'];
+            $done = $step['done'];
+            if ($timeBudget !== null && (microtime(true) - $start) >= $timeBudget) {
+                break;
+            }
+        } while (!$done);
+        return [
+            'ran' => $ran,
+            'done' => $done,
+            'processed' => $processed,
+            'burned' => $burned,
+            'accounts' => $accounts,
+        ];
     }
 
     /**
@@ -782,6 +1062,67 @@ class Transact extends AbstractService
             return $shifted - ($shifted % 86400) - $offsetHours * 3600;
         }
         return $now - ($now % 86400);
+    }
+
+    /**
+     * Inflation settings, primary currency only. Amounts are in currency
+     * units; 0 disables the individual lever.
+     */
+    protected function inflationSettings(): array
+    {
+        $options = $this->app->options();
+        $rate = (float)($options->ocInflationDemurrageRate ?? 0);
+        return [
+            'enabled' => (bool)($options->ocInflationEnabled ?? false),
+            'cap' => max(0.0, (float)($options->ocInflationBalanceCap ?? 0)),
+            'faucet' => max(0.0, (float)($options->ocInflationFaucetDaily ?? 0)),
+            'rate' => max(0.0, min(100.0, $rate)),
+            'days' => max(1, (int)($options->ocInflationDemurrageDays ?? 7)),
+        ];
+    }
+
+    protected function inflationApplies(int $currencyId): bool
+    {
+        return $currencyId > 0 && $currencyId === $this->primaryCurrencyId();
+    }
+
+    /**
+     * Actual member credit after the balance cap and daily faucet.
+     * $cap = 0 disables the cap; $faucetRemaining = PHP_FLOAT_MAX disables
+     * the faucet. Pure so it can be unit-tested without booting XenForo.
+     */
+    public static function calculateCredit(
+        float $requested,
+        float $balance,
+        float $cap,
+        float $faucetRemaining,
+        int $decimals
+    ): float {
+        if ($requested <= 0) {
+            return 0.0;
+        }
+        $amount = $requested;
+        if ($cap > 0) {
+            $amount = min($amount, $cap - $balance);
+        }
+        if ($faucetRemaining >= 0) {
+            $amount = min($amount, $faucetRemaining);
+        }
+        $amount = round($amount, max(0, $decimals));
+        return $amount > 0 ? $amount : 0.0;
+    }
+
+    /**
+     * Demurrage burn for a balance: rate percent, currency-rounded, floored
+     * at zero. Pure for unit tests.
+     */
+    public static function calculateDemurrage(float $balance, float $rate, int $decimals): float
+    {
+        if ($balance <= 0 || $rate <= 0) {
+            return 0.0;
+        }
+        $burn = round($balance * min(100.0, $rate) / 100, max(0, $decimals));
+        return max(0.0, min($burn, $balance));
     }
 
     protected function passesDailyLimit(int $userId, string $trigger, int $maxPerDay, int $currencyId): bool

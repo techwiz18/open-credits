@@ -1,0 +1,1 @@
+Demurrage applied to {accounts} account(s): {amount} {currency} burned.

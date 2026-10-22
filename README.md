@@ -41,6 +41,9 @@ let members transfer credits and redeem codes, gate trophies on wealth.
 * **Display control** — per-location toggles in Setup → Options → OpenCredits
   (postbit, account menu, profile stat, profile tab, wallet redeem, transfer;
   profile tab mode: auto/wallet/member).
+* **Inflation control** — optional primary-currency money-supply tools: a
+  balance cap, a daily faucet cap, and demurrage/decay, with a resumable cron
+  and a preview/run-now tool under AdminCP → Credits → Tools.
 * **Leaderboard widget** — place a "Top credit holders" widget with a
   configurable count and currency (primary by default), optionally visible to
   guests.

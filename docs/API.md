@@ -35,7 +35,8 @@ The currency flagged primary in AdminCP (falls back to id 1).
 $ok = $credits->adjust(
     int $userId, int $currencyId, float $amount,
     string $trigger, int $contentId = 0,
-    string $note = '', string $contentType = ''
+    string $note = '', string $contentType = '',
+    bool $respectInflation = false, &$credited = null
 ): bool
 ```
 
@@ -46,6 +47,14 @@ checks funds and never overdraw-blocks — it is privileged code. Always check
 currency's decimals (dust rounds to zero and is refused). Returns false for
 empty input (`$userId <= 0` or `$amount == 0.0`), unknown users/currencies,
 inactive currencies, and overdrafts when the currency disallows negatives.
+
+Pass `$respectInflation = true` for member-facing minting (earnings or
+redemptions): when inflation control is enabled, the credit is clamped to the
+primary currency's balance cap and daily faucet. `$credited` receives the
+amount **actually** credited after clamping (earn alerts use it). Admin and
+integrator calls leave it false and remain trusted; transfers and charges are
+supply-neutral and are never clamped. The cap is an economy control, not a
+security boundary.
 
 ```php
 $ok = $credits->transfer(int $fromUserId, int $toUserId, float $amount, int $currencyId = 1): bool
@@ -144,8 +153,8 @@ code: `not_found`, `inactive`, `expired`, `exhausted`, `already_redeemed`
 
 Listen to the `oc_credits_adjust` code event (AdminCP → Development → Code
 event listeners → Add; it is registered by OpenCredits so it appears in the
-event picker). It fires after every committed change — awards, charges, and
-each leg of a transfer — with:
+event picker). It fires after every committed change — awards, charges, each
+leg of a transfer, and demurrage burns — with:
 
 | Arg | Meaning |
 |---|---|

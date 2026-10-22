@@ -1,0 +1,1 @@
+A pass now would affect {accounts} account(s) and burn {amount} {currency}.
