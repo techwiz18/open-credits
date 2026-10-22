@@ -161,14 +161,39 @@ Full reference (method signatures, trust rules, criteria, worked examples):
 
 ## Roadmap
 
-Tracked as [issues and milestones](../../milestones): v0.10 shipped alerts
-on earn, redeem codes, and admin adjust/take tools, and v0.10.1 followed with
-hardening (reaction-dedup, guarded backfills, event scoping, full i18n, test
-harness). v0.11 added the consolidated profile wallet, a configurable daily
-boundary, snapshot-based history pruning, and the top-holders leaderboard
-widget; v0.12 adds the `[charge]` BBCode for premium/credits-gated content. The
-remaining epics (interest/tax/paychecks, payments/shop, inflation controls)
-sit in Future. File or vote on issues to shape what lands next.
+The target is a complete, admin-tunable credits economy: members earn, spend,
+and move credits; admins can steer the economy; other add-ons can integrate
+through the transaction service.
+
+**Near term: hardening** — no new surface area:
+
+* Remove the per-post balance lookup on the postbit.
+* Rate-limit credit write endpoints.
+* Move large balance rebuilds and history pruning to resumable background jobs.
+* Reject currency-precision changes that would silently round existing
+  balances.
+
+**Planned: the economy epics** ([Future milestone](../../milestone/2)):
+
+1. [Interest, taxation, and paycheck schedules](../../issues/6) — scheduled flows
+   that keep credits circulating without manual admin work.
+2. [Payment profiles and shop integration](../../issues/7) — buy credits and
+   spend them on add-on purchases.
+3. [Inflation control](../../issues/8) — admin-tunable levers to keep the
+   economy from drifting.
+
+**1.0 cycle** — the compatibility and i18n pass:
+
+* Adopt XenForo's encoded version IDs with a tested upgrade path.
+* Finish phrase coverage and adopt phrase-boundary markers for clean
+  translations.
+
+**Out of scope** — content protection. `[charge]` is a display gate: the post
+body remains in the raw message, snippets, quotes, and API. Use a real
+access-control add-on if the content must stay private.
+
+For what has already shipped, see [Releases](../../releases). Priorities are set
+in the [issues and milestones](../../milestones); comment or vote to shape them.
 
 ## Built with AI
 
