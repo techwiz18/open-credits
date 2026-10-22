@@ -1,0 +1,1 @@
+Shows a locked box in place of the content until the reader pays credits; the author is credited.

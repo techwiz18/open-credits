@@ -28,10 +28,35 @@ rm -rf src/.qatmp && cp -r qa src/.qatmp
 docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
 ```
 
-Covered today: `PruneHistoryTest` — prune + rebuild keeps balances exact;
-redeem, backfill, and reaction dedupe rows survive; net-zero rows are still
-pruned; and the current earning day is never touched. It writes only under a
-synthetic user id above every real one and cleans up in `tearDown()`.
+Covered today:
+- `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,
+  and reaction dedupe rows survive; net-zero rows are still pruned; and the
+  current earning day is never touched. It writes only under a synthetic user
+  id above every real one.
+- `ChargeTest` — the `[charge]` service (#5): funds move reader → author, a
+  repeat charge (including a changed price) is a no-op, overdrafts are refused,
+  and self-charges are free. It uses two real members (the service locks user
+  rows) plus a synthetic content id.
+- `ChargeAmountsTest` — the unlock endpoint's parser-based price extractor:
+  malformed tags, casing, `[code]`/`[code=rich]`, `[plain]` contents, and
+  `maxAmount` picking the highest valid block.
+- `ChargeRenderTest` — the renderer gates and fail-closed states: guest,
+  non-paid/paid member, author stats, admin bypass, inactive currency,
+  invalid price, and two-price posts using the highest price; blocked
+  (banned/email-confirm) payers cannot unlock via the controller.
+- `ChargeUnlockTest` — a crafted cheap `amount` still charges the post's
+  highest valid `[charge]` block.
+- `BackfillTest` — the historical backfill preview/run query applies the
+  event's forum/group scope and skips first posts; the action writes an
+  `event_id` marker, is idempotent, refuses a per-member run after a
+  site-wide run, and the history row is labelled/unlinked.
+- `ChargeCleanupTest` — hard-deleting a post drops its unlock rows; member
+  deletion covers both payer and author charge rows.
+- `MemberCreditsTest` — the wallet page (pagination 10 by default with per-page links, currency switcher,
+  retired transfer/redeem redirects) and the per-member profile Credits tab
+  (balances; send form for other members; no history for self; single-currency self tab uses the wallet).
+
+All clean up in `tearDown()`.
 
 Why not hampel/xenforo-test-framework? For XF 2.3 on PHP 8.2 it requires
 framework v3.x, which pins PHPUnit 10 (the harness here is on 11) and is a

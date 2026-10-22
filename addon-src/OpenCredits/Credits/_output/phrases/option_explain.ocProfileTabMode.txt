@@ -1,0 +1,1 @@
+How the Credits tab on member profiles behaves. Auto loads the wallet when the forum has one visible active currency; Wallet always loads your wallet on your own profile; Member always shows the per-member balance card.

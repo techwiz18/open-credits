@@ -20,6 +20,7 @@ class Transaction extends Entity
             'trigger' => ['type' => self::STR, 'maxLength' => 50, 'default' => ''],
             'content_type' => ['type' => self::STR, 'maxLength' => 25, 'default' => ''],
             'content_id' => ['type' => self::UINT, 'default' => 0],
+            'event_id' => ['type' => self::UINT, 'default' => 0],
             'note' => ['type' => self::STR, 'maxLength' => 255, 'default' => ''],
             'log_date' => ['type' => self::UINT, 'default' => 0],
         ];

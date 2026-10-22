@@ -56,11 +56,43 @@ Double-entry member transfer (`-X` sender / `+X` receiver). Unlike `adjust()`,
 is short. Same user or non-positive amounts also return false.
 
 ```php
-$rows = $credits->rebuildAllBalances(): int
+$status = $credits->chargeForContent(
+    int $fromUserId, int $toUserId, int $currencyId,
+    float $amount, string $contentType, int $contentId
+): string
 ```
 
-Recomputes every cached balance from the ledger (also available as
-`oc-credits:rebuild` and AdminCP → Credits → Rebuild balances).
+Double-entry premium-content charge: debits the reader and credits the author,
+recording one purchase per `(content, reader, currency)`. Like `transfer()`, it
+**never overdraws**. Returns `ok`, `already_paid`, `self` (reader is the author),
+`no_funds`, `invalid`, or `invalid_author` (the reader or author is not a valid,
+non-banned user). Repeated calls for the same content (any price) return
+`already_paid` without moving money. The `[charge]` BBCode uses this; other
+add-ons can call it for their own premium content.
+
+```php
+$paid = $credits->hasPaidForContent(int $userId, string $contentType, int $contentId, int $currencyId = 0): bool
+```
+
+Whether the member has already unlocked this content item (regardless of the
+price they paid). Pass `0` for the currency to ignore it.
+
+```php
+$count = $credits->unlockCountFor(string $contentType, int $contentId, int $currencyId, float $amount): int
+```
+
+Number of members who have unlocked the content at that price. Used by the
+`[charge]` BBCode's author-only stats line.
+
+```php
+$result = $credits->rebuildAllBalances(int $startAfterUserId = 0, int $batchSize = 0): array
+$rows = $credits->rebuildAllBalancesFully(int $batchSize = 5000): int
+```
+
+`rebuildAllBalances()` processes one user-id batch and returns
+`['rows' => int, 'next' => int|null]` (loop while `next !== null`);
+`rebuildAllBalancesFully()` runs the whole rebuild and returns the row count.
+Also available as `oc-credits:rebuild` and AdminCP → Credits → Rebuild balances.
 
 ## Worked example: spend-to-play entry fee
 
@@ -77,6 +109,26 @@ $credits->adjust($userId, $currencyId, -$price, 'my_addon_entry', $contentId, 'T
 
 Charge with your own trigger key (namespaced, e.g. `my_addon_entry`) so the
 member's history stays readable.
+
+## Premium content (`[charge]`)
+
+Forum posts can show a locked box in place of content until the reader pays:
+
+```
+[charge=10]This text is shown after the reader pays 10 credits.[/charge]
+```
+
+The amount is in the primary currency. Authors, staff/admins/moderators, and
+members with the **Bypass charge BBCode** permission see it for free. One
+purchase unlocks every `[charge]` block in the post; the post's price is the
+**highest** valid block, the reader is charged and the author credited (both
+ledger rows use the `charge` trigger). The BBCode renders a form that posts to
+`/credits/unlock`; the endpoint refuses banned and non-valid accounts (email
+confirmation, rejected, disabled).
+
+This is a **credits-gated display, not content protection**: the text remains
+in the post message, so it can still appear in raw post output, snippets,
+quotes, and the API. Treat it as a premium teaser, not DRM.
 
 ```php
 $status = $credits->redeem(int $userId, string $code, ?array &$granted = null): string

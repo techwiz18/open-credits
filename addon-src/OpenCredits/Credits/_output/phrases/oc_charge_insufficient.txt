@@ -1,0 +1,1 @@
+You have {balance}. This content costs {price}.

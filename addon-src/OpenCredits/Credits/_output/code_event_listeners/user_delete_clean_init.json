@@ -1,0 +1,1 @@
+{"active": true, "callback_class": "OpenCredits\\Credits\\Listener", "callback_method": "userDeleteCleanInit", "description": "Deletes charge rows for a deleted member", "event_id": "user_delete_clean_init", "execute_order": 10, "hint": ""}

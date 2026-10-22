@@ -20,6 +20,9 @@
 			</div>
 			<div class="block-footer">
 				<span class="block-footer-counter">{{ phrase('ocadm_x_codes', {'count': $total|number}) }}</span>
+				<xf:if is="$total > $perPage">
+					<xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="oc-codes" />
+				</xf:if>
 			</div>
 		</div>
 	</div>

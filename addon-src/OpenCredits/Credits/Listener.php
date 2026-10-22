@@ -51,7 +51,8 @@ class Listener
         if ((!$isNewVisible && !$becameVisible)) {
             return;
         }
-        self::applyTrigger('thread', (int)$entity->user_id, (int)$entity->thread_id, 'thread', (int)$entity->get('node_id'));
+        self::applyTrigger('thread', (int)$entity->user_id, (int)$entity->thread_id, 'thread', (int)$entity->get('node_id'),
+            'thread:' . (int)$entity->thread_id);
     }
 
     public static function postEntityPostSave(Entity $entity)
@@ -76,7 +77,8 @@ class Listener
                 \XF::logException($e, false, 'OpenCredits post forum lookup failed: ');
             }
         }
-        self::applyTrigger('post', (int)$entity->user_id, (int)$entity->post_id, 'post', $nodeId);
+        self::applyTrigger('post', (int)$entity->user_id, (int)$entity->post_id, 'post', $nodeId,
+            'post:' . (int)$entity->post_id);
     }
 
     public static function userEntityPostSave(Entity $entity)
@@ -173,6 +175,42 @@ class Listener
         } elseif ($rule === 'oc_credits_fewer') {
             $return = ((float)$user->get('oc_credits') < (float)($data['credits'] ?? 0));
         }
+    }
+
+    /**
+     * Hard-deleted post: drop its unlock rows so they do not point at missing
+     * content. Ledger rows stay as financial history.
+     */
+    public static function postEntityPostDelete(Entity $entity): void
+    {
+        if (!$entity instanceof \XF\Entity\Post) {
+            return;
+        }
+        try {
+            \XF::db()->delete(
+                'xf_oc_charge',
+                "content_type = 'post' AND content_id = ?",
+                [(int)$entity->post_id]
+            );
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits charge cleanup failed: ');
+        }
+    }
+
+    /**
+     * Member deletion: remove unlock rows where they were the payer or the
+     * content author. Ledger rows stay as financial history.
+     *
+     * @param mixed $service
+     */
+    public static function userDeleteCleanInit($service, array &$deletes): void
+    {
+        $deletes['xf_oc_charge'] = [
+            'user_id = ?',
+            'author_user_id = ?',
+        ];
+        $deletes['xf_oc_balance'] = 'user_id = ?';
+        $deletes['xf_oc_snapshot'] = 'user_id = ?';
     }
 
     protected static function applyTrigger(

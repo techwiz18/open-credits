@@ -1,73 +1,131 @@
-<xf:title>{{ phrase('oc_credits_history') }}</xf:title>
+<xf:title>{{ phrase('oc_credits') }}</xf:title>
 
+<xf:if is="$showBalance">
 <div class="block">
-    <div class="block-container">
-        <div class="block-body">
-            <div class="block-row block-row--separated">
-                <div class="pairs pairs--columns pairs--fluid">
-                    <dl class="pairs pairs--justified">
-                        <dt>{$currency.title}</dt>
-                        <dd>{$currency.prefix}{$balance|number($currency.decimals)}{$currency.suffix}</dd>
-                    </dl>
-                </div>
-                <xf:if is="$xf.visitor.hasPermission('general', 'ocTransfer')">
-                <a href="{{ link('credits/transfer', '', {'currency_id': $currency.currency_id}) }}" class="button">{{ phrase('oc_transfer_to') }}</a>
-                </xf:if>
-                <a href="{{ link('credits/redeem') }}" class="button">{{ phrase('oc_redeem_a_code') }}</a>
-            </div>
-            <xf:if is="$currencies|count > 1">
-                <div class="block-row block-row--separated">
-                    <dl class="pairs pairs--justified">
-                        <dt>{{ phrase('oc_viewing_history_for') }}</dt>
-                        <dd>
-                            <strong>{$currency.title}</strong>
-                            <span class="u-muted">— {{ phrase('oc_switch_currency') }}:</span>
-                            <xf:foreach loop="$currencies" value="$c">
-                                <xf:if is="$c.currency_id != $currency.currency_id">
-                                    <a href="{{ link('credits', '', {'currency_id': $c.currency_id}) }}" class="button button--small">{$c.title}</a>
-                                </xf:if>
-                            </xf:foreach>
-                        </dd>
-                    </dl>
-                </div>
-            </xf:if>
-        </div>
-    </div>
+	<div class="block-container">
+		<div class="block-body">
+			<div class="block-row block-row--separated">
+				<dl class="pairs pairs--justified">
+					<dt>{$currency.title}</dt>
+					<dd><strong>{$currency.prefix}{$balance|number($currency.decimals)}{$currency.suffix}</strong></dd>
+				</dl>
+				<xf:if is="$currencies|count > 1">
+					<div class="contentRow-minor">
+						{{ phrase('oc_switch_currency') }}:
+						<xf:foreach loop="$currencies" value="$c">
+							<xf:if is="$c.currency_id != $currency.currency_id">
+								<xf:if is="$inProfileTab">
+								<a href="{{ link('credits/member', '', {'user_id': $returnUserId, 'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
+							<xf:else />
+								<a href="{{ link('credits', '', {'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
+							</xf:if>
+							</xf:if>
+						</xf:foreach>
+					</div>
+				</xf:if>
+			</div>
+		</div>
+	</div>
 </div>
+</xf:if>
+
+<xf:if is="$showRedeem">
+<div class="block">
+	<div class="block-container">
+		<h3 class="block-header">{{ phrase('oc_redeem_a_code') }}</h3>
+		<xf:form action="{{ link('credits/redeem-save') }}" ajax="true">
+			<xf:if is="$inProfileTab">
+				<input type="hidden" name="oc_in_tab" value="1" />
+				<input type="hidden" name="oc_return_user_id" value="{$returnUserId}" />
+			</xf:if>
+			<div class="block-body">
+				<div class="block-row">
+					<div class="inputGroup">
+						<input type="text" name="code" class="input" placeholder="XXXX-XXXX-XXXX"
+							required="required" maxlength="32" aria-label="{{ phrase('oc_code') }}" />
+						<span class="inputGroup-splitter"></span>
+						<button type="submit" class="button button--primary">{{ phrase('oc_redeem') }}</button>
+					</div>
+				</div>
+			</div>
+		</xf:form>
+	</div>
+</div>
+</xf:if>
+
+<xf:if is="$showTransfer and $canSend">
+	<div class="block">
+		<div class="block-container">
+			<h3 class="block-header">
+				{{ phrase('oc_transfer') }}
+				<span class="u-pullRight">{$currency.prefix}{$balance|number($currency.decimals)}{$currency.suffix}</span>
+			</h3>
+			<xf:form action="{{ link('credits/transfer-save') }}" ajax="true">
+				<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
+				<xf:if is="$inProfileTab">
+					<input type="hidden" name="oc_in_tab" value="1" />
+					<input type="hidden" name="oc_return_user_id" value="{$returnUserId}" />
+				</xf:if>
+				<div class="block-body">
+					<div class="block-row">
+						<div class="inputGroup">
+							<input type="text" name="to" class="input" placeholder="{{ phrase('oc_to_user') }}"
+								required="required" data-xf-init="auto-complete" data-ac-url="{{ link('members/find') }}"
+								data-single="true" minlength="2" aria-label="{{ phrase('oc_to_user') }}" />
+							<span class="inputGroup-splitter"></span>
+							<input type="number" name="amount" class="input" step="{$amountStep}" min="{$amountStep}"
+								placeholder="{{ phrase('oc_amount') }}" required="required" aria-label="{{ phrase('oc_amount') }}" />
+							<span class="inputGroup-splitter"></span>
+							<button type="submit" class="button button--primary">{{ phrase('oc_transfer') }}</button>
+						</div>
+					</div>
+				</div>
+			</xf:form>
+		</div>
+	</div>
+</xf:if>
 
 <div class="block">
-    <div class="block-container">
-        <h3 class="block-header">{{ phrase('oc_credits_history') }}</h3>
-        <div class="block-body">
-            <xf:if is="$entries is not empty">
-                <xf:foreach loop="$entries" value="$entry">
-                    <div class="block-row">
-                        <div class="contentRow">
-                            <div class="contentRow-main">
-                                <div class="contentRow-title">{$entry.label}</div>
-                                <div class="contentRow-minor">
-                                    <xf:if is="$entry.detailUser">
-                                        <xf:username user="$entry.detailUser" />
-                                    <xf:elseif is="$entry.detailThread" />
-                                        {$entry.detail} <a href="{{ link('threads', $entry.detailThread) }}">{$entry.detailThread.title}</a>
-                                    </xf:if>
-                                    {{ date($entry.logDate) }}
-                                </div>
-                            </div>
-                            <div class="contentRow-extra">
-                                <xf:if is="$entry.amount > 0">+</xf:if>{$entry.amount|number($currency.decimals)}
-                            </div>
-                        </div>
-                    </div>
-                </xf:foreach>
-            <xf:else />
-                <div class="block-row">{{ phrase('no_results_found') }}</div>
-            </xf:if>
-        </div>
-        <xf:if is="$total > $perPage">
-            <div class="block-footer">
-                <xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="credits" params="{{ {'currency_id': $currency.currency_id} }}" />
-            </div>
-        </xf:if>
-    </div>
+	<div class="block-container">
+		<h3 class="block-header">{{ phrase('oc_credits_history') }}</h3>
+		<div class="block-body">
+			<xf:if is="$entries is not empty">
+				<xf:foreach loop="$entries" value="$entry">
+					<div class="block-row">
+						<div class="contentRow">
+							<div class="contentRow-main">
+								<div class="contentRow-title">{$entry.label}</div>
+								<div class="contentRow-minor">
+									<xf:if is="$entry.detailUser">
+										<xf:username user="$entry.detailUser" />
+									<xf:elseif is="$entry.detailThread" />
+										{$entry.detail} <a href="{{ link('threads', $entry.detailThread) }}">{$entry.detailThread.title}</a>
+									</xf:if>
+									{{ date($entry.logDate) }}
+								</div>
+							</div>
+							<div class="contentRow-extra">
+								<xf:if is="$entry.amount > 0">+</xf:if>{$entry.amount|number($currency.decimals)}
+							</div>
+						</div>
+					</div>
+				</xf:foreach>
+			<xf:else />
+				<div class="block-row">{{ phrase('no_results_found') }}</div>
+			</xf:if>
+		</div>
+		<div class="block-footer">
+			<xf:if is="$total > $perPage">
+				<xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="{$pagerLink}" params="{{ $pagerParams }}" />
+			</xf:if>
+			<span class="contentRow-minor">{{ phrase('oc_per_page') }}:</span>
+			<xf:foreach loop="$perPageUrls" key="$option" value="$url">
+				<xf:if is="$option == $perPage">
+					<span class="button button--small button--primary">{$option}</span>
+				<xf:else />
+					<a href="{$url}" class="button button--small oc-credits-per-page">{$option}</a>
+				</xf:if>
+			</xf:foreach>
+		</div>
+	</div>
 </div>

@@ -19,15 +19,25 @@ class Codes extends AbstractController
 
     public function actionIndex(): \XF\Mvc\Reply\AbstractReply
     {
-        $codes = $this->finder('OpenCredits\Credits:Code')
+        $page = $this->filter('page', 'uint');
+        $perPage = 50;
+
+        $finder = $this->finder('OpenCredits\Credits:Code')
             ->with('Currency')
-            ->order('code_id', 'DESC')
-            ->fetch();
+            ->order('code_id', 'DESC');
+
+        $total = $finder->total();
+        $codes = $finder->limitByPage($page, $perPage)->fetch();
 
         return $this->view(
             'OpenCredits\Credits:Code\Listing',
             'oc_code_list',
-            ['codes' => $codes, 'total' => count($codes)]
+            [
+                'codes' => $codes,
+                'total' => $total,
+                'page' => $page,
+                'perPage' => $perPage,
+            ]
         );
     }
 

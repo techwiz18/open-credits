@@ -139,58 +139,72 @@ class Tools extends AbstractController
         }
 
         // Each event (and each site-wide batch) commits separately so huge
-        // forums complete in small transactions instead of one giant one.
-        // A failed event rolls back to its pre-run state (tracked by ledger
-        // id), so retrying it neither double-pays nor under-pays.
+        // forums complete in small transactions instead of one giant one. A
+        // batch's rows and its resume marker commit atomically, so a retry
+        // resumes exactly where the last committed batch stopped.
         $db = $this->app->db();
+        $error = null;
         try {
             foreach ($eligible as $event) {
-                if (!$force && $this->backfillEventRan($event, $onlyUserId)) {
+                if (!$force && $onlyUserId > 0 && $this->backfillEventRan($event, 0)) {
+                    // A completed site-wide run already paid this member.
                     $skipped[] = (int)$event->event_id;
                     continue;
                 }
-                $txnStart = (int)$db->fetchOne('SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction');
-                try {
-                if ($onlyUserId > 0) {
-                    $result = $this->runBackfillEvent($event, $onlyUserId);
-                    $awarded += $result['rows'];
+                $state = $this->findBackfillState($event, $onlyUserId);
+                if (!$force && !empty($state['completed_date'])) {
+                    $skipped[] = (int)$event->event_id;
                     continue;
                 }
-                    // Site-wide runs page through user-id ranges so huge forums
-                    // complete in small transactions instead of one giant one.
-                    $next = 0;
-                    do {
-                        $result = $this->runBackfillEvent($event, 0, $next, 5000);
-                        $awarded += $result['rows'];
-                        $next = $result['next'];
-                    } while ($next !== null);
-                } catch (\Throwable $e) {
-                    $db->query(
-                        'DELETE FROM xf_oc_transaction WHERE transaction_id > ?'
-                        . ' AND `trigger` = ? AND note = ?',
-                        [$txnStart, $event->trigger, 'Historical backfill']
-                    );
-                    throw $e;
+
+                if ($force || !$state) {
+                    $state = $this->resetBackfillState($event, $onlyUserId);
                 }
+
+                $backfillId = (int)$state['backfill_id'];
+                if ($onlyUserId > 0) {
+                    $result = $this->runBackfillEvent($event, $onlyUserId, 0, 0, $backfillId);
+                    $awarded += $result['rows'];
+                } else {
+                    // Resume from the last completed batch boundary.
+                    $next = (int)($state['last_user_id'] ?? 0);
+                    do {
+                        $result = $this->runBackfillEvent($event, 0, $next, 5000, $backfillId);
+                        $awarded += $result['rows'];
+                        if ($result['next'] === null) {
+                            break;
+                        }
+                        $next = $result['next'];
+                    } while (true);
+                }
+
+                $db->update(
+                    'xf_oc_backfill',
+                    ['completed_date' => \XF::$time, 'last_user_id' => 0],
+                    'backfill_id = ?',
+                    [(int)$state['backfill_id']]
+                );
             }
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits backfill failed: ');
-            return $this->error(
-                'Backfill failed part-way. Finished events are kept and the '
-                . 'failed event was rolled back — fix the cause and re-run.'
-            );
+            $error = 'Backfill paused part-way. Completed batches are kept — re-run to resume.';
         }
 
+        // Always rebuild whatever committed so cached balances match the ledger.
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
         try {
             $svc->rebuildAllBalancesFully();
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits backfill rebuild failed: ');
-            return $this->error(
-                'Backfill rows were written, but the balance rebuild failed. '
-                . 'Run AdminCP → Credits → Tools → Rebuild balances to finish.'
-            );
+            if ($error === null) {
+                $error = 'Backfill rows were written, but the balance rebuild failed. '
+                    . 'Run AdminCP → Credits → Tools → Rebuild balances to finish.';
+            }
+        }
+
+        if ($error !== null) {
+            return $this->error($error);
         }
 
         return $this->view(
@@ -344,6 +358,14 @@ class Tools extends AbstractController
             return $this->error('Pruning failed due to a server error. Completed batches are kept — fix the cause and re-run.');
         }
 
+        // Remove unlock rows for content that no longer exists (e.g. a thread
+        // hard-deleted in bulk). Ledger rows stay as financial history.
+        $this->app->db()->query(
+            "DELETE c FROM xf_oc_charge AS c
+             LEFT JOIN xf_post AS p ON (c.content_type = 'post' AND p.post_id = c.content_id)
+             WHERE c.content_type = 'post' AND p.post_id IS NULL"
+        );
+
         return $this->view(
             'OpenCredits\Credits:Tools\Prune',
             'oc_tools_prune',
@@ -369,9 +391,9 @@ class Tools extends AbstractController
         $rows = $db->fetchAll(
             'SELECT c.currency_id, c.title, COUNT(*) AS entry_count FROM xf_oc_transaction AS t'
             . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = t.currency_id'
-            . ' WHERE t.log_date <= ? AND t.`trigger` != ? AND t.note != ?'
+            . ' WHERE t.log_date <= ? AND t.`trigger` != ? AND t.note != ? AND t.note NOT LIKE ?'
             . ' GROUP BY c.currency_id, c.title ORDER BY c.currency_id',
-            [$cutoff, 'redeem', 'Historical backfill']
+            [$cutoff, 'redeem', 'Historical backfill', 'reaction:%']
         );
         $preview = [];
         foreach ($rows as $row) {
@@ -385,18 +407,42 @@ class Tools extends AbstractController
 
     protected function backfillEventRan($event, int $onlyUserId = 0): bool
     {
-        $sql = 'SELECT transaction_id FROM xf_oc_transaction WHERE note = ? AND `trigger` = ? AND currency_id = ?';
-        $params = ['Historical backfill', $event->trigger, $event->currency_id];
-        if ($onlyUserId > 0) {
-            // Per-member runs are tracked per member, so one member's backfill
-            // never blocks the site-wide run (or vice versa).
-            $sql .= ' AND (user_id = ? OR content_id = ?)';
-            $params[] = $onlyUserId;
-            $params[] = $onlyUserId;
+        return (bool)$this->app->db()->fetchOne(
+            'SELECT backfill_id FROM xf_oc_backfill WHERE event_id = ? AND user_id = ?'
+            . ' AND completed_date > 0 LIMIT 1',
+            [(int)$event->event_id, $onlyUserId]
+        );
+    }
+
+    protected function findBackfillState($event, int $scopeUserId): array
+    {
+        $row = $this->app->db()->fetchRow(
+            'SELECT * FROM xf_oc_backfill WHERE event_id = ? AND user_id = ?',
+            [(int)$event->event_id, $scopeUserId]
+        );
+        return $row ?: [];
+    }
+
+    protected function resetBackfillState($event, int $scopeUserId): array
+    {
+        $db = $this->app->db();
+        $state = $this->findBackfillState($event, $scopeUserId);
+        if (!empty($state['backfill_id'])) {
+            $db->update('xf_oc_backfill', [
+                'last_user_id' => 0,
+                'started_date' => \XF::$time,
+                'completed_date' => 0,
+            ], 'backfill_id = ?', [(int)$state['backfill_id']]);
         } else {
-            $sql .= ' AND content_id = 0';
+            $db->insert('xf_oc_backfill', [
+                'event_id' => (int)$event->event_id,
+                'user_id' => $scopeUserId,
+                'last_user_id' => 0,
+                'started_date' => \XF::$time,
+                'completed_date' => 0,
+            ]);
         }
-        return (bool)$this->app->db()->fetchOne($sql . ' LIMIT 1', $params);
+        return $this->findBackfillState($event, $scopeUserId);
     }
 
     protected function backfillPreview(): array
@@ -412,21 +458,13 @@ class Tools extends AbstractController
             if (!$previewCurrency || !$previewCurrency->active) {
                 continue;
             }
-            if ($event->trigger === 'post') {
-                $users = (int)$this->app->db()->fetchOne(
-                    "SELECT COUNT(DISTINCT user_id) FROM xf_post WHERE message_state = 'visible' AND user_id > 0"
-                );
-            } else {
-                $users = (int)$this->app->db()->fetchOne(
-                    "SELECT COUNT(DISTINCT user_id) FROM xf_thread WHERE discussion_state = 'visible' AND user_id > 0"
-                );
-            }
-            $currency = $event->Currency;
+            [$sql, $params] = $this->backfillContentQuery($event, 0, 0, 0, true);
+            $users = (int)$this->app->db()->fetchOne($sql, $params);
             $preview[] = [
                 'event_id' => (int)$event->event_id,
                 'label' => \OpenCredits\Credits\Entity\CreditEvent::TRIGGER_LABELS[$event->trigger] ?? $event->trigger,
-                'currency' => $currency ? $currency->title : 'Credits',
-                'decimals' => $currency ? (int)$currency->decimals : 2,
+                'currency' => $previewCurrency->title,
+                'decimals' => (int)$previewCurrency->decimals,
                 'amount' => (float)$event->amount,
                 'users' => $users,
                 'ran' => $this->backfillEventRan($event),
@@ -441,7 +479,7 @@ class Tools extends AbstractController
      * on 'next') so huge forums complete in small transactions. Each call
      * commits atomically and returns ['rows', 'next' (or null when done)].
      */
-    protected function runBackfillEvent($event, int $onlyUserId = 0, int $startAfterUserId = 0, int $batchSize = 0): array
+    protected function runBackfillEvent($event, int $onlyUserId = 0, int $startAfterUserId = 0, int $batchSize = 0, int $backfillId = 0): array
     {
         $db = $this->app->db();
         $now = \XF::$time;
@@ -455,52 +493,17 @@ class Tools extends AbstractController
             return ['rows' => 0, 'next' => null];
         }
 
-        if ($event->trigger === 'post') {
-            $contentTable = 'xf_post';
-            $stateColumn = 'message_state';
-            $stateValue = 'visible';
-        } else {
-            $contentTable = 'xf_thread';
-            $stateColumn = 'discussion_state';
-            $stateValue = 'visible';
-        }
         $maxUserId = max(
             (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_user'),
             $onlyUserId
         );
+        $endUserId = $onlyUserId > 0
+            ? $maxUserId
+            : ($batchSize > 0 ? $startAfterUserId + $batchSize : $maxUserId);
 
-        $where = "{$stateColumn} = '{$stateValue}' AND user_id > 0";
-        $params = [];
-        if ($onlyUserId > 0) {
-            $where .= ' AND user_id = ?';
-            $params[] = $onlyUserId;
-            $endUserId = $maxUserId;
-        } elseif ($batchSize > 0) {
-            $endUserId = $startAfterUserId + $batchSize;
-            $where .= ' AND user_id > ? AND user_id <= ?';
-            $params[] = $startAfterUserId;
-            $params[] = $endUserId;
-            // A site-wide run must not re-pay members who already received a
-            // per-member backfill for this event (their rows carry a nonzero
-            // content_id, invisible to the site-wide completion guard).
-            $where .= ' AND user_id NOT IN (SELECT user_id FROM xf_oc_transaction'
-                . " WHERE note = 'Historical backfill' AND `trigger` = ? AND currency_id = ? AND content_id <> 0)";
-            $params[] = $event->trigger;
-            $params[] = (int)$event->currency_id;
-        } else {
-            $endUserId = $maxUserId;
-            // A site-wide run must not re-pay members who already received a
-            // per-member backfill for this event (their rows carry a nonzero
-            // content_id, invisible to the site-wide completion guard).
-            $where .= ' AND user_id NOT IN (SELECT user_id FROM xf_oc_transaction'
-                . " WHERE note = 'Historical backfill' AND `trigger` = ? AND currency_id = ? AND content_id <> 0)";
-            $params[] = $event->trigger;
-            $params[] = (int)$event->currency_id;
-        }
-        $counts = $db->fetchPairs(
-            "SELECT user_id, COUNT(*) FROM {$contentTable} WHERE {$where} GROUP BY user_id",
-            $params
-        );
+        [$sql, $params] = $this->backfillContentQuery($event, $onlyUserId, $startAfterUserId, $endUserId, false);
+        $counts = $db->fetchPairs($sql, $params);
+        $next = ($batchSize > 0 && $onlyUserId <= 0 && $endUserId < $maxUserId) ? $endUserId : null;
 
         $rows = 0;
         $db->beginTransaction();
@@ -513,17 +516,128 @@ class Tools extends AbstractController
                     'trigger' => $event->trigger,
                     'content_type' => $event->trigger,
                     'content_id' => $onlyUserId > 0 ? $onlyUserId : 0,
+                    'event_id' => (int)$event->event_id,
                     'note' => 'Historical backfill',
                     'log_date' => $now,
                 ]);
                 $rows++;
+            }
+            if ($backfillId > 0) {
+                // Commit the resume boundary in the same transaction as the
+                // rows; a crash can never leave paid rows behind a stale
+                // marker (which would double-pay on resume).
+                if ($onlyUserId > 0 || $next === null) {
+                    $db->update('xf_oc_backfill', [
+                        'last_user_id' => 0,
+                        'completed_date' => $now,
+                    ], 'backfill_id = ?', [$backfillId]);
+                } else {
+                    $db->update('xf_oc_backfill', [
+                        'last_user_id' => $next,
+                    ], 'backfill_id = ?', [$backfillId]);
+                }
             }
             $db->commit();
         } catch (\Throwable $e) {
             $db->rollBack();
             throw $e;
         }
-        $next = ($batchSize > 0 && $onlyUserId <= 0 && $endUserId < $maxUserId) ? $endUserId : null;
         return ['rows' => $rows, 'next' => $next];
+    }
+
+    /**
+     * Builds the scoped content query for a backfill. Applies the event's
+     * forum/usergroup restrictions, the first-post rule for post events, the
+     * user-id range, and (for site-wide runs) excludes members who already
+     * received a per-member backfill for the same event.
+     *
+     * @return array{0: string, 1: array}
+     */
+    protected function backfillContentQuery(
+        $event,
+        int $onlyUserId = 0,
+        int $startAfterUserId = 0,
+        int $endUserId = 0,
+        bool $countOnly = false
+    ): array {
+        $isPost = $event->trigger === 'post';
+        if ($isPost) {
+            $from = 'xf_post AS p INNER JOIN xf_thread AS t ON t.thread_id = p.thread_id';
+            $author = 'p';
+            $state = 'p.message_state';
+        } else {
+            $from = 'xf_thread AS t';
+            $author = 't';
+            $state = 't.discussion_state';
+        }
+        $from .= ' INNER JOIN xf_user AS u ON u.user_id = ' . $author . '.user_id';
+
+        $where = "{$state} = 'visible' AND {$author}.user_id > 0";
+        $params = [];
+
+        if ($isPost) {
+            // The thread event already pays the first post.
+            $where .= ' AND p.position > 0';
+        }
+
+        $forumIds = $this->decodeIdList($event->forum_ids);
+        if ($forumIds) {
+            $placeholders = implode(',', array_fill(0, count($forumIds), '?'));
+            $where .= " AND t.node_id IN ({$placeholders})";
+            $params = array_merge($params, $forumIds);
+        }
+
+        $groupIds = $this->decodeIdList($event->usergroup_ids);
+        if ($groupIds) {
+            $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
+            $clauses = ["u.user_group_id IN ({$placeholders})"];
+            $params = array_merge($params, $groupIds);
+            foreach ($groupIds AS $groupId) {
+                $clauses[] = 'FIND_IN_SET(?, u.secondary_group_ids)';
+                $params[] = $groupId;
+            }
+            $where .= ' AND (' . implode(' OR ', $clauses) . ')';
+        }
+
+        if ($onlyUserId > 0) {
+            $where .= " AND {$author}.user_id = ?";
+            $params[] = $onlyUserId;
+        } else {
+            if ($endUserId > 0) {
+                $where .= " AND {$author}.user_id > ? AND {$author}.user_id <= ?";
+                $params[] = $startAfterUserId;
+                $params[] = $endUserId;
+            }
+            // Don't re-pay members who already got a per-member backfill for
+            // this event (those rows carry a nonzero content_id).
+            $where .= " AND {$author}.user_id NOT IN ("
+                . 'SELECT user_id FROM xf_oc_transaction WHERE event_id = ? AND content_id <> 0)';
+            $params[] = (int)$event->event_id;
+        }
+
+        $select = $countOnly
+            ? 'COUNT(DISTINCT ' . $author . '.user_id)'
+            : $author . '.user_id, COUNT(*)';
+        $sql = 'SELECT ' . $select . ' FROM ' . $from . ' WHERE ' . $where;
+        if (!$countOnly) {
+            $sql .= ' GROUP BY ' . $author . '.user_id';
+        }
+
+        return [$sql, $params];
+    }
+
+    protected function decodeIdList($value): array
+    {
+        if (is_array($value)) {
+            $ids = $value;
+        } elseif (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+            $ids = is_array($decoded) ? $decoded : explode(',', $value);
+        } else {
+            return [];
+        }
+        return array_values(array_filter(array_map('intval', $ids), function ($id) {
+            return $id > 0;
+        }));
     }
 }

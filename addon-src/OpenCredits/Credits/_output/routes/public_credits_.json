@@ -1,11 +1,1 @@
-{
-    "route_type": "public",
-    "route_prefix": "credits",
-    "sub_name": "",
-    "format": "",
-    "build_class": "",
-    "build_method": "",
-    "controller": "OpenCredits\\Credits\\Pub\\Controller\\Credits",
-    "context": "",
-    "action_prefix": ""
-}
+{"route_type":"public","route_prefix":"credits","sub_name":"","format":"","build_class":"","build_method":"","controller":"OpenCredits\\Credits\\Pub\\Controller\\Credits","context":"ocCredits","action_prefix":""}

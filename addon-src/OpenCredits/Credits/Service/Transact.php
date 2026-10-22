@@ -149,13 +149,13 @@ class Transact extends AbstractService
 
     /**
      * Whether an event row's forum/usergroup restrictions admit this award.
-     * Empty restrictions always pass; forum scoping passes when there is no
-     * forum context (non-content triggers).
+     * Empty restrictions always pass; a forum restriction requires the content
+     * to live in one of the listed forums.
      */
     protected function eventAppliesTo(array $row, int $nodeId, array $userGroupIds): bool
     {
         $forumIds = $this->decodeIdList($row['forum_ids'] ?? null);
-        if ($forumIds && $nodeId > 0 && !in_array($nodeId, $forumIds, true)) {
+        if ($forumIds && ($nodeId <= 0 || !in_array($nodeId, $forumIds, true))) {
             return false;
         }
         $groupIds = $this->decodeIdList($row['usergroup_ids'] ?? null);
@@ -331,7 +331,7 @@ class Transact extends AbstractService
             ]);
             $db->commit();
             self::clearBalanceCache($userId);
-            $this->app->fire('oc_credits_adjust', [$userId, $currencyId, $amount, $trigger, $contentId]);
+            $this->fireAdjustEvent([$userId, $currencyId, $amount, $trigger, $contentId]);
             return true;
         } catch (\Throwable $e) {
             $db->rollBack();
@@ -358,7 +358,10 @@ class Transact extends AbstractService
             }
             $allowNegative = (int)$currency['allow_negative'];
         }
-        if ($allowNegative) {
+        if ($allowNegative || $delta >= 0) {
+            // Positive deltas are always allowed: if a currency was switched
+            // from allow_negative to the floor-at-zero rule, members with a
+            // legacy negative balance can still earn their way back out.
             return true;
         }
         $balance = (float)$db->fetchOne(
@@ -443,8 +446,8 @@ class Transact extends AbstractService
             $db->commit();
             self::clearBalanceCache($fromUserId);
             self::clearBalanceCache($toUserId);
-            $this->app->fire('oc_credits_adjust', [$fromUserId, $currencyId, -$amount, 'transfer', $toUserId]);
-            $this->app->fire('oc_credits_adjust', [$toUserId, $currencyId, $amount, 'transfer', $fromUserId]);
+            $this->fireAdjustEvent([$fromUserId, $currencyId, -$amount, 'transfer', $toUserId]);
+            $this->fireAdjustEvent([$toUserId, $currencyId, $amount, 'transfer', $fromUserId]);
             $sender = $this->app->em()->find('XF:User', $fromUserId);
             $currency = $this->app->em()->find('OpenCredits\Credits:Currency', $currencyId);
             $this->sendEarnAlert(
@@ -466,6 +469,167 @@ class Transact extends AbstractService
             $db->rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Charges a member to unlock premium content and credits the author.
+     * Idempotent per (content, payer, currency): a member never pays twice
+     * for the same content, even if its price changes. Never overdraws.
+     *
+     * Returns 'ok', 'already_paid', 'self', 'no_funds', 'invalid' or
+     * 'invalid_author' (reader or author is not a valid, non-banned user).
+     */
+    public function chargeForContent(
+        int $fromUserId,
+        int $toUserId,
+        int $currencyId,
+        float $amount,
+        string $contentType,
+        int $contentId
+    ): string {
+        if ($fromUserId <= 0 || $toUserId <= 0 || $contentId <= 0 || $amount <= 0 || $contentType === '') {
+            return 'invalid';
+        }
+        if ($fromUserId === $toUserId) {
+            return 'self';
+        }
+        $type = substr($contentType, 0, 25);
+        $db = $this->db();
+        $db->beginTransaction();
+        try {
+            $first = min($fromUserId, $toUserId);
+            $second = max($fromUserId, $toUserId);
+            $locked = $db->fetchAll(
+                'SELECT user_id, user_state, is_banned FROM xf_user'
+                . ' WHERE user_id IN (?, ?) ORDER BY user_id FOR UPDATE',
+                [$first, $second]
+            );
+            if (count($locked) !== 2) {
+                $db->rollBack();
+                return 'invalid_author';
+            }
+            foreach ($locked AS $row) {
+                if ((string)$row['user_state'] !== 'valid' || !empty($row['is_banned'])) {
+                    $db->rollBack();
+                    return 'invalid_author';
+                }
+            }
+            $currency = $db->fetchRow(
+                'SELECT decimals, active FROM xf_oc_currency WHERE currency_id = ?',
+                $currencyId
+            );
+            if (!$currency || !(int)$currency['active']) {
+                $db->rollBack();
+                return 'invalid';
+            }
+            $amount = round($amount, (int)$currency['decimals']);
+            if ($amount <= 0) {
+                $db->rollBack();
+                return 'invalid';
+            }
+            // One purchase per content item, regardless of the price paid.
+            $existing = $db->fetchOne(
+                'SELECT charge_id FROM xf_oc_charge WHERE content_type = ? AND content_id = ?'
+                . ' AND user_id = ? AND currency_id = ?',
+                [$type, $contentId, $fromUserId, $currencyId]
+            );
+            if ($existing) {
+                $db->commit();
+                return 'already_paid';
+            }
+            // Charges never overdraw, regardless of the currency's allow_negative.
+            $senderBalance = (float)$db->fetchOne(
+                'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
+                [$fromUserId, $currencyId]
+            );
+            if ($senderBalance < $amount) {
+                $db->rollBack();
+                return 'no_funds';
+            }
+            $this->applyBalanceDelta($fromUserId, $currencyId, -$amount);
+            $this->applyBalanceDelta($toUserId, $currencyId, $amount);
+            $now = \XF::$time;
+            $note = 'Charge: ' . $type . ' #' . $contentId;
+            $db->insert('xf_oc_transaction', [
+                'user_id' => $fromUserId, 'currency_id' => $currencyId,
+                'amount' => -$amount, 'trigger' => 'charge',
+                'content_type' => $type, 'content_id' => $contentId,
+                'note' => $note, 'log_date' => $now,
+            ]);
+            $db->insert('xf_oc_transaction', [
+                'user_id' => $toUserId, 'currency_id' => $currencyId,
+                'amount' => $amount, 'trigger' => 'charge',
+                'content_type' => $type, 'content_id' => $contentId,
+                'note' => $note, 'log_date' => $now,
+            ]);
+            $db->insert('xf_oc_charge', [
+                'content_type' => $type,
+                'content_id' => $contentId,
+                'user_id' => $fromUserId,
+                'author_user_id' => $toUserId,
+                'currency_id' => $currencyId,
+                'amount' => $amount,
+                'charge_date' => $now,
+            ]);
+            $db->commit();
+            self::clearBalanceCache($fromUserId);
+            self::clearBalanceCache($toUserId);
+            $this->fireAdjustEvent([$fromUserId, $currencyId, -$amount, 'charge', $contentId]);
+            $this->fireAdjustEvent([$toUserId, $currencyId, $amount, 'charge', $contentId]);
+            return 'ok';
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Fires a post-commit event without letting a listener turn a completed
+     * charge into a reported failure.
+     */
+    protected function fireAdjustEvent(array $args): void
+    {
+        try {
+            $this->app->fire('oc_credits_adjust', $args);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits adjust event failed: ');
+        }
+    }
+
+    /**
+     * Whether the member has already unlocked this content item (any price).
+     * Pass $currencyId = 0 to ignore the currency (used before resolving the
+     * primary currency so existing buyers keep access).
+     */
+    public function hasPaidForContent(int $userId, string $contentType, int $contentId, int $currencyId = 0): bool
+    {
+        if ($userId <= 0 || $contentId <= 0 || $contentType === '') {
+            return false;
+        }
+        $sql = 'SELECT charge_id FROM xf_oc_charge WHERE user_id = ? AND content_type = ? AND content_id = ?';
+        $params = [$userId, substr($contentType, 0, 25), $contentId];
+        if ($currencyId > 0) {
+            $sql .= ' AND currency_id = ?';
+            $params[] = $currencyId;
+        }
+        $sql .= ' LIMIT 1';
+        return (bool)$this->db()->fetchOne($sql, $params);
+    }
+
+    /**
+     * Number of members who have unlocked a content item at a given price.
+     * Intended for the author-facing stats line.
+     */
+    public function unlockCountFor(string $contentType, int $contentId, int $currencyId, float $amount): int
+    {
+        if ($contentId <= 0 || $contentType === '') {
+            return 0;
+        }
+        return (int)$this->db()->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_charge WHERE content_type = ? AND content_id = ?'
+            . ' AND currency_id = ? AND amount = ?',
+            [$contentType, $contentId, $currencyId, $amount]
+        );
     }
 
     /**
@@ -552,7 +716,7 @@ class Transact extends AbstractService
                 'trigger' => 'redeem',
                 'content_type' => 'code',
                 'content_id' => (int)$row['code_id'],
-                'note' => substr($code, 0, 255),
+                'note' => 'code #' . (int)$row['code_id'],
                 'log_date' => \XF::$time,
             ]);
             $db->query(
@@ -561,7 +725,7 @@ class Transact extends AbstractService
             );
             $db->commit();
             self::clearBalanceCache($userId);
-            $this->app->fire('oc_credits_adjust', [$userId, $currencyId, $amount, 'redeem', (int)$row['code_id']]);
+            $this->fireAdjustEvent([$userId, $currencyId, $amount, 'redeem', (int)$row['code_id']]);
             $granted = ['amount' => $amount, 'currency_id' => $currencyId];
             return 'ok';
         } catch (\Throwable $e) {
@@ -768,6 +932,10 @@ class Transact extends AbstractService
         if ($batchSize <= 0) {
             $db->beginTransaction();
             try {
+                // Lock users first (ascending) so concurrent awards, which lock
+                // the user row then the balance row, cannot deadlock with this
+                // rebuild (which used to lock balances first).
+                $db->query('SELECT user_id FROM xf_user ORDER BY user_id FOR UPDATE');
                 $db->query('DELETE FROM xf_oc_balance');
                 $stmt = $db->query(
                     'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
@@ -795,6 +963,10 @@ class Transact extends AbstractService
         $endUserId = $startAfterUserId + $batchSize;
         $db->beginTransaction();
         try {
+            $db->query(
+                'SELECT user_id FROM xf_user WHERE user_id > ? AND user_id <= ? ORDER BY user_id FOR UPDATE',
+                [$startAfterUserId, $endUserId]
+            );
             $db->query(
                 'DELETE FROM xf_oc_balance WHERE user_id > ? AND user_id <= ?',
                 [$startAfterUserId, $endUserId]

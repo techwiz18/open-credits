@@ -1,14 +1,1 @@
-{
-    "admin_oc-currencies_.json": {
-        "hash": "5b0c6f9d6a9ad985317f43fee880c9db"
-    },
-    "admin_oc-events_.json": {
-        "hash": "6cd72d8ada4dc6433d76138e6c4e040e"
-    },
-    "admin_oc-tools_.json": {
-        "hash": "edf159a775177aeeb2299d105ff1ad35"
-    },
-    "public_credits_.json": {
-        "hash": "7950dfc9ac01106de3b21ff92e303a57"
-    }
-}
+{"admin_oc-currencies_.json":{"hash":"776ab06714296e4329c0f1f754657baf"},"admin_oc-events_.json":{"hash":"a4c0d2398fab02d52560fe72098f04a0"},"admin_oc-tools_.json":{"hash":"edf159a775177aeeb2299d105ff1ad35"},"public_credits_.json":{"hash":"5dfe99ac72aa22aa60fc5e32832b13c3"}}

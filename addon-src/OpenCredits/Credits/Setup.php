@@ -56,12 +56,15 @@ class Setup extends AbstractSetup
             $table->addColumn('trigger', 'varchar', 50);
             $table->addColumn('content_type', 'varchar', 25)->setDefault('');
             $table->addColumn('content_id', 'int')->setDefault(0);
+            $table->addColumn('event_id', 'int')->setDefault(0);
             $table->addColumn('note', 'varchar', 255)->setDefault('');
             $table->addColumn('log_date', 'int');
             $table->addKey(['user_id', 'log_date']);
             $table->addKey(['user_id', 'currency_id', 'log_date'], 'user_currency_date');
             $table->addKey(['user_id', 'trigger', 'content_id', 'content_type'], 'user_trigger_content');
             $table->addKey(['user_id', 'trigger', 'log_date'], 'user_trigger_date');
+            $table->addKey(['log_date'], 'log_date');
+            $table->addKey(['event_id'], 'event_id');
         });
     }
 
@@ -123,6 +126,21 @@ class Setup extends AbstractSetup
         $this->addBalanceLeaderboardIndex();
     }
 
+    public function installStep12()
+    {
+        $this->createChargeTable();
+    }
+
+    public function installStep13()
+    {
+        $this->syncEditorButton(true);
+    }
+
+    public function installStep14()
+    {
+        $this->createBackfillTable();
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -132,6 +150,8 @@ class Setup extends AbstractSetup
         $sm->dropTable('xf_oc_balance');
         $sm->dropTable('xf_oc_code');
         $sm->dropTable('xf_oc_snapshot');
+        $sm->dropTable('xf_oc_charge');
+        $sm->dropTable('xf_oc_backfill');
     }
 
     public function uninstallStep2()
@@ -144,8 +164,13 @@ class Setup extends AbstractSetup
     public function uninstallStep3()
     {
         $db = $this->db();
-        $db->delete('xf_permission_entry', "permission_group_id = 'general' AND permission_id IN ('ocView', 'ocTransfer')");
+        $db->delete('xf_permission_entry', "permission_group_id = 'general' AND permission_id IN ('ocView', 'ocTransfer', 'ocChargeFree')");
         $db->delete('xf_admin_permission_entry', "admin_permission_id = 'ocCredits'");
+    }
+
+    public function uninstallStep4()
+    {
+        $this->syncEditorButton(false);
     }
 
     public function upgrade900Step1()
@@ -246,6 +271,154 @@ class Setup extends AbstractSetup
         $this->addBalanceLeaderboardIndex();
     }
 
+    public function upgrade935Step1()
+    {
+        // 933 is v0.11.1 and 934 is v0.11.2, so installs on either skip
+        // straight to 935. Create the table here so every upgrade path works,
+        // and guard it for early dev installs that already have it.
+        if (!$this->tableExists('xf_oc_charge')) {
+            $this->createChargeTable();
+        }
+        $this->syncEditorButton(true);
+    }
+
+    public function upgrade937Step1()
+    {
+        if (!$this->tableExists('xf_oc_charge')) {
+            $this->createChargeTable();
+            return;
+        }
+
+        $indexes = $this->schemaManager()->getTableIndexDefinitions('xf_oc_charge');
+        $hasOldKey = isset($indexes['content_user_currency_amount']);
+        $hasNewKey = isset($indexes['content_user_currency']);
+
+        if ($hasOldKey || !$hasNewKey) {
+            // Move from per-price purchases to one purchase per content item.
+            // Keep the earliest purchase if a member paid more than one price.
+            $this->db()->query(
+                'DELETE c1 FROM xf_oc_charge AS c1'
+                . ' INNER JOIN xf_oc_charge AS c2 ON c1.content_type = c2.content_type'
+                . ' AND c1.content_id = c2.content_id AND c1.user_id = c2.user_id'
+                . ' AND c1.currency_id = c2.currency_id AND c1.charge_id > c2.charge_id'
+            );
+            $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) use ($hasOldKey, $hasNewKey) {
+                if (!$hasNewKey) {
+                    $table->addUniqueKey(['content_type', 'content_id', 'user_id', 'currency_id'], 'content_user_currency');
+                }
+                if ($hasOldKey) {
+                    $table->dropIndexes('content_user_currency_amount');
+                }
+            });
+        }
+
+        if (!isset($indexes['content_currency_amount'])) {
+            $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) {
+                $table->addKey(['content_type', 'content_id', 'currency_id', 'amount'], 'content_currency_amount');
+            });
+        }
+    }
+
+    public function upgrade938Step1()
+    {
+        $needColumn = !$this->columnExists('xf_oc_transaction', 'event_id');
+        $indexes = $this->schemaManager()->getTableIndexDefinitions('xf_oc_transaction');
+        $needLogIndex = !isset($indexes['log_date']);
+        $needEventIndex = !isset($indexes['event_id']);
+
+        if ($needColumn || $needLogIndex || $needEventIndex) {
+            $this->schemaManager()->alterTable('xf_oc_transaction', function (Alter $table) use ($needColumn, $needLogIndex, $needEventIndex) {
+                if ($needColumn) {
+                    $table->addColumn('event_id', 'int')->setDefault(0);
+                }
+                if ($needLogIndex) {
+                    $table->addKey(['log_date'], 'log_date');
+                }
+                if ($needEventIndex) {
+                    $table->addKey(['event_id'], 'event_id');
+                }
+            });
+        }
+
+        if (!$this->tableExists('xf_oc_backfill')) {
+            $this->createBackfillTable();
+        }
+
+        $chargeIndexes = $this->schemaManager()->getTableIndexDefinitions('xf_oc_charge');
+        if (!isset($chargeIndexes['author_user_id'])) {
+            $this->schemaManager()->alterTable('xf_oc_charge', function (Alter $table) {
+                $table->addKey(['author_user_id'], 'author_user_id');
+            });
+        }
+    }
+
+    /**
+     * Adds (or removes) the charge BBCode button in the rich-text editor
+     * toolbar's text group, for every viewport configuration. Idempotent and
+     * additive: existing button layout is preserved.
+     */
+    protected function syncEditorButton(bool $add): void
+    {
+        $config = \XF::options()->editorToolbarConfig;
+        if (!is_array($config) || !$config) {
+            return;
+        }
+        $button = 'xfCustom_charge';
+        $changed = false;
+
+        if ($add) {
+            // Only add when it is missing; never move an existing placement
+            // (admins may have rearranged the toolbar).
+            foreach ($config AS $groups) {
+                if (!is_array($groups)) {
+                    continue;
+                }
+                foreach ($groups AS $group) {
+                    if (is_array($group) && !empty($group['buttons']) && is_array($group['buttons'])
+                        && in_array($button, $group['buttons'], true)) {
+                        return;
+                    }
+                }
+            }
+
+            foreach ($config AS &$groups) {
+                if (!is_array($groups)) {
+                    continue;
+                }
+                if (isset($groups['moreText']) && is_array($groups['moreText'])) {
+                    $groups['moreText']['buttons'][] = $button;
+                    $changed = true;
+                }
+            }
+            unset($groups);
+        } else {
+            foreach ($config AS &$groups) {
+                if (!is_array($groups)) {
+                    continue;
+                }
+                foreach ($groups AS &$group) {
+                    if (!is_array($group) || empty($group['buttons']) || !is_array($group['buttons'])) {
+                        continue;
+                    }
+                    $filtered = array_values(array_filter($group['buttons'], function ($existing) use ($button) {
+                        return $existing !== $button;
+                    }));
+                    if ($filtered !== $group['buttons']) {
+                        $group['buttons'] = $filtered;
+                        $changed = true;
+                    }
+                }
+                unset($group);
+            }
+            unset($groups);
+        }
+
+        if ($changed) {
+            \XF::repository(\XF\Repository\OptionRepository::class)
+                ->updateOption('editorToolbarConfig', $config);
+        }
+    }
+
     protected function addBalanceLeaderboardIndex(): void
     {
         $this->schemaManager()->alterTable('xf_oc_balance', function (Alter $table) {
@@ -289,6 +462,50 @@ class Setup extends AbstractSetup
             $table->addColumn('balance', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
             $table->addColumn('log_date', 'int')->setDefault(0);
             $table->addPrimaryKey(['user_id', 'currency_id']);
+        });
+    }
+
+    /**
+     * Premium-content purchases for the [charge] BBCode. Unique per
+     * content/payer/currency so a member never pays twice for the same
+     * content, even if its price changes.
+     */
+    protected function createChargeTable(): void
+    {
+        $this->createTable('xf_oc_charge', function (Create $table) {
+            $table->addColumn('charge_id', 'int')->autoIncrement();
+            $table->addColumn('content_type', 'varchar', 25);
+            $table->addColumn('content_id', 'int')->setDefault(0);
+            $table->addColumn('user_id', 'int');
+            $table->addColumn('author_user_id', 'int')->setDefault(0);
+            $table->addColumn('currency_id', 'int')->setDefault(1);
+            $table->addColumn('amount', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
+            $table->addColumn('charge_date', 'int')->setDefault(0);
+            $table->addUniqueKey(
+                ['content_type', 'content_id', 'user_id', 'currency_id'],
+                'content_user_currency'
+            );
+            $table->addKey(['user_id', 'charge_date'], 'user_date');
+            $table->addKey(['author_user_id'], 'author_user_id');
+            $table->addKey(['content_type', 'content_id', 'currency_id', 'amount'], 'content_currency_amount');
+        });
+    }
+
+    /**
+     * Resumable backfill state: one row per (event, scope). user_id is 0 for a
+     * site-wide run or the member id for a per-member run; last_user_id is the
+     * last completed batch boundary; completed_date is 0 while running.
+     */
+    protected function createBackfillTable(): void
+    {
+        $this->createTable('xf_oc_backfill', function (Create $table) {
+            $table->addColumn('backfill_id', 'int')->autoIncrement();
+            $table->addColumn('event_id', 'int');
+            $table->addColumn('user_id', 'int')->setDefault(0);
+            $table->addColumn('last_user_id', 'int')->setDefault(0);
+            $table->addColumn('started_date', 'int')->setDefault(0);
+            $table->addColumn('completed_date', 'int')->setDefault(0);
+            $table->addUniqueKey(['event_id', 'user_id'], 'event_user');
         });
     }
 
