@@ -34,7 +34,7 @@ Read [shared policy](../xf-shared-policy/SKILL.md) for universal rules (runner d
 
 - `actionMember` passes `canSend`, `lockedTo`, `targetReceivable`, `senderBalance`, `currency`, `amountStep`; balances come from `$user.oc_balances`.
 - The per-member send form posts `oc_in_tab=1`; `actionTransferSave` redirects back to the **recipient's** profile tab (`#credits`).
-- Wallet paging defaults to 10/page with a 10/20/50 `per_page` selector; the choice persists in the session (`ocWalletPerPage`). Use `xf:pagenav` and keep `per_page` in its `params`; XF's pager class is `pageNav` (capital N).
+- Wallet paging defaults to 10/page; the 10/20/50 `per_page` selector sits in the history footer (below the pager), and the choice persists in the session (`ocWalletPerPage`). Use `xf:pagenav` and keep `per_page` in its `params`; XF's pager class is `pageNav` (capital N).
 - The `credits` route's `context` is `ocCredits`; that is what marks the Credits nav tab active. Keep it in sync with the nav entry id.
 - The profile stat link goes to the profile page's Credits tab (`link('members', $user)` + `#credits`), not the standalone tab page.
 - Prefer a normal form/redirect for core navigation. Add add-on JS only when an interaction genuinely must stay in place.
