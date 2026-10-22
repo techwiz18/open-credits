@@ -27,6 +27,7 @@ class Credits extends AbstractController
             }
         }
 
+        $canSend = $visitor->hasPermission('general', 'ocTransfer');
         $page = $this->filter('page', 'uint');
         $perPage = 20;
 
@@ -50,6 +51,8 @@ class Credits extends AbstractController
             'page' => $page,
             'perPage' => $perPage,
             'total' => $total,
+            'canSend' => $canSend,
+            'amountStep' => self::amountStep((int)$currency->decimals),
         ];
 
         return $this->view(
@@ -193,13 +196,8 @@ class Credits extends AbstractController
         }
         $isSelf = (int)$user->user_id === (int)$visitor->user_id;
 
-        // Profile wallet: balances, compact transfer form, and full (paged) history.
-        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
-        $currencies = $this->finder('OpenCredits\Credits:Currency')
-            ->where('active', 1)
-            ->where('visible', 1)
-            ->order('currency_id')
-            ->fetch();
+        // Per-member card: balances + a send form locked to this member.
+        $currency = $this->assertViewableCurrency(0);
         $canSend = $visitor->hasPermission('general', 'ocTransfer');
         $lockedTo = $isSelf ? '' : $user->username;
         $targetReceivable = !$user->is_banned
@@ -213,20 +211,6 @@ class Credits extends AbstractController
             }
         }
 
-        $page = $this->filter('page', 'uint');
-        $perPage = 10;
-        $entries = [];
-        $total = 0;
-        if ($isSelf) {
-            $finder = $this->finder('OpenCredits\Credits:Transaction')
-                ->where('user_id', $visitor->user_id)
-                ->where('currency_id', $currency->currency_id)
-                ->order('log_date', 'DESC')->order('transaction_id', 'DESC');
-            $total = $finder->total();
-            $transactions = $finder->limitByPage($page, $perPage)->fetch();
-            $entries = $this->buildHistoryEntries($transactions);
-        }
-
         return $this->view(
             'OpenCredits\Credits:Credits\Member',
             'credits_member',
@@ -234,20 +218,14 @@ class Credits extends AbstractController
                 'user' => $user,
                 'isSelf' => $isSelf,
                 'currency' => $currency,
-                'currencies' => $currencies,
                 'senderBalance' => $senderBalance,
                 'canSend' => $canSend,
                 'lockedTo' => $lockedTo,
                 'targetReceivable' => $targetReceivable,
-                'entries' => $entries,
-                'page' => $page,
-                'perPage' => $perPage,
-                'total' => $total,
                 'amountStep' => self::amountStep((int)$currency->decimals),
             ]
         );
     }
-
 
     protected function assertViewableCurrency(int $currencyId, bool $fallback = true): \XF\Mvc\Entity\Entity
     {
@@ -277,40 +255,19 @@ class Credits extends AbstractController
     public function actionTransfer(ParameterBag $params): AbstractReply
     {
         $visitor = \XF::visitor();
-        if (!$visitor->user_id || $visitor->is_banned || !$visitor->hasPermission('general', 'ocView')
-            || !$visitor->hasPermission('general', 'ocTransfer')
-        ) {
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
             return $this->noPermission();
         }
-
         $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
 
-        $balance = 0.0;
-        foreach ($visitor->oc_all_balances as $row) {
-            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
-                $balance = (float)$row['balance'];
-                break;
-            }
-        }
-
-        $viewParams = [
-            'currency' => $currency,
-            'balance' => $balance,
-            'to' => $this->filter('to', 'str'),
-            'amountStep' => self::amountStep((int)$currency->decimals),
-        ];
-
-        return $this->view(
-            'OpenCredits\Credits:Credits\Transfer',
-            'credits_transfer',
-            $viewParams
-        );
+        return $this->redirect($this->buildLink('credits', null, [
+            'currency_id' => (int)$currency->currency_id,
+        ]));
     }
 
     public function actionTransferSave(ParameterBag $params): AbstractReply
     {
         $this->assertPostOnly();
-        $ocInTab = (bool)$this->filter('oc_in_tab', 'bool');
 
         $visitor = \XF::visitor();
         if (!$visitor->user_id || $visitor->is_banned || !$visitor->hasPermission('general', 'ocView')
@@ -358,7 +315,7 @@ class Credits extends AbstractController
         }
 
         if ($ocInTab) {
-            return $this->redirect($this->buildLink('members', $visitor) . '#credits');
+            return $this->redirect($this->buildLink('members', $target) . '#credits');
         }
         return $this->redirect($this->buildLink('credits', null, ['currency_id' => $currency->currency_id]));
     }
@@ -461,11 +418,7 @@ class Credits extends AbstractController
             return $this->noPermission();
         }
 
-        return $this->view(
-            'OpenCredits\Credits:Credits\Redeem',
-            'credits_redeem',
-            ['ran' => false, 'code' => $this->filter('code', 'str')]
-        );
+        return $this->redirect($this->buildLink('credits'));
     }
 
     public function actionRedeemSave(ParameterBag $params): AbstractReply
@@ -505,23 +458,8 @@ class Credits extends AbstractController
             return $this->error($messages[$status] ?? 'That code cannot be redeemed.');
         }
 
-        $currency = $this->em()->find(
-            'OpenCredits\Credits:Currency',
-            (int)$granted['currency_id']
-        );
-        if (!$currency) {
-            return $this->error('Redemption succeeded but the currency is gone. Contact an administrator.');
-        }
-
-        return $this->view(
-            $ocInTab ? 'OpenCredits\Credits:Credits\RedeemBlock' : 'OpenCredits\Credits:Credits\Redeem',
-            $ocInTab ? 'oc_redeem_block' : 'credits_redeem',
-            [
-                'ran' => true,
-                'code' => $code,
-                'amount' => (float)$granted['amount'],
-                'currency' => $currency,
-            ]
-        );
+        return $this->redirect($this->buildLink('credits', null, [
+            'currency_id' => (int)$granted['currency_id'],
+        ]));
     }
 }

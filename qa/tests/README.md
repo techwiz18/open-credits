@@ -49,9 +49,9 @@ Covered today:
   site-wide run, and the history row is labelled/unlinked.
 - `ChargeCleanupTest` — hard-deleting a post drops its unlock rows; member
   deletion covers both payer and author charge rows.
-- `MemberCreditsTest` — the profile Credits tab: currency switcher, slim
-  balance line, paginated (10/page) full history for self, no history for
-  other members, and the banned-viewer guard.
+- `MemberCreditsTest` — the wallet page (pagination 20, currency switcher,
+  retired transfer/redeem redirects) and the per-member profile Credits tab
+  (balances; send form for other members; no history for self).
 
 All clean up in `tearDown()`.
 

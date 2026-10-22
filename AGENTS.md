@@ -63,6 +63,7 @@ Load the relevant skill from `.agents/skills/` for the task at hand:
 | `xf-core-dev` | Changes under `src/XF/`, `js/xf/`, `src/addons/XF/` (usually not needed here) |
 | `xf-scaffold-make` | Creating artifacts with `xf-make:*` |
 | `xf-template-phrase` | Templates, phrases, template modifications |
+| `opencredits-ux` | UI/UX and IA for the credits wallet and profile tab; read before any member-facing layout change |
 
 Load only the skills relevant to the task; combine when work spans areas. The
 universal rules in `xf-shared-policy` take precedence, except where this file

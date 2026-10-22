@@ -1,7 +1,0 @@
-<div class="block-row block-row--separated">
-	{{ phrase('oc_redeemed_x', {'amount': $currency.prefix . $amount|number($currency.decimals) . $currency.suffix, 'currency': $currency.title}) }}
-</div>
-<div class="block-row">
-	<a href="{{ link('members', $xf.visitor) }}#credits" class="button button--primary">{{ phrase('oc_view_history') }}</a>
-	<a href="{{ link('credits/redeem') }}" class="button">{{ phrase('oc_redeem_another') }}</a>
-</div>

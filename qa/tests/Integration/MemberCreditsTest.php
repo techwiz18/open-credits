@@ -8,13 +8,16 @@ use OpenCredits\Credits\Pub\Controller\Credits;
 use PHPUnit\Framework\TestCase;
 
 /**
- * DB-backed checks for the profile Credits tab (the [charge] hub layout):
- * the action paginates the member's own history at 10/page, honours the
- * currency switcher, hides history for other members, and refuses
- * banned/non-valid viewers. Runs against the licensed dev forum.
+ * The two credits surfaces: the wallet page (/credits) owns the balance,
+ * actions and full paged history; the profile Credits tab is per-member
+ * (balances + a send form for other members, "Open wallet" for self).
+ *
+ * Runs against the licensed dev forum and cleans its own seeded rows.
  */
 class MemberCreditsTest extends TestCase
 {
+    protected const SEED_TRIGGER = 'octest_wallet';
+
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
 
@@ -45,44 +48,22 @@ class MemberCreditsTest extends TestCase
         $this->cleanup();
     }
 
-    protected function cleanup(): void
+    protected function tearDown(): void
     {
-        if ($this->memberId) {
-            $this->db->delete(
-                'xf_oc_transaction',
-                "`trigger` = 'octest_member_tab' AND user_id = ?",
-                [$this->memberId]
-            );
-            \XF::app()->service('OpenCredits\\Credits:Transact')->rebuildAllBalancesFully();
-        }
+        $this->cleanup();
+        \XF::setVisitor(null);
     }
 
-    public function testOwnTabPaginatesAtTen(): void
+    public function testWalletPaginatesAtTwentyRows(): void
     {
-        $user = \XF::em()->find('XF:User', $this->memberId);
-        \XF::setVisitor($user);
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
 
-        $reply = $this->callAction($this->memberId, 1);
-        $this->assertInstanceOf(\XF\Mvc\Reply\View::class, $reply);
-        $params = $reply->getParams();
-        $this->assertTrue($params['isSelf']);
-        $this->assertSame(1, (int)$params['page']);
-        $this->assertSame(10, (int)$params['perPage']);
-        $this->assertIsArray($params['entries']);
-        $this->assertGreaterThanOrEqual(0, (int)$params['total']);
-    }
-
-    public function testHistoryPagesAtTenRows(): void
-    {
-        $user = \XF::em()->find('XF:User', $this->memberId);
-        \XF::setVisitor($user);
-
-        for ($i = 0; $i < 12; $i++) {
+        for ($i = 0; $i < 25; $i++) {
             $this->db->insert('xf_oc_transaction', [
                 'user_id' => $this->memberId,
                 'currency_id' => $this->currencyId,
                 'amount' => 1,
-                'trigger' => 'octest_member_tab',
+                'trigger' => self::SEED_TRIGGER,
                 'content_type' => '',
                 'content_id' => 0,
                 'event_id' => 0,
@@ -91,54 +72,99 @@ class MemberCreditsTest extends TestCase
             ]);
         }
 
-        $page1 = $this->callAction($this->memberId, 1)->getParams();
-        $this->assertCount(10, $page1['entries']);
-        $this->assertGreaterThanOrEqual(12, (int)$page1['total']);
+        $page1 = $this->callIndex(1)->getParams();
+        $this->assertCount(20, $page1['entries']);
+        $this->assertGreaterThanOrEqual(25, (int)$page1['total']);
 
-        $page2 = $this->callAction($this->memberId, 2)->getParams();
-        $this->assertGreaterThanOrEqual(2, count($page2['entries']));
+        $page2 = $this->callIndex(2)->getParams();
+        $this->assertGreaterThanOrEqual(5, count($page2['entries']));
     }
 
-    public function testPageParamIsHonoured(): void
+    public function testWalletCurrencySwitcher(): void
     {
-        $user = \XF::em()->find('XF:User', $this->memberId);
-        \XF::setVisitor($user);
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
 
-        $reply = $this->callAction($this->memberId, 2);
-        $params = $reply->getParams();
-        $this->assertSame(2, (int)$params['page']);
-    }
-
-    public function testCurrencySwitcherFollowsCurrencyId(): void
-    {
-        $user = \XF::em()->find('XF:User', $this->memberId);
-        \XF::setVisitor($user);
-
-        $reply = $this->callAction($this->memberId, 1, $this->currencyId);
-        $params = $reply->getParams();
+        $params = $this->callIndex(1, $this->currencyId)->getParams();
         $this->assertSame($this->currencyId, (int)$params['currency']->currency_id);
     }
 
-    public function testOtherMemberTabHasNoHistory(): void
+    public function testRetiredTransferPageRedirectsToWallet(): void
     {
-        $user = \XF::em()->find('XF:User', $this->memberId);
-        \XF::setVisitor($user);
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
 
-        $reply = $this->callAction($this->otherId, 1);
-        $params = $reply->getParams();
-        $this->assertFalse($params['isSelf']);
-        $this->assertSame([], $params['entries']);
-        $this->assertSame(0, (int)$params['total']);
+        $request = new \XF\Http\Request(
+            \XF::app()->inputFilterer(),
+            ['currency_id' => $this->currencyId],
+            [],
+            [],
+            ['REQUEST_METHOD' => 'GET']
+        );
+        $controller = \XF::app()->controller(Credits::class, $request);
+        $reply = $controller->actionTransfer(new \XF\Mvc\ParameterBag([]));
+
+        $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $reply);
+        $this->assertStringContainsString('credits', $reply->getUrl());
+        $this->assertStringNotContainsString('transfer', $reply->getUrl());
     }
 
-    // (banned viewing is gated by ocView/permission; the spending-path
-    // guard is covered by ChargeRenderTest::testBlockedMemberCannotUnlock)
+    public function testRetiredRedeemPageRedirectsToWallet(): void
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
 
-    protected function callAction(int $userId, int $page, int $currencyId = 0): \XF\Mvc\Reply\AbstractReply
+        $request = new \XF\Http\Request(
+            \XF::app()->inputFilterer(),
+            [],
+            [],
+            [],
+            ['REQUEST_METHOD' => 'GET']
+        );
+        $controller = \XF::app()->controller(Credits::class, $request);
+        $reply = $controller->actionRedeem(new \XF\Mvc\ParameterBag([]));
+
+        $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $reply);
+        $this->assertStringContainsString('credits', $reply->getUrl());
+    }
+
+    public function testOwnTabIsPerMember(): void
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+
+        $params = $this->callMember($this->memberId)->getParams();
+        $this->assertTrue($params['isSelf']);
+        $this->assertSame('', $params['lockedTo']);
+        $this->assertArrayNotHasKey('entries', $params);
+        $this->assertArrayNotHasKey('page', $params);
+    }
+
+    public function testOtherMemberTabLocksSendForm(): void
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+
+        $other = \XF::em()->find('XF:User', $this->otherId);
+        $params = $this->callMember($this->otherId)->getParams();
+        $this->assertFalse($params['isSelf']);
+        $this->assertSame($other->username, $params['lockedTo']);
+        $this->assertSame($this->otherId, (int)$params['user']->user_id);
+    }
+
+    protected function callIndex(int $page, int $currencyId = 0): \XF\Mvc\Reply\AbstractReply
     {
         $request = new \XF\Http\Request(
             \XF::app()->inputFilterer(),
-            ['user_id' => $userId, 'page' => $page, 'currency_id' => $currencyId],
+            ['page' => $page, 'currency_id' => $currencyId],
+            [],
+            [],
+            ['REQUEST_METHOD' => 'GET']
+        );
+        $controller = \XF::app()->controller(Credits::class, $request);
+        return $controller->actionIndex(new \XF\Mvc\ParameterBag([]));
+    }
+
+    protected function callMember(int $userId): \XF\Mvc\Reply\AbstractReply
+    {
+        $request = new \XF\Http\Request(
+            \XF::app()->inputFilterer(),
+            ['user_id' => $userId],
             [],
             [],
             ['REQUEST_METHOD' => 'GET']
@@ -147,9 +173,15 @@ class MemberCreditsTest extends TestCase
         return $controller->actionMember(new \XF\Mvc\ParameterBag([]));
     }
 
-    protected function tearDown(): void
+    protected function cleanup(): void
     {
-        $this->cleanup();
-        \XF::setVisitor(null);
+        if ($this->memberId) {
+            $this->db->delete(
+                'xf_oc_transaction',
+                'user_id = ? AND `trigger` = ?',
+                [$this->memberId, self::SEED_TRIGGER]
+            );
+            \XF::app()->service('OpenCredits\Credits:Transact')->rebuildAllBalancesFully();
+        }
     }
 }

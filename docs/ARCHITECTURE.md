@@ -112,9 +112,15 @@ change fires the `oc_credits_adjust` code event with
 
 ## Frontend
 
-* Route prefix `credits` → `Pub\Controller\Credits`: `actionIndex` (history, paged 20),
-  `actionTransfer` (form), `actionTransferSave` (POST, CSRF via `xf:form`).
-* Templates: `credits_index`, `credits_transfer` (public).
+* Route prefix `credits` → `Pub\Controller\Credits`: `actionIndex` (the wallet:
+  balance, compact redeem/transfer, history paged 20), `actionMember` (the
+  per-member profile tab), `actionTransferSave` / `actionRedeemSave` (POST,
+  CSRF via `xf:form`). The legacy `actionTransfer` / `actionRedeem` GETs
+  redirect to the wallet.
+* Templates: `credits_index` (wallet) and `credits_member` (per-member tab).
+  The wallet owns the redeem/transfer actions and the full history; the
+  per-member tab shows the member's balances, a "Send credits" form for other
+  members, and an "Open wallet" link for self.
 * Template mods: `oc_credits_postbit` (`message_macros`, after reaction score),
   `oc_credits_account_menu` (`account_visitor_menu`, visitor stats),
   `oc_credits_criteria` (`helper_criteria`, admin trophy/promotion form).
