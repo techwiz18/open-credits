@@ -1,28 +1,7 @@
-<div class="block">
-	<div class="block-container">
-		<h3 class="block-header">{{ phrase('oc_redeem_a_code') }}</h3>
-		<xf:if is="$ran">
-			<div class="block-body">
-				<div class="block-row block-row--separated">
-					{{ phrase('oc_redeemed_x', {'amount': $currency.prefix . $amount|number($currency.decimals) . $currency.suffix, 'currency': $currency.title}) }}
-				</div>
-			</div>
-			<div class="block-footer">
-				<a href="{{ link('members', $xf.visitor) }}#credits" class="button button--primary">{{ phrase('oc_view_history') }}</a>
-				<a href="{{ link('credits/redeem') }}" class="button">{{ phrase('oc_redeem_another') }}</a>
-			</div>
-		<xf:else />
-			<xf:form action="{{ link('credits/redeem-save') }}" ajax="true">
-				<input type="hidden" name="oc_in_tab" value="1" />
-				<div class="block-body">
-					<div class="block-row block-row--separated">
-						{{ phrase('oc_redeem_explain') }}
-					</div>
-					<xf:textboxrow name="code" value="{$code}" label="{{ phrase('oc_code') }}"
-						placeholder="XXXX-XXXX-XXXX" required="required" maxlength="32" />
-				</div>
-				<xf:submitrow submit="{{ phrase('oc_redeem') }}" />
-			</xf:form>
-		</xf:if>
-	</div>
+<div class="block-row block-row--separated">
+	{{ phrase('oc_redeemed_x', {'amount': $currency.prefix . $amount|number($currency.decimals) . $currency.suffix, 'currency': $currency.title}) }}
+</div>
+<div class="block-row">
+	<a href="{{ link('members', $xf.visitor) }}#credits" class="button button--primary">{{ phrase('oc_view_history') }}</a>
+	<a href="{{ link('credits/redeem') }}" class="button">{{ phrase('oc_redeem_another') }}</a>
 </div>

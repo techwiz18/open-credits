@@ -1,66 +1,63 @@
 <xf:title>{{ phrase('oc_credits_history') }}</xf:title>
 
-<xf:if is="$currencies|count > 1">
-	<div class="block">
-		<div class="block-container">
-			<div class="block-body">
-				<div class="block-row block-row--separated">
-					<dl class="pairs pairs--justified">
-						<dt>{{ phrase('oc_viewing_history_for') }}</dt>
-						<dd>
-							<strong>{$currency.title}</strong>
-							<span class="u-muted">— {{ phrase('oc_switch_currency') }}:</span>
-							<xf:foreach loop="$currencies" value="$c">
-								<xf:if is="$c.currency_id != $currency.currency_id">
-									<a href="{{ link('credits/member', '', {'user_id': $user.user_id, 'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
-								</xf:if>
-							</xf:foreach>
-						</dd>
-					</dl>
-				</div>
-			</div>
-		</div>
-	</div>
-</xf:if>
-
 <div class="block">
 	<div class="block-container">
 		<div class="block-body">
-			<div class="block-row block-row--separated">
+			<div class="block-row">
 				<div class="pairs pairs--justified">
 					<dt>{$currency.title}</dt>
 					<dd>{$currency.prefix}{$viewedBalance|number($currency.decimals)}{$currency.suffix}</dd>
 				</div>
+				<xf:if is="$currencies|count > 1">
+					<div class="contentRow-minor">
+						{{ phrase('oc_switch_currency') }}:
+						<xf:foreach loop="$currencies" value="$c">
+							<xf:if is="$c.currency_id != $currency.currency_id">
+								<a href="{{ link('credits/member', '', {'user_id': $user.user_id, 'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
+							</xf:if>
+						</xf:foreach>
+					</div>
+				</xf:if>
 			</div>
 		</div>
 	</div>
 </div>
 
 <xf:if is="$isSelf">
-	<xf:form action="{{ link('credits/redeem-save') }}" ajax="true" class="block">
-		<input type="hidden" name="oc_in_tab" value="1" />
+	<div class="block">
 		<div class="block-container">
-			<h3 class="block-header">{{ phrase('oc_redeem_a_code') }}</h3>
-			<div class="block-body">
-				<div class="block-row block-row--separated">
-					{{ phrase('oc_redeem_explain') }}
-				</div>
-				<xf:textboxrow name="code" label="{{ phrase('oc_code') }}"
-					placeholder="XXXX-XXXX-XXXX" required="required" maxlength="32" />
+			<h3 class="block-formSectionHeader">
+				<span class="collapseTrigger collapseTrigger--block" data-xf-click="toggle" data-target="< :up:next">
+					<span class="block-formSectionHeader-aligner">{{ phrase('oc_redeem_a_code') }}</span>
+				</span>
+			</h3>
+			<div class="block-body block-body--collapsible">
+				<xf:form action="{{ link('credits/redeem-save') }}" ajax="true">
+					<input type="hidden" name="oc_in_tab" value="1" />
+					<div class="block-row block-row--separated">
+						{{ phrase('oc_redeem_explain') }}
+					</div>
+					<xf:textboxrow name="code" label="{{ phrase('oc_code') }}"
+						placeholder="XXXX-XXXX-XXXX" required="required" maxlength="32" />
+					<xf:submitrow submit="{{ phrase('oc_redeem') }}" />
+				</xf:form>
 			</div>
-			<xf:submitrow submit="{{ phrase('oc_redeem') }}" />
 		</div>
-	</xf:form>
+	</div>
 </xf:if>
 
 <xf:if is="$canSend and (!$lockedTo or $targetReceivable)">
 	<div class="block">
 		<div class="block-container">
-			<h3 class="block-header">{{ phrase('oc_transfer') }}</h3>
-			<xf:form action="{{ link('credits/transfer-save') }}" ajax="true">
-				<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
-				<input type="hidden" name="oc_in_tab" value="1" />
-				<div class="block-body">
+			<h3 class="block-formSectionHeader">
+				<span class="collapseTrigger collapseTrigger--block" data-xf-click="toggle" data-target="< :up:next">
+					<span class="block-formSectionHeader-aligner">{{ phrase('oc_transfer') }}</span>
+				</span>
+			</h3>
+			<div class="block-body block-body--collapsible">
+				<xf:form action="{{ link('credits/transfer-save') }}" ajax="true">
+					<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
+					<input type="hidden" name="oc_in_tab" value="1" />
 					<div class="block-row block-row--separated">
 						{$currency.title}: <strong>{$currency.prefix}{$senderBalance|number($currency.decimals)}{$currency.suffix}</strong>
 					</div>
@@ -76,9 +73,9 @@
 					<xf:textboxrow name="amount" type="number" step="{$amountStep}" min="{$amountStep}" label="{{ phrase('oc_amount') }}"
 						placeholder="0.00" required="true"
 						hint="{{ phrase('oc_smallest_unit_x', {'currency': $currency.title, 'step': $amountStep}) }}" />
-				</div>
-				<xf:submitrow submit="{{ phrase('oc_transfer') }}" />
-			</xf:form>
+					<xf:submitrow submit="{{ phrase('oc_transfer') }}" />
+				</xf:form>
+			</div>
 		</div>
 	</div>
 <xf:elseif is="$lockedTo and !$targetReceivable" />
