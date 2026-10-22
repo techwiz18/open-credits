@@ -41,6 +41,20 @@ class MemberCreditsTest extends TestCase
         }
         $this->memberId = (int)$ids[0];
         $this->otherId = (int)$ids[1];
+
+        $this->cleanup();
+    }
+
+    protected function cleanup(): void
+    {
+        if ($this->memberId) {
+            $this->db->delete(
+                'xf_oc_transaction',
+                "`trigger` = 'octest_member_tab' AND user_id = ?",
+                [$this->memberId]
+            );
+            \XF::app()->service('OpenCredits\\Credits:Transact')->rebuildAllBalancesFully();
+        }
     }
 
     public function testOwnTabPaginatesAtTen(): void
@@ -56,6 +70,33 @@ class MemberCreditsTest extends TestCase
         $this->assertSame(10, (int)$params['perPage']);
         $this->assertIsArray($params['entries']);
         $this->assertGreaterThanOrEqual(0, (int)$params['total']);
+    }
+
+    public function testHistoryPagesAtTenRows(): void
+    {
+        $user = \XF::em()->find('XF:User', $this->memberId);
+        \XF::setVisitor($user);
+
+        for ($i = 0; $i < 12; $i++) {
+            $this->db->insert('xf_oc_transaction', [
+                'user_id' => $this->memberId,
+                'currency_id' => $this->currencyId,
+                'amount' => 1,
+                'trigger' => 'octest_member_tab',
+                'content_type' => '',
+                'content_id' => 0,
+                'event_id' => 0,
+                'note' => 'test',
+                'log_date' => \XF::$time + $i,
+            ]);
+        }
+
+        $page1 = $this->callAction($this->memberId, 1)->getParams();
+        $this->assertCount(10, $page1['entries']);
+        $this->assertGreaterThanOrEqual(12, (int)$page1['total']);
+
+        $page2 = $this->callAction($this->memberId, 2)->getParams();
+        $this->assertGreaterThanOrEqual(2, count($page2['entries']));
     }
 
     public function testPageParamIsHonoured(): void
@@ -108,6 +149,7 @@ class MemberCreditsTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->cleanup();
         \XF::setVisitor(null);
     }
 }
