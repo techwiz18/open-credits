@@ -190,6 +190,38 @@ class MemberCreditsTest extends TestCase
         }
     }
 
+    public function testSelfTabUsesWalletWithOneCurrency(): void
+    {
+        $others = $this->db->fetchAll(
+            'SELECT currency_id, active, visible FROM xf_oc_currency WHERE currency_id <> ?',
+            [$this->currencyId]
+        );
+        $this->db->update('xf_oc_currency', ['active' => 0], 'currency_id <> ?', [$this->currencyId]);
+        \XF::em()->clearEntityCache();
+
+        try {
+            \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+
+            $self = $this->callMember($this->memberId);
+            $this->assertInstanceOf(\XF\Mvc\Reply\View::class, $self);
+            $this->assertSame('credits_index', $self->getTemplateName());
+
+            // Other members keep the per-member card.
+            $other = $this->callMember($this->otherId);
+            $this->assertSame('credits_member', $other->getTemplateName());
+        } finally {
+            foreach ($others as $row) {
+                $this->db->update(
+                    'xf_oc_currency',
+                    ['active' => (int)$row['active'], 'visible' => (int)$row['visible']],
+                    'currency_id = ?',
+                    [(int)$row['currency_id']]
+                );
+            }
+            \XF::em()->clearEntityCache();
+        }
+    }
+
     protected function callIndex(int $page, int $currencyId = 0, ?int $perPage = null): \XF\Mvc\Reply\AbstractReply
     {
         $input = ['page' => $page, 'currency_id' => $currencyId];

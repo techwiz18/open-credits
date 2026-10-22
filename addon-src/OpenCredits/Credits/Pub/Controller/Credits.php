@@ -17,6 +17,19 @@ class Credits extends AbstractController
             return $this->noPermission();
         }
 
+        return $this->view(
+            'OpenCredits\Credits:Credits\Index',
+            'credits_index',
+            $this->buildWalletParams()
+        );
+    }
+
+    /**
+     * View params for the wallet page: balance, compact actions, paged history.
+     */
+    protected function buildWalletParams(): array
+    {
+        $visitor = \XF::visitor();
         $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
 
         $balance = 0.0;
@@ -50,7 +63,7 @@ class Credits extends AbstractController
         $total = $finder->total();
         $transactions = $finder->limitByPage($page, $perPage)->fetch();
 
-        $viewParams = [
+        return [
             'currency' => $currency,
             'currencies' => $this->finder('OpenCredits\Credits:Currency')
                 ->where('active', 1)
@@ -66,12 +79,6 @@ class Credits extends AbstractController
             'canSend' => $canSend,
             'amountStep' => self::amountStep((int)$currency->decimals),
         ];
-
-        return $this->view(
-            'OpenCredits\Credits:Credits\Index',
-            'credits_index',
-            $viewParams
-        );
     }
 
     protected const HISTORY_LABELS = [
@@ -207,6 +214,21 @@ class Credits extends AbstractController
             throw $this->exception($this->notFound($error));
         }
         $isSelf = (int)$user->user_id === (int)$visitor->user_id;
+
+        // Single-currency forums: your own tab is just the wallet.
+        if ($isSelf) {
+            $visibleCurrencyCount = $this->finder('OpenCredits\Credits:Currency')
+                ->where('active', 1)
+                ->where('visible', 1)
+                ->total();
+            if ($visibleCurrencyCount <= 1) {
+                return $this->view(
+                    'OpenCredits\Credits:Credits\Index',
+                    'credits_index',
+                    $this->buildWalletParams()
+                );
+            }
+        }
 
         // Per-member card: balances + a send form locked to this member.
         $currency = $this->assertViewableCurrency(0);

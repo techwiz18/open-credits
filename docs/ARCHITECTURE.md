@@ -113,7 +113,7 @@ change fires the `oc_credits_adjust` code event with
 ## Frontend
 
 * Route prefix `credits` → `Pub\Controller\Credits`: `actionIndex` (the wallet:
-  balance, compact redeem/transfer, history paged 10 with a 10/20/50 selector), `actionMember` (the
+  balance, compact redeem/transfer, history paged 10 with 10/20/50 footer links), `actionMember` (the
   per-member profile tab), `actionTransferSave` / `actionRedeemSave` (POST,
   CSRF via `xf:form`). The legacy `actionTransfer` / `actionRedeem` GETs
   redirect to the wallet. The route's context is `ocCredits`, which marks the
@@ -121,7 +121,9 @@ change fires the `oc_credits_adjust` code event with
 * Templates: `credits_index` (wallet) and `credits_member` (per-member tab).
   The wallet owns the redeem/transfer actions and the full history; the
   per-member tab shows the member's balances, a "Send credits" form for other
-  members, and an "Open wallet" link for self.
+  members, and an "Open wallet" link for self. On single-currency forums the
+  self tab renders the wallet template directly; other members keep the
+  per-member card.
 * Template mods: `oc_credits_postbit` (`message_macros`, after reaction score),
   `oc_credits_account_menu` (`account_visitor_menu`, visitor stats),
   `oc_credits_criteria` (`helper_criteria`, admin trophy/promotion form).
