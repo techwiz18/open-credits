@@ -17,7 +17,7 @@ Read [shared policy](../xf-shared-policy/SKILL.md) for universal rules (runner d
 
 1. Balance is the hero and appears once per surface.
 2. History is the primary content; actions are secondary and compact.
-3. Wallet order: balance + currency switcher → compact Redeem → compact Transfer → history (20/page).
+3. Wallet order: balance + currency switcher → compact Redeem → compact Transfer → history (10/page by default; 10/20/50 selector).
 4. Per-member order: balances → (other member: Send credits) / (self: Open wallet).
 5. Actions are one-line `inputGroup`s, always visible; do not hide them behind toggles.
 6. Confirm actions by landing back on `/credits`; the new ledger row and updated balance are the confirmation.
@@ -34,7 +34,7 @@ Read [shared policy](../xf-shared-policy/SKILL.md) for universal rules (runner d
 
 - `actionMember` passes `canSend`, `lockedTo`, `targetReceivable`, `senderBalance`, `currency`, `amountStep`; balances come from `$user.oc_balances`.
 - The per-member send form posts `oc_in_tab=1`; `actionTransferSave` redirects back to the **recipient's** profile tab (`#credits`).
-- Wallet paging is 20/page; XF's pager class is `pageNav` (capital N). Do not hand-roll selectors or custom paging JS for the wallet.
+- Wallet paging defaults to 10/page with a 10/20/50 `per_page` selector; the choice persists in the session (`ocWalletPerPage`). Use `xf:pagenav` and keep `per_page` in its `params`; XF's pager class is `pageNav` (capital N).
 - The `credits` route's `context` is `ocCredits`; that is what marks the Credits nav tab active. Keep it in sync with the nav entry id.
 - The profile stat link goes to the profile page's Credits tab (`link('members', $user)` + `#credits`), not the standalone tab page.
 - Prefer a normal form/redirect for core navigation. Add add-on JS only when an interaction genuinely must stay in place.
