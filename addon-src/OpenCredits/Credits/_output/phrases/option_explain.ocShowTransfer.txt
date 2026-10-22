@@ -1,0 +1,1 @@
+Show the transfer form on the wallet and the send form on member profiles.

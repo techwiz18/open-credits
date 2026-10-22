@@ -21,7 +21,7 @@
 	</div>
 </div>
 
-<xf:if is="!$isSelf and $canSend and $targetReceivable">
+<xf:if is="$showTransfer and !$isSelf and $canSend and $targetReceivable">
 	<div class="block">
 		<div class="block-container">
 			<h3 class="block-header">
@@ -47,6 +47,6 @@
 			</xf:form>
 		</div>
 	</div>
-<xf:elseif is="!$isSelf and $lockedTo and !$targetReceivable" />
+<xf:elseif is="$showTransfer and !$isSelf and $lockedTo and !$targetReceivable" />
 	<div class="blockMessage">{{ phrase('oc_cannot_receive') }}</div>
 </xf:if>

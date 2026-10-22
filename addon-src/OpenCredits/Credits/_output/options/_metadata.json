@@ -22,5 +22,14 @@
     },
     "ocHistoryRetentionDays.json": {
         "hash": "e7b602df84b4bd911e5adad6dd6a74ef"
+    },
+    "ocShowWalletRedeem.json": {
+        "hash": "988ff99be45c1eb5d1d2c6237dd788a2"
+    },
+    "ocShowTransfer.json": {
+        "hash": "cb030f3b086f38b34d2f480b5b40f8fe"
+    },
+    "ocProfileTabMode.json": {
+        "hash": "7e33a1b9a92bfe1d7f1962c9f8c4c174"
     }
 }

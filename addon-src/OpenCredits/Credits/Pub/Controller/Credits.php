@@ -77,6 +77,8 @@ class Credits extends AbstractController
             'perPageOptions' => $perPageOptions,
             'total' => $total,
             'canSend' => $canSend,
+            'showRedeem' => (bool)\XF::app()->options()->ocShowWalletRedeem,
+            'showTransfer' => (bool)\XF::app()->options()->ocShowTransfer,
             'amountStep' => self::amountStep((int)$currency->decimals),
         ];
     }
@@ -215,13 +217,21 @@ class Credits extends AbstractController
         }
         $isSelf = (int)$user->user_id === (int)$visitor->user_id;
 
-        // Single-currency forums: your own tab is just the wallet.
+        // Profile tab mode: auto (wallet on single-currency forums), wallet, or member.
         if ($isSelf) {
-            $visibleCurrencyCount = $this->finder('OpenCredits\Credits:Currency')
-                ->where('active', 1)
-                ->where('visible', 1)
-                ->total();
-            if ($visibleCurrencyCount <= 1) {
+            $mode = (string)\XF::app()->options()->ocProfileTabMode;
+            $useWallet = false;
+            if ($mode === 'wallet') {
+                $useWallet = true;
+            } elseif ($mode !== 'member') {
+                $visibleCurrencyCount = $this->finder('OpenCredits\Credits:Currency')
+                    ->where('active', 1)
+                    ->where('visible', 1)
+                    ->total();
+                $useWallet = $visibleCurrencyCount <= 1;
+            }
+
+            if ($useWallet) {
                 return $this->view(
                     'OpenCredits\Credits:Credits\Index',
                     'credits_index',
@@ -256,6 +266,7 @@ class Credits extends AbstractController
                 'canSend' => $canSend,
                 'lockedTo' => $lockedTo,
                 'targetReceivable' => $targetReceivable,
+                'showTransfer' => (bool)\XF::app()->options()->ocShowTransfer,
                 'amountStep' => self::amountStep((int)$currency->decimals),
             ]
         );

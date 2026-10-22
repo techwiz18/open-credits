@@ -1,0 +1,1 @@
+Show the redeem-code form on the credits wallet.

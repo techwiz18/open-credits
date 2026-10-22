@@ -25,6 +25,17 @@ Read [shared policy](../xf-shared-policy/SKILL.md) for universal rules (runner d
 7. Currency is wallet-level context: the switcher changes the balance, the transfer currency, and the history together.
 8. Use standard XF components: `block`, `block-container`, `block-header`, `block-body`, `block-row`, `inputGroup`, `inputGroup-splitter`, `inputGroup-text`, `u-pullRight`, `pairs pairs--justified`, `pageNav`, `button`, `button--primary`.
 
+## Display options (modularity)
+
+One option per surface/component, fixed order, defaults preserve current behaviour:
+
+- Existing surfaces: `ocShowPostbit`, `ocShowMenu`, `ocShowProfileStats`, `ocShowProfileTab`.
+- Wallet blocks: `ocShowWalletRedeem`, `ocShowTransfer` (transfer also hides the per-member send form).
+- Profile mode: `ocProfileTabMode` — `auto` (wallet when one visible active currency), `wallet` (your own tab always wallet), `member` (always per-member card).
+- Fallbacks: profile tab off → profile stat links to the wallet; transfer off → both transfer UIs gone; redeem off → wallet redeem gone.
+- Group visibility stays in permissions (`ocView`/`ocTransfer`), not per-group options.
+- No block reordering or page-builder; keep a fixed order with on/off.
+
 ## Implementation map
 
 | Surface | Controller | Template |

@@ -23,6 +23,7 @@
 	</div>
 </div>
 
+<xf:if is="$showRedeem">
 <div class="block">
 	<div class="block-container">
 		<h3 class="block-header">{{ phrase('oc_redeem_a_code') }}</h3>
@@ -40,8 +41,9 @@
 		</xf:form>
 	</div>
 </div>
+</xf:if>
 
-<xf:if is="$canSend">
+<xf:if is="$showTransfer and $canSend">
 	<div class="block">
 		<div class="block-container">
 			<h3 class="block-header">

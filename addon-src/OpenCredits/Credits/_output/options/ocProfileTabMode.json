@@ -1,0 +1,13 @@
+{
+    "edit_format": "radio",
+    "edit_format_params": "auto={{ phrase('oc_profile_tab_auto') }}\nwallet={{ phrase('oc_profile_tab_wallet') }}\nmember={{ phrase('oc_profile_tab_member') }}",
+    "sub_options": [],
+    "validation_class": "",
+    "validation_method": "",
+    "advanced": false,
+    "data_type": "string",
+    "default_value": "auto",
+    "relations": {
+        "ocCredits": 41
+    }
+}

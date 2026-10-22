@@ -132,8 +132,12 @@ change fires the `oc_credits_adjust` code event with
   save; both permissions are required). Default deny;
   install/upgrade auto-allows both for the group titled `Registered`.
 * Display options (`ocCredits` option group): `ocShowPostbit`, `ocShowMenu`,
-  `ocShowProfileStats`, `ocShowProfileTab` — each template mod gates on its
-  option; all default on.
+  `ocShowProfileStats`, `ocShowProfileTab`, `ocShowWalletRedeem`,
+  `ocShowTransfer` (all default on), plus `ocProfileTabMode`
+  (`auto`/`wallet`/`member`; `auto` loads the wallet on single-currency
+  forums). When the profile tab is off, the profile stat links to the wallet;
+  the transfer/redeem toggles hide their wallet blocks (transfer also hides the
+  per-member send form).
 * Tools (`oc-tools` admin route): rebuild (sync service call + result view),
   one-shot/resumable historical backfill (lump sums per member per post/thread
   event, scoped by the event's forum/group restrictions, completion keyed on
