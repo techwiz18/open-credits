@@ -1,5 +1,28 @@
 <xf:title>{{ phrase('oc_credits_history') }}</xf:title>
 
+<xf:if is="$currencies|count > 1">
+	<div class="block">
+		<div class="block-container">
+			<div class="block-body">
+				<div class="block-row">
+					<div class="pairs pairs--justified">
+						<dt>{{ phrase('oc_switch_currency') }}</dt>
+						<dd>
+							<xf:foreach loop="$currencies" value="$c">
+								<xf:if is="$c.currency_id == $currency.currency_id">
+									<span class="button button--small button--primary">{$c.title}</span>
+								<xf:else />
+									<a href="{{ link('credits/member', '', {'user_id': $user.user_id, 'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
+								</xf:if>
+							</xf:foreach>
+						</dd>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</xf:if>
+
 <xf:if is="$isSelf">
 	<div class="block">
 		<div class="block-container">
@@ -61,19 +84,7 @@
 <xf:if is="$isSelf and $total > 0">
 	<div class="block">
 		<div class="block-container">
-			<h3 class="block-header">
-				{{ phrase('oc_credits_history') }}
-				<xf:if is="$currencies|count > 1">
-					<span class="u-pullRight">
-						{{ phrase('oc_switch_currency') }}:
-						<xf:foreach loop="$currencies" value="$c">
-							<xf:if is="$c.currency_id != $currency.currency_id">
-								<a href="{{ link('credits/member', '', {'user_id': $user.user_id, 'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
-							</xf:if>
-						</xf:foreach>
-					</span>
-				</xf:if>
-			</h3>
+			<h3 class="block-header">{{ phrase('oc_credits_history') }}</h3>
 			<div class="block-body">
 				<xf:if is="$entries is not empty">
 					<xf:foreach loop="$entries" value="$entry">
