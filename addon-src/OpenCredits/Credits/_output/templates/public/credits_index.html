@@ -102,29 +102,26 @@
 			<xf:if is="$total > $perPage">
 				<xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="credits" params="{{ {'currency_id': $currency.currency_id, 'per_page': $perPage} }}" />
 			</xf:if>
-			<form method="get" action="{{ link('credits') }}">
-				<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
-				<label for="oc-per-page">{{ phrase('oc_per_page') }}:</label>
-				<select name="per_page" id="oc-per-page" class="input oc-per-page-select">
-					<xf:foreach loop="$perPageOptions" value="$option">
-						<xf:if is="$option == $perPage">
-							<option value="{$option}" selected="selected">{$option}</option>
-						<xf:else />
-							<option value="{$option}">{$option}</option>
-						</xf:if>
-					</xf:foreach>
-				</select>
-				<button type="submit" class="button button--small">{{ phrase('oc_go') }}</button>
-			</form>
+			<label for="oc-per-page">{{ phrase('oc_per_page') }}:</label>
+			<select id="oc-per-page" class="input oc-per-page-select">
+				<xf:foreach loop="$perPageOptions" value="$option">
+					<xf:if is="$option == $perPage">
+						<option value="{$option}" data-url="{{ link('credits', '', {'currency_id': $currency.currency_id, 'per_page': $option}) }}" selected="selected">{$option}</option>
+					<xf:else />
+						<option value="{$option}" data-url="{{ link('credits', '', {'currency_id': $currency.currency_id, 'per_page': $option}) }}">{$option}</option>
+					</xf:if>
+				</xf:foreach>
+			</select>
 		</div>
 	</div>
 </div>
 <xf:js>
 	XF.onDelegated(document, 'change', 'select.oc-per-page-select', function ()
 	{
-		if (this.form)
+		const option = this.options[this.selectedIndex];
+		if (option && option.dataset.url)
 		{
-			this.form.submit();
+			window.location = option.dataset.url;
 		}
 	});
 </xf:js>
