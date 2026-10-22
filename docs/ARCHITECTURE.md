@@ -116,7 +116,8 @@ change fires the `oc_credits_adjust` code event with
   balance, compact redeem/transfer, history paged 20), `actionMember` (the
   per-member profile tab), `actionTransferSave` / `actionRedeemSave` (POST,
   CSRF via `xf:form`). The legacy `actionTransfer` / `actionRedeem` GETs
-  redirect to the wallet.
+  redirect to the wallet. The route's context is `ocCredits`, which marks the
+  Credits nav tab active.
 * Templates: `credits_index` (wallet) and `credits_member` (per-member tab).
   The wallet owns the redeem/transfer actions and the full history; the
   per-member tab shows the member's balances, a "Send credits" form for other
