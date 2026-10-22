@@ -123,7 +123,9 @@ change fires the `oc_credits_adjust` code event with
   per-member tab shows the member's balances, a "Send credits" form for other
   members, and an "Open wallet" link for self. On single-currency forums the
   self tab renders the wallet template directly; other members keep the
-  per-member card.
+  per-member card. When the wallet is embedded, its pager/per-page/currency links use the
+  member route and are AJAX-reloaded by `oc_credits_tab.js` so they stay in
+  the profile tab.
 * Template mods: `oc_credits_postbit` (`message_macros`, after reaction score),
   `oc_credits_account_menu` (`account_visitor_menu`, visitor stats),
   `oc_credits_criteria` (`helper_criteria`, admin trophy/promotion form).

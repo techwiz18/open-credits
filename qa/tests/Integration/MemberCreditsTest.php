@@ -61,6 +61,7 @@ class MemberCreditsTest extends TestCase
         $this->seedWalletRows(25);
 
         $page1 = $this->callIndex(1)->getParams();
+        $this->assertTrue($page1['showBalance']);
         $this->assertCount(10, $page1['entries']);
         $this->assertGreaterThanOrEqual(25, (int)$page1['total']);
 
@@ -246,6 +247,7 @@ class MemberCreditsTest extends TestCase
             $self = $this->callMember($this->memberId);
             $this->assertInstanceOf(\XF\Mvc\Reply\View::class, $self);
             $this->assertSame('credits_index', $self->getTemplateName());
+            $this->assertFalse($self->getParams()['showBalance']);
 
             // Other members keep the per-member card.
             $other = $this->callMember($this->otherId);

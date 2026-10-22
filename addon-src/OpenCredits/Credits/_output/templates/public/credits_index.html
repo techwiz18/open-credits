@@ -1,5 +1,6 @@
 <xf:title>{{ phrase('oc_credits') }}</xf:title>
 
+<xf:if is="$showBalance">
 <div class="block">
 	<div class="block-container">
 		<div class="block-body">
@@ -13,7 +14,11 @@
 						{{ phrase('oc_switch_currency') }}:
 						<xf:foreach loop="$currencies" value="$c">
 							<xf:if is="$c.currency_id != $currency.currency_id">
-								<a href="{{ link('credits', '', {'currency_id': $c.currency_id}) }}" class="button button--small">{$c.title}</a>
+								<xf:if is="$inProfileTab">
+								<a href="{{ link('credits/member', '', {'user_id': $returnUserId, 'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
+							<xf:else />
+								<a href="{{ link('credits', '', {'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
+							</xf:if>
 							</xf:if>
 						</xf:foreach>
 					</div>
@@ -22,6 +27,7 @@
 		</div>
 	</div>
 </div>
+</xf:if>
 
 <xf:if is="$showRedeem">
 <div class="block">
@@ -110,14 +116,14 @@
 		</div>
 		<div class="block-footer">
 			<xf:if is="$total > $perPage">
-				<xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="credits" params="{{ {'currency_id': $currency.currency_id, 'per_page': $perPage} }}" />
+				<xf:pagenav page="{$page}" perpage="{$perPage}" total="{$total}" link="{$pagerLink}" params="{{ $pagerParams }}" />
 			</xf:if>
 			<span class="contentRow-minor">{{ phrase('oc_per_page') }}:</span>
 			<xf:foreach loop="$perPageOptions" value="$option">
 				<xf:if is="$option == $perPage">
 					<span class="button button--small button--primary">{$option}</span>
 				<xf:else />
-					<a href="{{ link('credits', '', {'currency_id': $currency.currency_id, 'per_page': $option}) }}" class="button button--small">{$option}</a>
+					<a href="{$perPageBaseUrl}&per_page={$option}" class="button button--small oc-credits-per-page">{$option}</a>
 				</xf:if>
 			</xf:foreach>
 		</div>

@@ -63,13 +63,23 @@ class Credits extends AbstractController
         $total = $finder->total();
         $transactions = $finder->limitByPage($page, $perPage)->fetch();
 
+        $currencies = $this->finder('OpenCredits\Credits:Currency')
+            ->where('active', 1)
+            ->where('visible', 1)
+            ->order('currency_id')
+            ->fetch();
+
+        // When the wallet is embedded in the profile tab, paging and per-page
+        // links go through the member route so they can reload the pane.
+        $pagerLink = $inProfileTab ? 'credits/member' : 'credits';
+        $pagerBaseParams = $inProfileTab
+            ? ['user_id' => (int)$visitor->user_id]
+            : ['currency_id' => (int)$currency->currency_id];
+
         return [
             'currency' => $currency,
-            'currencies' => $this->finder('OpenCredits\Credits:Currency')
-                ->where('active', 1)
-                ->where('visible', 1)
-                ->order('currency_id')
-                ->fetch(),
+            'currencies' => $currencies,
+            'showBalance' => !$inProfileTab || count($currencies) > 1,
             'balance' => $balance,
             'entries' => $this->buildHistoryEntries($transactions),
             'page' => $page,
@@ -81,6 +91,9 @@ class Credits extends AbstractController
             'showTransfer' => (bool)\XF::app()->options()->ocShowTransfer,
             'inProfileTab' => $inProfileTab,
             'returnUserId' => (int)$visitor->user_id,
+            'pagerLink' => $pagerLink,
+            'pagerParams' => $pagerBaseParams + ['per_page' => $perPage],
+            'perPageBaseUrl' => $this->buildLink($pagerLink, null, $pagerBaseParams),
             'amountStep' => self::amountStep((int)$currency->decimals),
         ];
     }
