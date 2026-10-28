@@ -61,7 +61,9 @@ Covered today:
   redeem cap/faucet rejection without consuming the code, secondary-currency
   bypass, disabled no-op, at-cap daily-login claim markers, resumable/forced
   demurrage with mirror + ledger checks, concurrent-pass busy, orphan purge,
-  and 0-decimal headroom flooring.
+  0-decimal headroom flooring, and stale faucet/claim pruning.
+- `AwardEligibilityTest` — banned, rejected, and disabled members earn nothing
+  from any trigger, while valid and awaiting-approval members earn normally.
 - `MemberCreditsTest` — the wallet page (pagination 10 by default with per-page links, currency switcher,
   retired transfer/redeem redirects) and the per-member profile Credits tab
   (balances; send form for other members; no history for self; single-currency self tab uses the wallet).

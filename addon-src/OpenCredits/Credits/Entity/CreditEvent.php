@@ -20,6 +20,26 @@ class CreditEvent extends Entity
         return self::TRIGGER_LABELS[$this->trigger] ?? ucwords(str_replace('_', ' ', (string)$this->trigger));
     }
 
+    /**
+     * Normalizes a JSON id list (as stored by the JSON_ARRAY columns), a
+     * comma-separated id string (as submitted by admin forms), or an id
+     * array into a clean int list. Empty input means unrestricted.
+     */
+    public static function decodeIdList($value): array
+    {
+        if (is_array($value)) {
+            $ids = $value;
+        } elseif (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+            $ids = is_array($decoded) ? $decoded : explode(',', $value);
+        } else {
+            return [];
+        }
+        return array_values(array_filter(array_map('intval', $ids), function ($id) {
+            return $id > 0;
+        }));
+    }
+
     protected function getDayBoundaryLabel(): string
     {
         $mode = 'utc';

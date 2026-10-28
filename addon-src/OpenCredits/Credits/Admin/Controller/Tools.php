@@ -630,14 +630,14 @@ class Tools extends AbstractController
             $where .= ' AND p.position > 0';
         }
 
-        $forumIds = $this->decodeIdList($event->forum_ids);
+        $forumIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($event->forum_ids);
         if ($forumIds) {
             $placeholders = implode(',', array_fill(0, count($forumIds), '?'));
             $where .= " AND t.node_id IN ({$placeholders})";
             $params = array_merge($params, $forumIds);
         }
 
-        $groupIds = $this->decodeIdList($event->usergroup_ids);
+        $groupIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($event->usergroup_ids);
         if ($groupIds) {
             $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
             $clauses = ["u.user_group_id IN ({$placeholders})"];
@@ -674,20 +674,5 @@ class Tools extends AbstractController
         }
 
         return [$sql, $params];
-    }
-
-    protected function decodeIdList($value): array
-    {
-        if (is_array($value)) {
-            $ids = $value;
-        } elseif (is_string($value) && $value !== '') {
-            $decoded = json_decode($value, true);
-            $ids = is_array($decoded) ? $decoded : explode(',', $value);
-        } else {
-            return [];
-        }
-        return array_values(array_filter(array_map('intval', $ids), function ($id) {
-            return $id > 0;
-        }));
     }
 }

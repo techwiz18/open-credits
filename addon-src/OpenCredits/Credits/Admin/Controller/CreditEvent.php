@@ -62,7 +62,7 @@ class CreditEvent extends AbstractController
             'triggers' => self::TRIGGERS,
             'userGroups' => $this->finder('XF:UserGroup')->order('title')->fetch(),
             'eventForumIds' => $this->implodeIds($event->forum_ids),
-            'eventGroupIds' => $this->decodeIds($event->usergroup_ids),
+            'eventGroupIds' => EventEntity::decodeIdList($event->usergroup_ids),
         ];
         return $this->view('OpenCredits\Credits:Event\Edit', 'oc_event_edit', $viewParams);
     }
@@ -111,11 +111,23 @@ class CreditEvent extends AbstractController
             return $this->error('Events cannot use an inactive currency. Activate it first.');
         }
         $input['amount'] = round($input['amount'], (int)$currency->decimals);
-        if ($input['amount'] == 0.0) {
-            return $this->error('Amount cannot be zero. Deactivate the event instead.');
+        if ($input['amount'] <= 0.0) {
+            return $this->error('Amount must be greater than zero. Deactivate the event instead.');
         }
-        $input['forum_ids'] = $this->decodeIds($input['forum_ids']);
-        $input['usergroup_ids'] = $this->decodeIds($input['usergroup_ids']);
+        $duplicate = $this->finder('OpenCredits\Credits:CreditEvent')
+            ->where('trigger', $input['trigger'])
+            ->where('currency_id', (int)$currency->currency_id)
+            ->where('active', 1);
+        if (!$event->isInsert()) {
+            $duplicate = $duplicate->where('event_id', '!=', (int)$event->event_id);
+        }
+        if ($duplicate->fetchOne()) {
+            return $this->error(
+                'An active event for this trigger and currency already exists. Edit that one instead — duplicates would pay out twice.'
+            );
+        }
+        $input['forum_ids'] = EventEntity::decodeIdList($input['forum_ids']);
+        $input['usergroup_ids'] = EventEntity::decodeIdList($input['usergroup_ids']);
 
         $form = $this->formAction();
         $form->basicEntitySave($event, $input);
@@ -145,34 +157,15 @@ class CreditEvent extends AbstractController
     }
 
     /**
-     * Normalizes a comma-separated id string or an id array into a clean
-     * int list for the JSON_ARRAY columns. Empty input means unrestricted.
+     * Displays stored ids as a comma-separated string for the edit form.
      */
-    protected function decodeIds($value): array
-    {
-        if (is_string($value)) {
-            $value = explode(',', $value);
-        }
-        if (!is_array($value)) {
-            return [];
-        }
-        $ids = [];
-        foreach ($value as $id) {
-            $id = (int)$id;
-            if ($id > 0) {
-                $ids[] = $id;
-            }
-        }
-        return array_values(array_unique($ids));
-    }
-
     protected function implodeIds($value): string
     {
         if (is_string($value)) {
-            return implode(', ', $this->decodeIds($value));
+            return implode(', ', EventEntity::decodeIdList($value));
         }
         if (is_array($value)) {
-            return implode(', ', $this->decodeIds(implode(',', $value)));
+            return implode(', ', EventEntity::decodeIdList(implode(',', $value)));
         }
         return '';
     }

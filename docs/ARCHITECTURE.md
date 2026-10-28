@@ -8,7 +8,7 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 
 | Path | Role |
 |---|---|
-| `addon.json` | Add-on meta. Current: 0.13.0 / 940. Requires XF 2.3.0+, PHP 8.2+ |
+| `addon.json` | Add-on meta. Current: 0.13.1-dev / 941. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
@@ -144,10 +144,12 @@ change fires the `oc_credits_adjust` code event with
   rounds to the currency, floors at zero, skips (and purges the cached rows
   of) deleted members, and runs from a resumable pass: the `ocDemurrage` cron
   ticks every 15 minutes with a 10s budget while a pass is in flight, Tools
-  offers preview + a time-bounded run-now with resume state, and the CLI runs
-  full. Overlapping runners get `busy`, never a second pass. The legacy
-  `xf_user.oc_credits` mirror follows the same deltas. These are economy
-  controls, not a security boundary.
+  offers preview (excluding already-processed members) + a time-bounded
+  run-now with resume state, and the CLI runs full. Overlapping runners get
+  `busy`, never a second pass. Switching primary seeds `last_run` so the new
+  currency does not burn immediately. The legacy `xf_user.oc_credits` mirror
+  follows the same deltas. These are economy controls, not a security
+  boundary.
 
 ## Frontend
 
@@ -182,7 +184,12 @@ change fires the `oc_credits_adjust` code event with
 * Inflation options (`ocCredits` group): `ocInflationEnabled` (off),
   `ocInflationBalanceCap`, `ocInflationFaucetDaily`,
   `ocInflationDemurrageRate` (0 disables each lever), and
-  `ocInflationDemurrageDays` (default 7). Primary currency only.
+  `ocInflationDemurrageDays` (default 7). Primary currency only. The faucet
+  counts every member mint in `xf_oc_faucet` (all sources share the one
+  allowance); stale faucet/claim rows are pruned on every inflation tick.
+* Earnings require a participable account: banned, rejected, and disabled
+  members earn nothing from any trigger (checked once in
+  `awardByTrigger()`, mirroring the register path).
 * Tools (`oc-tools` admin route): rebuild (sync service call + result view),
   one-shot/resumable historical backfill (lump sums per member per post/thread
   event, scoped by the event's forum/group restrictions, completion keyed on
@@ -218,6 +225,10 @@ change fires the `oc_credits_adjust` code event with
 ## Conventions for new work
 
 * Never write balances outside `Service/Transact.php`.
+* Id-list parsing (JSON columns, comma-separated form input) lives in exactly
+  one place: `CreditEvent::decodeIdList()`. Do not add local copies.
+* New triggers must be unique per (trigger, currency) while active — the admin
+  save refuses duplicates because `awardByTrigger()` pays every active row.
 * New triggers: add seed row in `Setup::seedDefaultEvents()`, listener method in
   `Listener.php`, `_output/code_event_listeners/*.json`, version bump + upgrade step.
 * New widgets: add the class under `Widget/`, `_output/widget_definitions/{id}.json`

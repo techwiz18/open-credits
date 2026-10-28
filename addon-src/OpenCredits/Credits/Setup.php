@@ -248,9 +248,23 @@ class Setup extends AbstractSetup
         }
     }
 
-    public function upgrade200Step1()
+    public function upgrade941Step1()
     {
-        $this->seedDefaultEvents();
+        // Faucet/claim tables shipped in 940 without a day_start index, so
+        // the weekly stale-row cleanup would scan. Add the keys if missing.
+        // (upgrade200's re-seed was dropped: it resurrected admin-deleted
+        // seed events. Fresh installs still seed via installStep6.)
+        foreach (['xf_oc_faucet', 'xf_oc_daily_claim'] as $table) {
+            if (!$this->tableExists($table)) {
+                continue;
+            }
+            $indexes = $this->schemaManager()->getTableIndexDefinitions($table);
+            if (!isset($indexes['day_start'])) {
+                $this->schemaManager()->alterTable($table, function (Alter $table) {
+                    $table->addKey(['day_start'], 'day_start');
+                });
+            }
+        }
     }
 
     public function upgrade907Step1()
@@ -596,6 +610,7 @@ class Setup extends AbstractSetup
             $table->addColumn('day_start', 'int')->setDefault(0);
             $table->addColumn('amount', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
             $table->addPrimaryKey(['user_id', 'currency_id', 'day_start']);
+            $table->addKey(['day_start'], 'day_start');
         });
     }
 
@@ -611,6 +626,7 @@ class Setup extends AbstractSetup
             $table->addColumn('user_id', 'int');
             $table->addColumn('day_start', 'int')->setDefault(0);
             $table->addPrimaryKey(['user_id', 'day_start']);
+            $table->addKey(['day_start'], 'day_start');
         });
     }
 

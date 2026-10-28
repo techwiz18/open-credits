@@ -94,6 +94,14 @@ class Transact extends AbstractService
         ?string $dedupeKey = null
     ): bool {
         $db = $this->db();
+        // No earnings for accounts that cannot participate, mirroring the
+        // register path (banned/rejected/disabled never earn). Unapproved
+        // states (moderated, email_confirm) still earn so the register bonus
+        // is waiting when the account activates. Checked once here so every
+        // entry point (listeners, daily login, integrators) is covered.
+        if ($userId > 0 && !$this->isAwardEligible($userId)) {
+            return false;
+        }
         // Event configs are request-static: bulk content saves must not
         // refetch identical rows per save. Admin event saves run in their
         // own requests, so no invalidation is needed here.
@@ -149,42 +157,40 @@ class Transact extends AbstractService
     }
 
     /**
+     * Whether the member may earn at all. Unknown users fail here too, but
+     * that changes nothing: adjust() already refuses them.
+     */
+    protected function isAwardEligible(int $userId): bool
+    {
+        try {
+            $user = $this->app->em()->find('XF:User', $userId);
+            if (!$user) {
+                return false;
+            }
+            return empty($user->is_banned)
+                && !in_array($user->get('user_state'), ['rejected', 'disabled'], true);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits eligibility check failed: ');
+            return false;
+        }
+    }
+
+    /**
      * Whether an event row's forum/usergroup restrictions admit this award.
      * Empty restrictions always pass; a forum restriction requires the content
      * to live in one of the listed forums.
      */
     protected function eventAppliesTo(array $row, int $nodeId, array $userGroupIds): bool
     {
-        $forumIds = $this->decodeIdList($row['forum_ids'] ?? null);
+        $forumIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($row['forum_ids'] ?? null);
         if ($forumIds && ($nodeId <= 0 || !in_array($nodeId, $forumIds, true))) {
             return false;
         }
-        $groupIds = $this->decodeIdList($row['usergroup_ids'] ?? null);
+        $groupIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($row['usergroup_ids'] ?? null);
         if ($groupIds && !array_intersect($groupIds, array_map('intval', $userGroupIds))) {
             return false;
         }
         return true;
-    }
-
-    /**
-     * Decodes a JSON id list as stored by the JSON_ARRAY entity columns.
-     */
-    protected function decodeIdList($value): array
-    {
-        if (is_array($value)) {
-            return array_values(array_filter(array_map('intval', $value), function ($id) {
-                return $id > 0;
-            }));
-        }
-        if (is_string($value) && $value !== '') {
-            $decoded = json_decode($value, true);
-            if (is_array($decoded)) {
-                return array_values(array_filter(array_map('intval', $decoded), function ($id) {
-                    return $id > 0;
-                }));
-            }
-        }
-        return [];
     }
 
     protected function dedupeKeyUsed(int $userId, string $trigger, string $contentType, int $contentId, string $dedupeKey): bool
@@ -369,7 +375,7 @@ class Transact extends AbstractService
                 'user_id' => $userId,
                 'currency_id' => $currencyId,
                 'amount' => $amount,
-                'trigger' => $trigger,
+                'trigger' => substr($trigger, 0, 50),
                 'content_type' => substr($contentType, 0, 25),
                 'content_id' => $contentId,
                 'note' => substr($note, 0, 255),
@@ -860,13 +866,20 @@ class Transact extends AbstractService
         }
         $decimals = (int)$currency['decimals'];
         // Only real members count: orphan balance rows (member deleted) are
-        // skipped by the burn and must not inflate the preview.
+        // skipped by the burn and must not inflate the preview. An in-flight
+        // pass already burned up to the cursor, so those are excluded too.
+        $params = [$settings['rate'], $decimals, $settings['rate'], $decimals, $currencyId];
+        $cursorClause = '';
+        if ($inProgress) {
+            $cursorClause = ' AND b.user_id > ?';
+            $params[] = (int)$state['cursor_user_id'];
+        }
         $row = $db->fetchRow(
             'SELECT SUM(CASE WHEN ROUND(b.balance * ? / 100, ?) > 0 THEN 1 ELSE 0 END) AS accounts,'
             . ' COALESCE(SUM(LEAST(b.balance, ROUND(b.balance * ? / 100, ?))), 0) AS total'
             . ' FROM xf_oc_balance AS b INNER JOIN xf_user AS u ON u.user_id = b.user_id'
-            . ' WHERE b.currency_id = ? AND b.balance > 0',
-            [$settings['rate'], $decimals, $settings['rate'], $decimals, $currencyId]
+            . ' WHERE b.currency_id = ? AND b.balance > 0' . $cursorClause,
+            $params
         );
         $result['accounts'] = (int)($row['accounts'] ?? 0);
         $result['total'] = (float)($row['total'] ?? 0);
@@ -891,10 +904,19 @@ class Transact extends AbstractService
             'ran' => false, 'done' => true, 'busy' => false, 'processed' => 0,
             'burned' => 0.0, 'accounts' => 0, 'lastRun' => 0, 'nextRun' => 0,
         ];
-        if (!$settings['enabled'] || $settings['rate'] <= 0) {
+        if (!$settings['enabled']) {
             return $result;
         }
         $db = $this->db();
+        $now = \XF::$time;
+        // Stale faucet/claim rows are dead weight: drop anything older than
+        // a week. Runs on every tick — not just pass start — so faucet-only
+        // setups (demurrage rate 0) do not accumulate rows forever.
+        $db->query('DELETE FROM xf_oc_faucet WHERE day_start < ?', [$now - 7 * 86400]);
+        $db->query('DELETE FROM xf_oc_daily_claim WHERE day_start < ?', [$now - 7 * 86400]);
+        if ($settings['rate'] <= 0) {
+            return $result;
+        }
         $currency = $db->fetchRow(
             'SELECT decimals, active FROM xf_oc_currency WHERE currency_id = ?',
             [$currencyId]
@@ -902,7 +924,6 @@ class Transact extends AbstractService
         if (!$currency || !(int)$currency['active']) {
             return $result;
         }
-        $now = \XF::$time;
         $state = $db->fetchRow(
             'SELECT last_run, cursor_user_id, pass_started, pass_token, pass_rate, pass_decimals'
             . ' FROM xf_oc_inflation WHERE currency_id = ?',
@@ -1025,12 +1046,6 @@ class Transact extends AbstractService
                 return array_merge($result, ['busy' => true, 'done' => false, 'lastRun' => $lastRun]);
             }
             $cursor = 0;
-            // Stale faucet rows are dead weight: drop anything older
-            // than a week at pass start.
-            $db->query(
-                'DELETE FROM xf_oc_faucet WHERE day_start < ?',
-                [$now - 7 * 86400]
-            );
             $rate = (float)$settings['rate'];
             $decimals = (int)$currency['decimals'];
         }
@@ -1477,11 +1492,15 @@ class Transact extends AbstractService
         );
         $snapshots = 0;
         $deleted = 0;
+        // Snapshot precision follows each currency so 0-decimal currencies
+        // never store sub-unit values a display would round misleadingly.
+        $decimalsByCurrency = $db->fetchPairs('SELECT currency_id, decimals FROM xf_oc_currency');
         $db->beginTransaction();
         try {
             foreach ($pairs as $pair) {
                 $uid = (int)$pair['user_id'];
                 $cid = (int)$pair['currency_id'];
+                $decimals = max(0, (int)($decimalsByCurrency[$cid] ?? 2));
                 $existing = (float)$db->fetchOne(
                     'SELECT COALESCE(balance, 0) FROM xf_oc_snapshot WHERE user_id = ? AND currency_id = ?',
                     [$uid, $cid]
@@ -1493,7 +1512,7 @@ class Transact extends AbstractService
                     [$uid, $cid, $cutoff, 'redeem', 'Historical backfill', 'reaction:%']
                 );
                 if ($sum != 0.0) {
-                    $new = round($existing + $sum, 2);
+                    $new = round($existing + $sum, $decimals);
                     $db->query(
                         'INSERT INTO xf_oc_snapshot (user_id, currency_id, balance, log_date) VALUES (?, ?, ?, ?)'
                         . ' ON DUPLICATE KEY UPDATE balance = ?, log_date = ?',
