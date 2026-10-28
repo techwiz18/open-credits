@@ -11,13 +11,14 @@ let members transfer and redeem credits, and gate trophies on wealth.
 [*] [B]Transfers & redeem codes[/B] — member-to-member transfers that never overdraw, plus single/multi-use coupon codes.
 [*] [B]Leaderboard[/B] — a placeable "Top credit holders" widget with a configurable count and currency, optionally visible to guests.
 [*] [B]Premium posts[/B] — show a locked box in place of content behind a credits charge with [ICODE][charge=10]…[/charge][/ICODE]; the author is credited and sees unlock stats.
+[*] [B]Inflation control[/B] — optional balance caps, daily faucet limits, and demurrage/decay to keep the money supply in check.
 [*] [B]Alerts & trophies[/B] — optional alerts when credits land, and "has at least / fewer than X credits" criteria for trophies, notices, and promotions.
 [/LIST]
 
 [B]For admins[/B]
 [LIST]
 [*] Manage currencies, earning events, codes, and members from [B]AdminCP → Credits[/B] (gated by the [I]Manage credits[/I] admin permission; super admins always have it).
-[*] Tools to adjust balances, rebuild from the ledger, backfill pre-install content, and prune old history into snapshots.
+[*] Tools to adjust balances, rebuild from the ledger, backfill pre-install content, prune old history into snapshots, and run demurrage passes (with preview).
 [*] Display toggles (postbit, menu, profile) and a configurable daily boundary (UTC, board time, or a fixed offset).
 [*] [B]Premium content control[/B] — the [ICODE][charge][/ICODE] BBCode, a [B]Bypass charge BBCode[/B] permission, and an editor toolbar button.
 [*] Spend/award API and an [ICODE]oc_credits_adjust[/ICODE] event — see [ICODE]docs/API.md[/ICODE] on GitHub.
@@ -55,9 +56,15 @@ To upgrade later: upload the newer zip and click [B]Upgrade[/B] on the add-on.
 
 [B]Changelog[/B]
 
+[B]0.13.1[/B]
+[LIST]
+[*] [B]Inflation hardening[/B] — the daily faucet is now tracked in its own ledger, so duplicating, disabling, or deleting an event mid-day can no longer move anyone's allowance; redeem codes count against it too. Demurrage passes are resumable and race-safe (a second runner gets "busy" instead of double-burning).
+[*] [B]Earning-event guardrails[/B] — saving an exact-duplicate active event (same trigger, currency, and scope) is refused, while scoped per-forum/per-group variants still work and deactivating always saves. Backfills and all earning paths skip banned, rejected, and disabled members.
+[/LIST]
+
 [B]0.13.0[/B]
 [LIST]
-[*] [B]Inflation control[/B] — an optional primary-currency money-supply toolkit: a balance cap, a daily faucet cap, and demurrage/decay. Caps apply to member earnings and redemptions; transfers and charges are unaffected, and admin adjustments remain trusted. Demurrage runs from a resumable daily cron, with a preview and "run now" in AdminCP → Credits → Tools.
+[*] [B]Inflation control[/B] — an optional primary-currency money-supply toolkit: a balance cap, a daily faucet cap, and demurrage/decay. Caps apply to member earnings and redemptions; transfers and charges are unaffected, and admin adjustments remain trusted. Demurrage runs from a resumable cron (checked every 15 minutes, applied once per period), with a preview and "run now" in AdminCP → Credits → Tools.
 [/LIST]
 
 [B]0.12.0[/B]
