@@ -159,6 +159,24 @@ class AwardEligibilityTest extends TestCase
         );
     }
 
+    public function testIneligibleUsersLeaveNoClaimMarker(): void
+    {
+        $user = \XF::em()->find('XF:User', $this->userId);
+        $user->set('is_banned', 1);
+        $user->save();
+
+        // Banned: no award and, crucially, no claim row — unbanning later
+        // the same day must not find a stale marker blocking the award.
+        $this->assertFalse($this->transact->awardDailyLoginIfNeeded($this->userId));
+        $this->assertSame(
+            0,
+            (int)$this->db->fetchOne(
+                'SELECT COUNT(*) FROM xf_oc_daily_claim WHERE user_id = ?',
+                [$this->userId]
+            )
+        );
+    }
+
     private function removeThrowawayUser(): void
     {
         $existing = \XF::em()->findOne('XF:User', ['username' => 'octest_elig']);

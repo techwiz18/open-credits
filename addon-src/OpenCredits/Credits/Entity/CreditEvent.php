@@ -35,9 +35,12 @@ class CreditEvent extends Entity
         } else {
             return [];
         }
-        return array_values(array_filter(array_map('intval', $ids), function ($id) {
+        // Dedupe: "4,4" must compare equal to "4" so repeated ids cannot
+        // slip past the exact-duplicate guard. Harmless for the other
+        // callers, which only do membership tests.
+        return array_values(array_unique(array_filter(array_map('intval', $ids), function ($id) {
             return $id > 0;
-        }));
+        })));
     }
 
     protected function getDayBoundaryLabel(): string
