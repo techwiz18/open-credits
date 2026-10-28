@@ -50,6 +50,42 @@ class InflationMathTest extends TestCase
         $this->assertSame(0.0, Transact::calculateCredit(-5.0, 0.0, 0.0, PHP_FLOAT_MAX, 2));
     }
 
+    public function testCapBelowBalanceCreditsNothing(): void
+    {
+        $this->assertSame(0.0, Transact::calculateCredit(10.0, 100.0, 50.0, PHP_FLOAT_MAX, 2));
+    }
+
+    public function testSubUnitHeadroomFloorsToZeroOnZeroDecimalCurrency(): void
+    {
+        // Legacy 4.50 balance on a 0-decimal currency with cap 5: the 0.50
+        // headroom floors to 0 instead of rounding up to 1.
+        $this->assertSame(0.0, Transact::calculateCredit(10.0, 4.5, 5.0, PHP_FLOAT_MAX, 0));
+    }
+
+    public function testSubUnitHeadroomFloorsBeforeClamping(): void
+    {
+        $this->assertSame(1.24, Transact::calculateCredit(10.0, 3.756, 5.0, PHP_FLOAT_MAX, 2));
+    }
+
+    public function testExactZeroFaucetCreditsNothing(): void
+    {
+        $this->assertSame(0.0, Transact::calculateCredit(10.0, 0.0, 0.0, 0.0, 2));
+    }
+
+    public function testFaucetRemainingFloorsToCurrency(): void
+    {
+        $this->assertSame(0.0, Transact::calculateCredit(10.0, 0.0, 0.0, 0.5, 0));
+    }
+
+    public function testFloorToDecimals(): void
+    {
+        $this->assertSame(0.0, Transact::floorToDecimals(0.5, 0));
+        $this->assertSame(1.0, Transact::floorToDecimals(1.9, 0));
+        $this->assertSame(1.24, Transact::floorToDecimals(1.249, 2));
+        $this->assertSame(0.0, Transact::floorToDecimals(-3.0, 2));
+        $this->assertSame(0.0, Transact::floorToDecimals(0.0, 2));
+    }
+
     public function testDemurrageIsRateOfBalance(): void
     {
         $this->assertSame(10.0, Transact::calculateDemurrage(100.0, 10.0, 2));

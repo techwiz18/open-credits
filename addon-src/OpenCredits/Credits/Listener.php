@@ -211,6 +211,8 @@ class Listener
         ];
         $deletes['xf_oc_balance'] = 'user_id = ?';
         $deletes['xf_oc_snapshot'] = 'user_id = ?';
+        $deletes['xf_oc_faucet'] = 'user_id = ?';
+        $deletes['xf_oc_daily_claim'] = 'user_id = ?';
     }
 
     protected static function applyTrigger(

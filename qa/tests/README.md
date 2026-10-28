@@ -31,8 +31,9 @@ docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install 
 Covered today:
 - `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,
   and reaction dedupe rows survive; net-zero rows are still pruned; and the
-  current earning day is never touched. It writes only under a synthetic user
-  id above every real one.
+  current earning day is never touched. It writes only under a throwaway
+  member (the rebuild only counts live members, so synthetic ids would never
+  rebuild).
 - `ChargeTest` — the `[charge]` service (#5): funds move reader → author, a
   repeat charge (including a changed price) is a no-op, overdrafts are refused,
   and self-charges are free. It uses two real members (the service locks user
@@ -52,6 +53,15 @@ Covered today:
   site-wide run, and the history row is labelled/unlinked.
 - `ChargeCleanupTest` — hard-deleting a post drops its unlock rows; member
   deletion covers both payer and author charge rows.
+- `InflationMathTest` (unit) — pure cap/faucet/demurrage math: partial fills,
+  sub-unit headroom flooring on 0-decimal currencies, floor-at-zero, rounding.
+- `InflationControlTest` — #8 against the dev forum under a synthetic primary
+  currency: cap fill/skip + admin bypass, faucet clamp + redeem counting,
+  duplicate-event and event-toggle faucet stability, custom-trigger sharing,
+  redeem cap/faucet rejection without consuming the code, secondary-currency
+  bypass, disabled no-op, at-cap daily-login claim markers, resumable/forced
+  demurrage with mirror + ledger checks, concurrent-pass busy, orphan purge,
+  and 0-decimal headroom flooring.
 - `MemberCreditsTest` — the wallet page (pagination 10 by default with per-page links, currency switcher,
   retired transfer/redeem redirects) and the per-member profile Credits tab
   (balances; send form for other members; no history for self; single-currency self tab uses the wallet).

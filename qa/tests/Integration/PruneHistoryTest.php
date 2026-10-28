@@ -16,9 +16,9 @@ use PHPUnit\Framework\TestCase;
  *   OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml
  * and it skips cleanly everywhere else (including public CI).
  *
- * Isolation: every row is written under a synthetic user id above every real
- * id, so no member's ledger, snapshot, or balance is touched. tearDown()
- * removes the synthetic rows and rebuilds.
+ * Isolation: every row is written under a throwaway member created for the
+ * test, so no real member's ledger, snapshot, or balance is touched.
+ * tearDown() removes the member, its rows, and rebuilds.
  */
 class PruneHistoryTest extends TestCase
 {
@@ -44,11 +44,16 @@ class PruneHistoryTest extends TestCase
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
 
-        $this->userId = 1000 + max(
-            (int)$this->db->fetchOne('SELECT COALESCE(MAX(user_id), 0) FROM xf_user'),
-            (int)$this->db->fetchOne('SELECT COALESCE(MAX(user_id), 0) FROM xf_oc_transaction'),
-            (int)$this->db->fetchOne('SELECT COALESCE(MAX(user_id), 0) FROM xf_oc_snapshot')
-        );
+        // A real member row: the balance rebuild only counts live members,
+        // so a synthetic id would never rebuild (orphan balances stay gone).
+        $this->removeThrowawayUser();
+        $user = \XF::repository('XF:User')->setupBaseUser();
+        $user->username = 'octest_prune';
+        $user->email = 'octest-prune-' . time() . '@example.invalid';
+        $user->user_group_id = 2;
+        $user->Auth->setPassword(bin2hex(random_bytes(16)));
+        $user->save();
+        $this->userId = (int)$user->user_id;
 
         $this->deleteSyntheticRows();
     }
@@ -59,6 +64,8 @@ class PruneHistoryTest extends TestCase
             return;
         }
         $this->deleteSyntheticRows();
+        $this->removeThrowawayUser();
+        $this->userId = 0;
         $this->transact->rebuildAllBalancesFully();
     }
 
@@ -213,6 +220,18 @@ class PruneHistoryTest extends TestCase
     {
         $this->db->delete('xf_oc_transaction', 'user_id = ?', [$this->userId]);
         $this->db->delete('xf_oc_snapshot', 'user_id = ?', [$this->userId]);
+        $this->db->delete('xf_oc_balance', 'user_id = ?', [$this->userId]);
+        $this->db->delete('xf_oc_faucet', 'user_id = ?', [$this->userId]);
+        $this->db->delete('xf_oc_daily_claim', 'user_id = ?', [$this->userId]);
+        Transact::clearBalanceCache();
+    }
+
+    private function removeThrowawayUser(): void
+    {
+        $existing = \XF::em()->findOne('XF:User', ['username' => 'octest_prune']);
+        if ($existing) {
+            $existing->delete();
+        }
         Transact::clearBalanceCache();
     }
 }

@@ -322,6 +322,7 @@ class Transact extends AbstractService
                 $db->rollBack();
                 return false;
             }
+            $faucetDayStart = 0;
             if ($respectInflation && $amount > 0 && $this->inflationApplies($currencyId)) {
                 $settings = $this->inflationSettings();
                 if ($settings['enabled']) {
@@ -330,14 +331,19 @@ class Transact extends AbstractService
                         [$userId, $currencyId]
                     );
                     $faucetRemaining = PHP_FLOAT_MAX;
+                    // The faucet ledger counts exactly what member mints
+                    // credited today — never event rows, so duplicating,
+                    // disabling, or deleting an event mid-day cannot move
+                    // the allowance, and custom integrator triggers count
+                    // the same as built-in ones. Tracked whenever inflation
+                    // is enabled so switching the faucet on mid-day still
+                    // sees this morning's earnings.
+                    $faucetDayStart = self::dayStart();
                     if ($settings['faucet'] > 0) {
                         $earned = (float)$db->fetchOne(
-                            'SELECT COALESCE(SUM(t.amount), 0) FROM xf_oc_transaction AS t'
-                            . ' INNER JOIN xf_oc_event AS e ON e.`trigger` = t.`trigger`'
-                            . ' AND e.currency_id = t.currency_id AND e.active = 1'
-                            . ' WHERE t.user_id = ? AND t.currency_id = ? AND t.log_date >= ?'
-                            . ' AND t.amount > 0 AND t.note != ?',
-                            [$userId, $currencyId, self::dayStart(), 'Historical backfill']
+                            'SELECT COALESCE(amount, 0) FROM xf_oc_faucet'
+                            . ' WHERE user_id = ? AND currency_id = ? AND day_start = ? FOR UPDATE',
+                            [$userId, $currencyId, $faucetDayStart]
                         );
                         $faucetRemaining = max(0.0, $settings['faucet'] - $earned);
                     }
@@ -369,6 +375,13 @@ class Transact extends AbstractService
                 'note' => substr($note, 0, 255),
                 'log_date' => \XF::$time,
             ]);
+            if ($faucetDayStart > 0) {
+                $db->query(
+                    'INSERT INTO xf_oc_faucet (user_id, currency_id, day_start, amount) VALUES (?, ?, ?, ?)'
+                    . ' ON DUPLICATE KEY UPDATE amount = amount + VALUES(amount)',
+                    [$userId, $currencyId, $faucetDayStart, $amount]
+                );
+            }
             $db->commit();
             $credited = $amount;
             self::clearBalanceCache($userId);
@@ -747,14 +760,30 @@ class Transact extends AbstractService
             }
             if ($this->inflationApplies($currencyId)) {
                 $settings = $this->inflationSettings();
-                if ($settings['enabled'] && $settings['cap'] > 0) {
+                if ($settings['enabled']) {
                     $balance = (float)$db->fetchOne(
                         'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
                         [$userId, $currencyId]
                     );
-                    if ($balance + $amount > $settings['cap']) {
+                    if ($settings['cap'] > 0
+                        && self::floorToDecimals($balance, (int)$currency['decimals'])
+                            + $amount > $settings['cap']
+                    ) {
                         $db->rollBack();
                         return 'capped';
+                    }
+                    $faucetDayStart = 0;
+                    if ($settings['faucet'] > 0) {
+                        $faucetDayStart = self::dayStart();
+                        $earned = (float)$db->fetchOne(
+                            'SELECT COALESCE(amount, 0) FROM xf_oc_faucet'
+                            . ' WHERE user_id = ? AND currency_id = ? AND day_start = ? FOR UPDATE',
+                            [$userId, $currencyId, $faucetDayStart]
+                        );
+                        if ($earned + $amount > $settings['faucet']) {
+                            $db->rollBack();
+                            return 'capped';
+                        }
                     }
                 }
             }
@@ -774,6 +803,13 @@ class Transact extends AbstractService
                 'note' => 'code #' . (int)$row['code_id'],
                 'log_date' => \XF::$time,
             ]);
+            if ($faucetDayStart > 0) {
+                $db->query(
+                    'INSERT INTO xf_oc_faucet (user_id, currency_id, day_start, amount) VALUES (?, ?, ?, ?)'
+                    . ' ON DUPLICATE KEY UPDATE amount = amount + VALUES(amount)',
+                    [$userId, $currencyId, $faucetDayStart, $amount]
+                );
+            }
             $db->query(
                 'UPDATE xf_oc_code SET uses = uses + 1 WHERE code_id = ?',
                 (int)$row['code_id']
@@ -807,6 +843,7 @@ class Transact extends AbstractService
             [$currencyId]
         );
         $lastRun = $state ? (int)$state['last_run'] : 0;
+        $inProgress = $state && (int)$state['cursor_user_id'] > 0;
         $result = [
             'enabled' => $settings['enabled'],
             'rate' => $settings['rate'],
@@ -814,6 +851,7 @@ class Transact extends AbstractService
             'currency' => $currency ?: null,
             'lastRun' => $lastRun,
             'nextRun' => $lastRun > 0 ? $lastRun + $settings['days'] * 86400 : 0,
+            'inProgress' => $inProgress,
             'accounts' => 0,
             'total' => 0.0,
         ];
@@ -821,10 +859,13 @@ class Transact extends AbstractService
             return $result;
         }
         $decimals = (int)$currency['decimals'];
+        // Only real members count: orphan balance rows (member deleted) are
+        // skipped by the burn and must not inflate the preview.
         $row = $db->fetchRow(
-            'SELECT SUM(CASE WHEN ROUND(balance * ? / 100, ?) > 0 THEN 1 ELSE 0 END) AS accounts,'
-            . ' COALESCE(SUM(LEAST(balance, ROUND(balance * ? / 100, ?))), 0) AS total'
-            . ' FROM xf_oc_balance WHERE currency_id = ? AND balance > 0',
+            'SELECT SUM(CASE WHEN ROUND(b.balance * ? / 100, ?) > 0 THEN 1 ELSE 0 END) AS accounts,'
+            . ' COALESCE(SUM(LEAST(b.balance, ROUND(b.balance * ? / 100, ?))), 0) AS total'
+            . ' FROM xf_oc_balance AS b INNER JOIN xf_user AS u ON u.user_id = b.user_id'
+            . ' WHERE b.currency_id = ? AND b.balance > 0',
             [$settings['rate'], $decimals, $settings['rate'], $decimals, $currencyId]
         );
         $result['accounts'] = (int)($row['accounts'] ?? 0);
@@ -833,9 +874,13 @@ class Transact extends AbstractService
     }
 
     /**
-     * One resumable demurrage batch. The cursor lives in xf_oc_inflation and
-     * is advanced in the same transaction as each burn; a concurrent runner
-     * that loses the cursor race rolls back instead of double-burning.
+     * One resumable demurrage batch. A pass is claimed atomically with a
+     * random pass token (pass_token = 0 means idle); every cursor advance
+     * and the completion write must match the token, so a concurrent runner
+     * that loses the race gets 'busy' instead of double-burning. The rate
+     * and decimals are snapshotted at pass start so a resumable pass burns
+     * every member at the same rate even if the admin changes settings
+     * mid-pass.
      */
     public function demurrageStep(int $batchSize = 500, bool $ignoreInterval = false): array
     {
@@ -843,7 +888,7 @@ class Transact extends AbstractService
         $settings = $this->inflationSettings();
         $currencyId = $this->primaryCurrencyId();
         $result = [
-            'ran' => false, 'done' => true, 'processed' => 0,
+            'ran' => false, 'done' => true, 'busy' => false, 'processed' => 0,
             'burned' => 0.0, 'accounts' => 0, 'lastRun' => 0, 'nextRun' => 0,
         ];
         if (!$settings['enabled'] || $settings['rate'] <= 0) {
@@ -857,10 +902,10 @@ class Transact extends AbstractService
         if (!$currency || !(int)$currency['active']) {
             return $result;
         }
-        $decimals = (int)$currency['decimals'];
         $now = \XF::$time;
         $state = $db->fetchRow(
-            'SELECT last_run, cursor_user_id, pass_started FROM xf_oc_inflation WHERE currency_id = ?',
+            'SELECT last_run, cursor_user_id, pass_started, pass_token, pass_rate, pass_decimals'
+            . ' FROM xf_oc_inflation WHERE currency_id = ?',
             [$currencyId]
         );
         if (!$state) {
@@ -869,21 +914,125 @@ class Transact extends AbstractService
                 'last_run' => 0,
                 'cursor_user_id' => 0,
                 'pass_started' => 0,
+                'pass_token' => 0,
+                'pass_rate' => 0,
+                'pass_decimals' => (int)$currency['decimals'],
             ]);
-            $state = ['last_run' => 0, 'cursor_user_id' => 0, 'pass_started' => 0];
+            $state = [
+                'last_run' => 0, 'cursor_user_id' => 0, 'pass_started' => 0,
+                'pass_token' => 0, 'pass_rate' => 0, 'pass_decimals' => (int)$currency['decimals'],
+            ];
         }
         $lastRun = (int)$state['last_run'];
         $cursor = (int)$state['cursor_user_id'];
-        $resuming = $cursor > 0;
+        $token = (int)$state['pass_token'];
+        $passStarted = (int)$state['pass_started'];
+        // A stale row (cursor without a token) from an older version is
+        // resumed under a freshly claimed token below.
+        $resuming = $cursor > 0 && $token !== 0;
         $interval = $settings['days'] * 86400;
-        if (!$resuming && !$ignoreInterval && $lastRun > 0 && ($now - $lastRun) < $interval) {
+        // Tolerance for cron jitter: XF preserves the request second when
+        // scheduling, so the tick can land a few seconds early and must not
+        // push the whole period out by a day.
+        if (!$resuming && !$ignoreInterval && $lastRun > 0 && ($now - $lastRun) < $interval - 60) {
             return array_merge($result, ['lastRun' => $lastRun, 'nextRun' => $lastRun + $interval]);
         }
-        if (!$resuming) {
-            $db->update('xf_oc_inflation', [
-                'cursor_user_id' => 0,
-                'pass_started' => $now,
-            ], 'currency_id = ?', [$currencyId]);
+        if ($resuming) {
+            // Heartbeat: prove the pass is still ours and mark it alive, so
+            // a pass abandoned mid-flight (owner died over an hour ago) can
+            // be reclaimed below instead of blocking every future run.
+            // MySQL reports 0 affected rows when the value is unchanged
+            // (same-second heartbeat), so a miss is confirmed with a fresh
+            // read before crying busy.
+            $alive = $db->update(
+                'xf_oc_inflation',
+                ['pass_started' => $now],
+                'currency_id = ? AND pass_token = ? AND cursor_user_id = ?',
+                [$currencyId, $token, $cursor]
+            );
+            if (!$alive) {
+                $fresh = $db->fetchRow(
+                    'SELECT cursor_user_id, pass_token FROM xf_oc_inflation WHERE currency_id = ?',
+                    [$currencyId]
+                );
+                if (!$fresh || (int)$fresh['pass_token'] !== $token || (int)$fresh['cursor_user_id'] !== $cursor) {
+                    return array_merge($result, ['busy' => true, 'done' => false, 'lastRun' => $lastRun]);
+                }
+            }
+            $rate = (float)$state['pass_rate'];
+            $decimals = (int)$state['pass_decimals'];
+            if ($rate <= 0) {
+                $rate = (float)$settings['rate'];
+            }
+        } elseif ($cursor > 0 && $token === 0) {
+            // Legacy in-flight row: claim it instead of restarting.
+            $token = random_int(1, 2147483647);
+            $claimed = $db->update(
+                'xf_oc_inflation',
+                [
+                    'pass_token' => $token,
+                    'pass_started' => $now,
+                    'pass_rate' => $settings['rate'],
+                    'pass_decimals' => (int)$currency['decimals'],
+                ],
+                'currency_id = ? AND pass_token = 0 AND cursor_user_id = ?',
+                [$currencyId, $cursor]
+            );
+            if (!$claimed) {
+                return array_merge($result, ['busy' => true, 'done' => false, 'lastRun' => $lastRun]);
+            }
+            $rate = (float)$settings['rate'];
+            $decimals = (int)$currency['decimals'];
+        } else {
+            if ($token !== 0) {
+                // Claimed but no progress yet: owned by another runner,
+                // unless the owner died between claim and first batch.
+                if ($passStarted < $now - 3600) {
+                    $released = $db->update(
+                        'xf_oc_inflation',
+                        [
+                            'pass_token' => 0,
+                            'pass_started' => 0,
+                            'pass_rate' => 0,
+                        ],
+                        'currency_id = ? AND pass_token = ? AND cursor_user_id = 0 AND pass_started < ?',
+                        [$currencyId, $token, $now - 3600]
+                    );
+                    if (!$released) {
+                        return array_merge($result, ['busy' => true, 'done' => false, 'lastRun' => $lastRun]);
+                    }
+                    $token = 0;
+                } else {
+                    return array_merge($result, ['busy' => true, 'done' => false, 'lastRun' => $lastRun]);
+                }
+            }
+            $token = random_int(1, 2147483647);
+            $claimed = $db->update(
+                'xf_oc_inflation',
+                [
+                    'pass_token' => $token,
+                    'pass_started' => $now,
+                    'pass_rate' => $settings['rate'],
+                    'pass_decimals' => (int)$currency['decimals'],
+                    'cursor_user_id' => 0,
+                ],
+                'currency_id = ? AND pass_token = 0 AND cursor_user_id = 0 AND last_run = ?',
+                [$currencyId, $lastRun]
+            );
+            if (!$claimed) {
+                // Another runner (cron, admin, or CLI) owns the pass, or a
+                // pass completed between our read and our claim.
+                return array_merge($result, ['busy' => true, 'done' => false, 'lastRun' => $lastRun]);
+            }
+            $cursor = 0;
+            // Stale faucet rows are dead weight: drop anything older
+            // than a week at pass start.
+            $db->query(
+                'DELETE FROM xf_oc_faucet WHERE day_start < ?',
+                [$now - 7 * 86400]
+            );
+            $rate = (float)$settings['rate'];
+            $decimals = (int)$currency['decimals'];
         }
         $rows = $db->fetchAll(
             'SELECT user_id FROM xf_oc_balance WHERE currency_id = ? AND user_id > ? AND balance > 0'
@@ -891,11 +1040,21 @@ class Transact extends AbstractService
             [$currencyId, $cursor]
         );
         if (!$rows) {
-            $db->update('xf_oc_inflation', [
-                'last_run' => $now,
-                'cursor_user_id' => 0,
-                'pass_started' => 0,
-            ], 'currency_id = ?', [$currencyId]);
+            $finished = $db->update(
+                'xf_oc_inflation',
+                [
+                    'last_run' => $now,
+                    'cursor_user_id' => 0,
+                    'pass_started' => 0,
+                    'pass_token' => 0,
+                    'pass_rate' => 0,
+                ],
+                'currency_id = ? AND pass_token = ? AND cursor_user_id = ?',
+                [$currencyId, $token, $cursor]
+            );
+            if (!$finished) {
+                return array_merge($result, ['busy' => true, 'done' => false, 'lastRun' => $lastRun]);
+            }
             return array_merge($result, ['ran' => true, 'done' => true, 'lastRun' => $now]);
         }
         $processed = 0;
@@ -911,13 +1070,13 @@ class Transact extends AbstractService
                 $advanced = $db->update(
                     'xf_oc_inflation',
                     ['cursor_user_id' => $userId],
-                    'currency_id = ? AND cursor_user_id = ?',
-                    [$currencyId, $lastUserId]
+                    'currency_id = ? AND cursor_user_id = ? AND pass_token = ?',
+                    [$currencyId, $lastUserId, $token]
                 );
                 if (!$advanced) {
                     $db->rollBack();
                     return array_merge($result, [
-                        'ran' => true, 'done' => false, 'processed' => $processed,
+                        'ran' => true, 'busy' => true, 'done' => false, 'processed' => $processed,
                         'burned' => $burned, 'accounts' => $accounts, 'lastRun' => $lastRun,
                     ]);
                 }
@@ -926,7 +1085,7 @@ class Transact extends AbstractService
                         'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
                         [$userId, $currencyId]
                     );
-                    $burn = self::calculateDemurrage($balance, $settings['rate'], $decimals);
+                    $burn = self::calculateDemurrage($balance, $rate, $decimals);
                     if ($burn > 0) {
                         $this->applyBalanceDelta($userId, $currencyId, -$burn);
                         $db->insert('xf_oc_transaction', [
@@ -940,6 +1099,15 @@ class Transact extends AbstractService
                             'log_date' => $now,
                         ]);
                     }
+                } else {
+                    // Orphan balance (member deleted): drop the cached row.
+                    // The ledger stays as financial history; the rebuild no
+                    // longer resurrects it (it only rebuilds live members).
+                    $db->delete(
+                        'xf_oc_balance',
+                        'user_id = ? AND currency_id = ?',
+                        [$userId, $currencyId]
+                    );
                 }
                 $db->commit();
             } catch (\Throwable $e) {
@@ -957,11 +1125,33 @@ class Transact extends AbstractService
         }
         $done = count($rows) < $batchSize;
         if ($done) {
-            $db->update('xf_oc_inflation', [
-                'last_run' => $now,
-                'cursor_user_id' => 0,
-                'pass_started' => 0,
-            ], 'currency_id = ?', [$currencyId]);
+            $finished = $db->update(
+                'xf_oc_inflation',
+                [
+                    'last_run' => $now,
+                    'cursor_user_id' => 0,
+                    'pass_started' => 0,
+                    'pass_token' => 0,
+                    'pass_rate' => 0,
+                ],
+                'currency_id = ? AND pass_token = ? AND cursor_user_id = ?',
+                [$currencyId, $token, $lastUserId]
+            );
+            if (!$finished) {
+                return array_merge($result, [
+                    'ran' => true, 'busy' => true, 'done' => false, 'processed' => $processed,
+                    'burned' => $burned, 'accounts' => $accounts, 'lastRun' => $lastRun,
+                ]);
+            }
+        } elseif ($processed > 0) {
+            // Heartbeat for long passes: a resumable run spanning many cron
+            // ticks must not look abandoned to the stale-claim recovery.
+            $db->update(
+                'xf_oc_inflation',
+                ['pass_started' => $now],
+                'currency_id = ? AND pass_token = ? AND cursor_user_id = ?',
+                [$currencyId, $token, $lastUserId]
+            );
         }
         return array_merge($result, [
             'ran' => true,
@@ -974,8 +1164,12 @@ class Transact extends AbstractService
     }
 
     /**
-     * Run demurrage batches until the pass completes or the optional time
-     * budget is hit. The cron uses a budget; the admin/CLI run full.
+     * Run demurrage batches until the pass completes, another runner wins
+     * the pass, or the optional time budget is hit. Never retries a lost
+     * race: a 'busy' step aborts immediately so overlapping admin/CLI/cron
+     * runs cannot start a second pass over the same balances. The cron uses
+     * a budget; the CLI runs full; the admin path uses a budget and reports
+     * the resume state.
      */
     public function runDemurrage(int $batchSize = 500, bool $ignoreInterval = false, ?int $timeBudget = null): array
     {
@@ -985,11 +1179,23 @@ class Transact extends AbstractService
         $accounts = 0;
         $done = false;
         $ran = false;
+        $busy = false;
         do {
             $step = $this->demurrageStep($batchSize, $ignoreInterval);
+            if (!empty($step['busy'])) {
+                return [
+                    'ran' => $ran,
+                    'busy' => true,
+                    'done' => false,
+                    'processed' => $processed,
+                    'burned' => $burned,
+                    'accounts' => $accounts,
+                ];
+            }
             if (!$step['ran']) {
                 return [
                     'ran' => $ran,
+                    'busy' => false,
                     'done' => $step['done'],
                     'processed' => $processed,
                     'burned' => $burned,
@@ -1007,6 +1213,7 @@ class Transact extends AbstractService
         } while (!$done);
         return [
             'ran' => $ran,
+            'busy' => $busy,
             'done' => $done,
             'processed' => $processed,
             'burned' => $burned,
@@ -1089,7 +1296,10 @@ class Transact extends AbstractService
     /**
      * Actual member credit after the balance cap and daily faucet.
      * $cap = 0 disables the cap; $faucetRemaining = PHP_FLOAT_MAX disables
-     * the faucet. Pure so it can be unit-tested without booting XenForo.
+     * the faucet. Headroom is floored to the currency's smallest unit before
+     * clamping, so a legacy sub-unit balance can never round its way over the
+     * cap on a 0-decimal currency. Pure so it can be unit-tested without
+     * booting XenForo.
      */
     public static function calculateCredit(
         float $requested,
@@ -1101,15 +1311,26 @@ class Transact extends AbstractService
         if ($requested <= 0) {
             return 0.0;
         }
+        $decimals = max(0, $decimals);
         $amount = $requested;
         if ($cap > 0) {
-            $amount = min($amount, $cap - $balance);
+            $amount = min($amount, self::floorToDecimals($cap - $balance, $decimals));
         }
         if ($faucetRemaining >= 0) {
-            $amount = min($amount, $faucetRemaining);
+            $amount = min($amount, self::floorToDecimals($faucetRemaining, $decimals));
         }
-        $amount = round($amount, max(0, $decimals));
+        $amount = round($amount, $decimals);
         return $amount > 0 ? $amount : 0.0;
+    }
+
+    /**
+     * Round down to the currency's smallest unit. Pure for unit tests.
+     */
+    public static function floorToDecimals(float $value, int $decimals): float
+    {
+        $decimals = max(0, $decimals);
+        $mult = 10 ** $decimals;
+        return floor(max(0.0, $value) * $mult + 1e-9) / $mult;
     }
 
     /**
@@ -1143,6 +1364,10 @@ class Transact extends AbstractService
      * Called from the visitor_setup listener (every request for logged-in users).
      * Fast path avoids the transaction when already awarded; the user-row lock
      * serializes concurrent first-requests of the day.
+     *
+     * When the cap or faucet clamps the award to zero, a claim marker is
+     * recorded so later requests today short-circuit on the fast path instead
+     * of retrying a write transaction on every page view.
      */
     public function awardDailyLoginIfNeeded(int $userId): bool
     {
@@ -1158,6 +1383,13 @@ class Transact extends AbstractService
         if ($already > 0) {
             return false;
         }
+        $claimed = (int)$db->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_daily_claim WHERE user_id = ? AND day_start = ?',
+            [$userId, $start]
+        );
+        if ($claimed > 0) {
+            return false;
+        }
         $db->beginTransaction();
         try {
             $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
@@ -1169,13 +1401,44 @@ class Transact extends AbstractService
                 $db->commit();
                 return false;
             }
+            $recheckClaim = (int)$db->fetchOne(
+                'SELECT COUNT(*) FROM xf_oc_daily_claim WHERE user_id = ? AND day_start = ?',
+                [$userId, $start]
+            );
+            if ($recheckClaim > 0) {
+                $db->commit();
+                return false;
+            }
             $awarded = $this->awardByTrigger('daily_login', $userId, $userId);
+            if (!$awarded && $this->hasActiveEvents('daily_login')) {
+                // Configured but clamped to zero by the cap/faucet: mark the
+                // day claimed so later requests skip the write transaction.
+                $db->query(
+                    'INSERT IGNORE INTO xf_oc_daily_claim (user_id, day_start) VALUES (?, ?)',
+                    [$userId, $start]
+                );
+            }
             $db->commit();
             return $awarded;
         } catch (\Throwable $e) {
             $db->rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Whether any active event exists for a trigger (used to tell "nothing
+     * configured" apart from "configured but clamped to zero").
+     */
+    protected function hasActiveEvents(string $trigger): bool
+    {
+        if (array_key_exists($trigger, self::$eventRowsCache)) {
+            return (bool)self::$eventRowsCache[$trigger];
+        }
+        return (bool)$this->db()->fetchOne(
+            'SELECT event_id FROM xf_oc_event WHERE `trigger` = ? AND active = 1 LIMIT 1',
+            [$trigger]
+        );
     }
 
     /**
@@ -1278,12 +1541,16 @@ class Transact extends AbstractService
                 // rebuild (which used to lock balances first).
                 $db->query('SELECT user_id FROM xf_user ORDER BY user_id FOR UPDATE');
                 $db->query('DELETE FROM xf_oc_balance');
+                // Live members only: ledger rows for deleted users stay as
+                // financial history but must not resurrect balance rows (the
+                // demurrage burn skips orphans the same way).
                 $stmt = $db->query(
                     'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
-                    . ' SELECT user_id, currency_id, SUM(amount) FROM ('
+                    . ' SELECT combined.user_id, combined.currency_id, SUM(combined.amount) FROM ('
                     . 'SELECT user_id, currency_id, balance AS amount FROM xf_oc_snapshot'
                     . ' UNION ALL SELECT user_id, currency_id, amount FROM xf_oc_transaction'
-                    . ') AS combined GROUP BY user_id, currency_id'
+                    . ') AS combined INNER JOIN xf_user AS u ON u.user_id = combined.user_id'
+                    . ' GROUP BY combined.user_id, combined.currency_id'
                 );
                 $rows = (int)$stmt->rowsAffected();
                 $this->resyncPrimaryMirror(null, null);
@@ -1314,10 +1581,11 @@ class Transact extends AbstractService
             );
             $stmt = $db->query(
                 'INSERT INTO xf_oc_balance (user_id, currency_id, balance)'
-                . ' SELECT user_id, currency_id, SUM(amount) FROM ('
+                . ' SELECT combined.user_id, combined.currency_id, SUM(combined.amount) FROM ('
                 . 'SELECT user_id, currency_id, balance AS amount FROM xf_oc_snapshot WHERE user_id > ? AND user_id <= ?'
                 . ' UNION ALL SELECT user_id, currency_id, amount FROM xf_oc_transaction WHERE user_id > ? AND user_id <= ?'
-                . ') AS combined GROUP BY user_id, currency_id',
+                . ') AS combined INNER JOIN xf_user AS u ON u.user_id = combined.user_id'
+                . ' GROUP BY combined.user_id, combined.currency_id',
                 [$startAfterUserId, $endUserId, $startAfterUserId, $endUserId]
             );
             $rows = (int)$stmt->rowsAffected();

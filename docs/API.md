@@ -145,9 +145,12 @@ $status = $credits->redeem(int $userId, string $code, ?array &$granted = null): 
 
 Redeems a member-facing coupon code (AdminCP → Credits → Redeem codes).
 Owns its transaction and locks the code row, so limited-use caps stay exact.
-Returns `'ok'` (with `$granted = ['amount', 'currency_id']`) or a failure
-code: `not_found`, `inactive`, `expired`, `exhausted`, `already_redeemed`
-(one per member per code), `invalid_amount`. No earn alert is sent.
+When inflation control is enabled on the primary currency, the code must fit
+under the balance cap and inside the remaining daily faucet, otherwise it
+returns `'capped'` with the code left unused. Returns `'ok'` (with `$granted =
+['amount', 'currency_id']`) or a failure code: `not_found`, `inactive`,
+`expired`, `exhausted`, `already_redeemed` (one per member per code),
+`invalid_amount`, `capped`. No earn alert is sent.
 
 ## Reacting to balance changes
 

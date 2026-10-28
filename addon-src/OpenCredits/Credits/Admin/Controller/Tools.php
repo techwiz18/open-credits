@@ -343,7 +343,9 @@ class Tools extends AbstractController
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
         try {
-            $result = $svc->runDemurrage(500, true);
+            // Bounded so a large board cannot exceed the web request limit;
+            // an unfinished pass reports its progress and can be resumed.
+            $result = $svc->runDemurrage(500, true, 25);
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits demurrage failed: ');
             return $this->error(
@@ -355,7 +357,8 @@ class Tools extends AbstractController
             'OpenCredits\Credits:Tools\Demurrage',
             'oc_tools_demurrage',
             [
-                'ran' => true,
+                'ran' => (bool)$result['ran'],
+                'busy' => (bool)($result['busy'] ?? false),
                 'preview' => $svc->demurragePreview(),
                 'result' => $result,
             ]

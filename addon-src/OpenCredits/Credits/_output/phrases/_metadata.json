@@ -413,6 +413,12 @@
         "version_string": "0.10.1-dev",
         "hash": "2e8a0175d801ac4eb935657f8b128c21"
     },
+    "ocadm_demurrage_busy.txt": {
+        "global_cache": false,
+        "version_id": 940,
+        "version_string": "0.13.0-dev",
+        "hash": "8f14532ee241a73dce404e139645be12"
+    },
     "ocadm_demurrage_disabled.txt": {
         "global_cache": false,
         "version_id": 939,
@@ -436,6 +442,18 @@
         "version_id": 939,
         "version_string": "0.12.0",
         "hash": "4f57bc4d675d14ceb0a877ebfbfb0ae7"
+    },
+    "ocadm_demurrage_in_progress.txt": {
+        "global_cache": false,
+        "version_id": 940,
+        "version_string": "0.13.0-dev",
+        "hash": "41680bd23e199ea2db165f314466a0c5"
+    },
+    "ocadm_demurrage_incomplete.txt": {
+        "global_cache": false,
+        "version_id": 940,
+        "version_string": "0.13.0-dev",
+        "hash": "ec97e1e734919520f499fc950ce7255e"
     },
     "ocadm_demurrage_last_run.txt": {
         "global_cache": false,

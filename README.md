@@ -176,9 +176,10 @@ through the transaction service.
 * Reject currency-precision changes that would silently round existing
   balances.
 
-**Planned: inflation control** ([#8](../../issues/8)) — the last core economy
+**Shipped: inflation control** ([#8](../../issues/8)) — the last core economy
 epic: an on/off toggle plus a balance cap, a daily faucet limit, and
-demurrage/decay so admins can keep the money supply in check.
+demurrage/decay so admins can keep the money supply in check. This is the
+complete core scope; the roadmap below is hardening plus the 1.0 pass.
 
 **Extension points, not core** — interest/tax/paychecks ([#6](../../issues/6))
 and payments/shop ([#7](../../issues/7)) are deliberately not bundled. They fit
