@@ -1425,9 +1425,11 @@ class Transact extends AbstractService
                 return false;
             }
             $awarded = $this->awardByTrigger('daily_login', $userId, $userId);
-            if (!$awarded && $this->hasActiveEvents('daily_login')) {
+            if (!$awarded && $this->hasActiveEvents('daily_login') && $this->isAwardEligible($userId)) {
                 // Configured but clamped to zero by the cap/faucet: mark the
                 // day claimed so later requests skip the write transaction.
+                // Ineligible members get no marker — unbanning later the same
+                // day must not find a stale claim blocking their award.
                 $db->query(
                     'INSERT IGNORE INTO xf_oc_daily_claim (user_id, day_start) VALUES (?, ?)',
                     [$userId, $start]

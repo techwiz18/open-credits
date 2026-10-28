@@ -156,7 +156,6 @@ class Charge
             $balance = $visitor->user_id ? self::transact()->getBalance((int)$visitor->user_id, $currencyId) : 0.0;
 
             return \XF::app()->templater()->renderTemplate('public:oc_charge_locked', [
-                'amount' => $amount,
                 'price' => $currency->format($amount),
                 'currency' => $currency,
                 'contentType' => $contentType,
@@ -245,7 +244,6 @@ class Charge
         }
         return \XF::app()->templater()->renderTemplate('public:oc_charge_author_stats', [
             'count' => $count,
-            'amount' => $amount,
             'total' => $currency->format($count * $amount),
         ]);
     }

@@ -114,6 +114,9 @@ class CreditEvent extends AbstractController
         if ($input['amount'] <= 0.0) {
             return $this->error('Amount must be greater than zero. Deactivate the event instead.');
         }
+        // Refuse only exact duplicates (same scope): per-forum/per-group
+        // rates legitimately need several same-trigger rows, and stacking
+        // those is by design. Identical rows can only double-pay.
         $duplicate = $this->finder('OpenCredits\Credits:CreditEvent')
             ->where('trigger', $input['trigger'])
             ->where('currency_id', (int)$currency->currency_id)
@@ -121,10 +124,21 @@ class CreditEvent extends AbstractController
         if (!$event->isInsert()) {
             $duplicate = $duplicate->where('event_id', '!=', (int)$event->event_id);
         }
-        if ($duplicate->fetchOne()) {
-            return $this->error(
-                'An active event for this trigger and currency already exists. Edit that one instead — duplicates would pay out twice.'
-            );
+        $newForums = EventEntity::decodeIdList($input['forum_ids']);
+        sort($newForums);
+        $newGroups = EventEntity::decodeIdList($input['usergroup_ids']);
+        sort($newGroups);
+        foreach ($duplicate->fetch() as $conflict) {
+            /** @var EventEntity $conflict */
+            $oldForums = EventEntity::decodeIdList($conflict->forum_ids);
+            sort($oldForums);
+            $oldGroups = EventEntity::decodeIdList($conflict->usergroup_ids);
+            sort($oldGroups);
+            if ($oldForums === $newForums && $oldGroups === $newGroups) {
+                return $this->error(
+                    'An identical active event (same trigger, currency, and scope) already exists. Edit that one instead — exact duplicates would pay out twice.'
+                );
+            }
         }
         $input['forum_ids'] = EventEntity::decodeIdList($input['forum_ids']);
         $input['usergroup_ids'] = EventEntity::decodeIdList($input['usergroup_ids']);

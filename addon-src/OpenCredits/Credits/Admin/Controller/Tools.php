@@ -623,6 +623,9 @@ class Tools extends AbstractController
         $from .= ' INNER JOIN xf_user AS u ON u.user_id = ' . $author . '.user_id';
 
         $where = "{$state} = 'visible' AND {$author}.user_id > 0";
+        // Match the earning rules: banned, rejected, and disabled members
+        // earn nothing, so backfilling them would contradict every award path.
+        $where .= " AND u.user_state NOT IN ('rejected', 'disabled') AND u.is_banned = 0";
         $params = [];
 
         if ($isPost) {
