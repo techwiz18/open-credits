@@ -353,11 +353,15 @@ class Tools extends AbstractController
             );
         }
 
+        // A busy first step means another runner owns the pass: report it
+        // as ran so the template shows the busy message instead of the
+        // form again. An interval skip (not busy) still shows the form.
+        $ran = (bool)$result['ran'] || !empty($result['busy']);
         return $this->view(
             'OpenCredits\Credits:Tools\Demurrage',
             'oc_tools_demurrage',
             [
-                'ran' => (bool)$result['ran'],
+                'ran' => $ran,
                 'busy' => (bool)($result['busy'] ?? false),
                 'preview' => $svc->demurragePreview(),
                 'result' => $result,
