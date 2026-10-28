@@ -1,0 +1,1 @@
+Demurrage pass incomplete: {accounts} account(s), {amount} {currency} burned so far. Re-run to resume.

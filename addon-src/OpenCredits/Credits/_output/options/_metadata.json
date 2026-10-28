@@ -1,1 +1,50 @@
-{"ocSendEarnAlerts.json":{"hash":"e7410d07afe28e7a08ce90fab07a32a3"},"ocShowMenu.json":{"hash":"3aac63037521361cf6109250ca3905fd"},"ocShowPostbit.json":{"hash":"611825860ee2b41958b38dad5c06c18f"},"ocShowProfileStats.json":{"hash":"b7ef363b616864fb7044a5ed2863f654"},"ocShowProfileTab.json":{"hash":"cc2477d2e4cb58375689d769e6b0a1fc"},"ocDayBoundary.json":{"hash":"76d615859f79a20e084957079b1e1dbf"},"ocDayOffsetHours.json":{"hash":"7ea2bf4ceb80516c186d10a058e7283d"},"ocHistoryRetentionDays.json":{"hash":"e7b602df84b4bd911e5adad6dd6a74ef"},"ocShowWalletRedeem.json":{"hash":"988ff99be45c1eb5d1d2c6237dd788a2"},"ocShowTransfer.json":{"hash":"cb030f3b086f38b34d2f480b5b40f8fe"},"ocProfileTabMode.json":{"hash":"7e33a1b9a92bfe1d7f1962c9f8c4c174"}}
+{
+    "ocDayBoundary.json": {
+        "hash": "76d615859f79a20e084957079b1e1dbf"
+    },
+    "ocDayOffsetHours.json": {
+        "hash": "7ea2bf4ceb80516c186d10a058e7283d"
+    },
+    "ocHistoryRetentionDays.json": {
+        "hash": "e7b602df84b4bd911e5adad6dd6a74ef"
+    },
+    "ocInflationBalanceCap.json": {
+        "hash": "38f1e8c09a012e6a8ee7a46fb5cef6ac"
+    },
+    "ocInflationDemurrageDays.json": {
+        "hash": "9c3ab545324628d048bb15023211abe6"
+    },
+    "ocInflationDemurrageRate.json": {
+        "hash": "18a28f8b6f5e8823cfb0a0e2c457522c"
+    },
+    "ocInflationEnabled.json": {
+        "hash": "1b00a1752f46921107334a01d870bceb"
+    },
+    "ocInflationFaucetDaily.json": {
+        "hash": "9636fb971cb8f4920e94f5c941d558d8"
+    },
+    "ocProfileTabMode.json": {
+        "hash": "7e33a1b9a92bfe1d7f1962c9f8c4c174"
+    },
+    "ocSendEarnAlerts.json": {
+        "hash": "e7410d07afe28e7a08ce90fab07a32a3"
+    },
+    "ocShowMenu.json": {
+        "hash": "3aac63037521361cf6109250ca3905fd"
+    },
+    "ocShowPostbit.json": {
+        "hash": "611825860ee2b41958b38dad5c06c18f"
+    },
+    "ocShowProfileStats.json": {
+        "hash": "b7ef363b616864fb7044a5ed2863f654"
+    },
+    "ocShowProfileTab.json": {
+        "hash": "cc2477d2e4cb58375689d769e6b0a1fc"
+    },
+    "ocShowTransfer.json": {
+        "hash": "cb030f3b086f38b34d2f480b5b40f8fe"
+    },
+    "ocShowWalletRedeem.json": {
+        "hash": "988ff99be45c1eb5d1d2c6237dd788a2"
+    }
+}

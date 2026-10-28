@@ -1,0 +1,1 @@
+Burn the configured percentage of primary-currency balances now. The cron normally runs this once per period.

@@ -38,6 +38,11 @@ class Tools extends AbstractController
                 'hint' => \XF::phrase('ocadm_tool_prune_hint')->render(),
                 'link' => $this->buildLink('oc-tools/prune'),
             ],
+            [
+                'label' => \XF::phrase('ocadm_tool_demurrage_title')->render(),
+                'hint' => \XF::phrase('ocadm_tool_demurrage_hint')->render(),
+                'link' => $this->buildLink('oc-tools/demurrage'),
+            ],
         ];
 
         return $this->view(
@@ -312,6 +317,51 @@ class Tools extends AbstractController
                 'newBalance' => $svc->getBalance((int)$target->user_id, $currencyId),
                 'targetUsername' => $target->username,
             ])
+        );
+    }
+
+    public function actionDemurrage(): \XF\Mvc\Reply\AbstractReply
+    {
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+
+        return $this->view(
+            'OpenCredits\Credits:Tools\Demurrage',
+            'oc_tools_demurrage',
+            [
+                'ran' => false,
+                'preview' => $svc->demurragePreview(),
+                'result' => null,
+            ]
+        );
+    }
+
+    public function actionDemurrageSave(): \XF\Mvc\Reply\AbstractReply
+    {
+        $this->assertPostOnly();
+
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+        try {
+            // Bounded so a large board cannot exceed the web request limit;
+            // an unfinished pass reports its progress and can be resumed.
+            $result = $svc->runDemurrage(500, true, 25);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits demurrage failed: ');
+            return $this->error(
+                'Demurrage failed due to a server error. Completed batches are kept — fix the cause and re-run.'
+            );
+        }
+
+        return $this->view(
+            'OpenCredits\Credits:Tools\Demurrage',
+            'oc_tools_demurrage',
+            [
+                'ran' => (bool)$result['ran'],
+                'busy' => (bool)($result['busy'] ?? false),
+                'preview' => $svc->demurragePreview(),
+                'result' => $result,
+            ]
         );
     }
 

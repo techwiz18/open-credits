@@ -8,7 +8,7 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 
 | Path | Role |
 |---|---|
-| `addon.json` | Add-on meta. Current: 0.12.0 / 939. Requires XF 2.3.0+, PHP 8.2+ |
+| `addon.json` | Add-on meta. Current: 0.13.0 / 940. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
@@ -17,7 +17,9 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 | `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect |
 | `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated) |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
+| `Cli/Command/Demurrage.php` | `oc-credits:demurrage` CLI (`--preview` or run now) |
 | `Cron/DailyLogin.php` | Stub (daily_login is awarded via `visitor_setup`, not cron) |
+| `Cron/Demurrage.php` | Demurrage cron (every 15 min); 10s budget per tick, resumable |
 | `_output/` | Dev-output JSON/HTML/TXT synced into XF on install/upgrade |
 
 ## Database
@@ -53,6 +55,22 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
   `user_id` is 0 for a site-wide run or the member id for a per-member run;
   `last_user_id` is the last committed user-id boundary; `completed_date = 0`
   while running.
+* `xf_oc_inflation(currency_id, last_run, cursor_user_id, pass_started,
+  pass_token, pass_rate, pass_decimals)` — resumable demurrage state for the
+  primary currency. `last_run` is the last completed pass; `cursor_user_id`
+  resumes an in-flight pass; `pass_token` (0 = idle) claims a pass for exactly
+  one runner and `pass_rate`/`pass_decimals` snapshot the configuration for
+  the whole pass. Each burn and cursor advance commits in one transaction
+  guarded by the token; a concurrent runner that loses the race gets `busy`
+  instead of double-burning, and an hour-stale unprogressed claim is reclaimed
+  rather than blocking forever.
+* `xf_oc_faucet(user_id, currency_id, day_start, amount)` — daily mint ledger:
+  what member mints actually credited today. Updated in the same transaction
+  as the award, so duplicating/disabling/deleting an event mid-day cannot move
+  the allowance and custom integrator triggers count the same as built-in ones.
+* `xf_oc_daily_claim(user_id, day_start)` — daily-visit claim markers written
+  when the cap/faucet clamps the daily award to zero, so the per-request
+  visitor path short-circuits instead of retrying a write transaction.
 
 ## Trigger matrix (listener → service call)
 
@@ -111,6 +129,25 @@ change fires the `oc_credits_adjust` code event with
   users; `max_per_day` counts per (event, currency) excluding backfill rows and
   is best-effort under concurrency; no per-day guard races the daily award
   thanks to the user-row lock.
+* Inflation control is primary-currency only and off by default. A balance cap
+  and a daily faucet **amount** clamp member mints (earnings through
+  `awardByTrigger`, redemptions) to the headroom / remaining allowance; the
+  headroom is floored to the currency's smallest unit so legacy sub-unit
+  balances cannot round their way over the cap. The faucet is tracked in
+  `xf_oc_faucet`, never derived from event rows. Redeems reject with `capped`
+  (code left unused) when they would breach the cap or exhaust the faucet.
+  Transfers and charges are supply-neutral and never clamped. The public
+  `adjust()` is privileged and bypasses both; member-facing callers pass
+  `$respectInflation = true`. A daily award clamped to zero writes an
+  `xf_oc_daily_claim` marker so the per-request visitor path short-circuits.
+  Demurrage burns `rate%` of positive primary balances once per `days`,
+  rounds to the currency, floors at zero, skips (and purges the cached rows
+  of) deleted members, and runs from a resumable pass: the `ocDemurrage` cron
+  ticks every 15 minutes with a 10s budget while a pass is in flight, Tools
+  offers preview + a time-bounded run-now with resume state, and the CLI runs
+  full. Overlapping runners get `busy`, never a second pass. The legacy
+  `xf_user.oc_credits` mirror follows the same deltas. These are economy
+  controls, not a security boundary.
 
 ## Frontend
 
@@ -142,11 +179,18 @@ change fires the `oc_credits_adjust` code event with
   forums). When the profile tab is off, the profile stat links to the wallet;
   the transfer/redeem toggles hide their wallet blocks (transfer also hides the
   per-member send form).
+* Inflation options (`ocCredits` group): `ocInflationEnabled` (off),
+  `ocInflationBalanceCap`, `ocInflationFaucetDaily`,
+  `ocInflationDemurrageRate` (0 disables each lever), and
+  `ocInflationDemurrageDays` (default 7). Primary currency only.
 * Tools (`oc-tools` admin route): rebuild (sync service call + result view),
   one-shot/resumable historical backfill (lump sums per member per post/thread
   event, scoped by the event's forum/group restrictions, completion keyed on
   `event_id`, then rebuild), prune (batched snapshots, current day protected),
-  and adjust (grant/remove a member's credits).
+  adjust (grant/remove a member's credits), and demurrage (preview + run-now
+  with a 25s budget and resume/busy states; the `ocDemurrage` cron ticks every
+  15 minutes with a 10s budget and applies the configured rate once per
+  period).
 * Widget `oc_top_holders` (`Widget`/`TopHolders.php`): top N members by balance
   in one currency (primary by default, or any visible active currency),
   `ocView`-gated, excludes banned/disabled and zero balances. Guests are hidden

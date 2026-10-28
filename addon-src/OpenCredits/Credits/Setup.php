@@ -141,6 +141,21 @@ class Setup extends AbstractSetup
         $this->createBackfillTable();
     }
 
+    public function installStep15()
+    {
+        $this->createInflationTable();
+    }
+
+    public function installStep16()
+    {
+        $this->createFaucetTable();
+    }
+
+    public function installStep17()
+    {
+        $this->createDailyClaimTable();
+    }
+
     public function uninstallStep1()
     {
         $sm = $this->schemaManager();
@@ -152,6 +167,9 @@ class Setup extends AbstractSetup
         $sm->dropTable('xf_oc_snapshot');
         $sm->dropTable('xf_oc_charge');
         $sm->dropTable('xf_oc_backfill');
+        $sm->dropTable('xf_oc_inflation');
+        $sm->dropTable('xf_oc_faucet');
+        $sm->dropTable('xf_oc_daily_claim');
     }
 
     public function uninstallStep2()
@@ -352,6 +370,39 @@ class Setup extends AbstractSetup
         }
     }
 
+    public function upgrade940Step1()
+    {
+        if (!$this->tableExists('xf_oc_inflation')) {
+            $this->createInflationTable();
+        } else {
+            // Dev installs that already have the table need the pass columns.
+            $columns = $this->schemaManager()->getTableColumnDefinitions('xf_oc_inflation');
+            $missing = array_diff(
+                ['pass_token', 'pass_rate', 'pass_decimals'],
+                array_keys($columns)
+            );
+            if ($missing) {
+                $this->schemaManager()->alterTable('xf_oc_inflation', function (Alter $table) use ($missing) {
+                    if (in_array('pass_token', $missing, true)) {
+                        $table->addColumn('pass_token', 'int')->unsigned(false)->setDefault(0);
+                    }
+                    if (in_array('pass_rate', $missing, true)) {
+                        $table->addColumn('pass_rate', 'decimal', '5,2')->unsigned(false)->setDefault('0.00');
+                    }
+                    if (in_array('pass_decimals', $missing, true)) {
+                        $table->addColumn('pass_decimals', 'tinyint')->setDefault(2);
+                    }
+                });
+            }
+        }
+        if (!$this->tableExists('xf_oc_faucet')) {
+            $this->createFaucetTable();
+        }
+        if (!$this->tableExists('xf_oc_daily_claim')) {
+            $this->createDailyClaimTable();
+        }
+    }
+
     /**
      * Adds (or removes) the charge BBCode button in the rich-text editor
      * toolbar's text group, for every viewport configuration. Idempotent and
@@ -506,6 +557,60 @@ class Setup extends AbstractSetup
             $table->addColumn('started_date', 'int')->setDefault(0);
             $table->addColumn('completed_date', 'int')->setDefault(0);
             $table->addUniqueKey(['event_id', 'user_id'], 'event_user');
+        });
+    }
+
+    /**
+     * Resumable demurrage state for the primary currency: last_run is the
+     * last completed pass, cursor_user_id resumes an in-flight pass.
+     * pass_token claims a pass for exactly one runner (0 = idle); pass_rate
+     * and pass_decimals snapshot the configuration for the whole pass so a
+     * resumable run burns every member at the same rate.
+     */
+    protected function createInflationTable(): void
+    {
+        $this->createTable('xf_oc_inflation', function (Create $table) {
+            $table->addColumn('currency_id', 'int');
+            $table->addColumn('last_run', 'int')->setDefault(0);
+            $table->addColumn('cursor_user_id', 'int')->setDefault(0);
+            $table->addColumn('pass_started', 'int')->setDefault(0);
+            $table->addColumn('pass_token', 'int')->unsigned(false)->setDefault(0);
+            $table->addColumn('pass_rate', 'decimal', '5,2')->unsigned(false)->setDefault('0.00');
+            $table->addColumn('pass_decimals', 'tinyint')->setDefault(2);
+            $table->addPrimaryKey('currency_id');
+        });
+    }
+
+    /**
+     * Daily faucet ledger: member mints per (member, currency, earning day).
+     * Updated in the same transaction as the award, so the faucet never
+     * depends on event rows (which admins can duplicate, disable, or delete
+     * mid-day). Only member-facing mints write here; admin/integrator
+     * adjust() calls, transfers, charges, and demurrage do not.
+     */
+    protected function createFaucetTable(): void
+    {
+        $this->createTable('xf_oc_faucet', function (Create $table) {
+            $table->addColumn('user_id', 'int');
+            $table->addColumn('currency_id', 'int')->setDefault(1);
+            $table->addColumn('day_start', 'int')->setDefault(0);
+            $table->addColumn('amount', 'decimal', '10,2')->unsigned(false)->setDefault('0.00');
+            $table->addPrimaryKey(['user_id', 'currency_id', 'day_start']);
+        });
+    }
+
+    /**
+     * Daily-visit claim markers: one row per (member, day) when the daily
+     * award is clamped to zero by the cap or faucet. Keeps the per-request
+     * visitor_setup path from retrying a write transaction on every page
+     * view once the member can no longer earn that day.
+     */
+    protected function createDailyClaimTable(): void
+    {
+        $this->createTable('xf_oc_daily_claim', function (Create $table) {
+            $table->addColumn('user_id', 'int');
+            $table->addColumn('day_start', 'int')->setDefault(0);
+            $table->addPrimaryKey(['user_id', 'day_start']);
         });
     }
 

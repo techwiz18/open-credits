@@ -119,6 +119,7 @@ class Credits extends AbstractController
         'daily_login' => 'Daily visit',
         'redeem' => 'Redeem code',
         'charge' => 'Premium content',
+        'demurrage' => 'Demurrage',
     ];
 
     /**
@@ -540,6 +541,7 @@ class Credits extends AbstractController
                 'exhausted' => 'That code has already been fully redeemed.',
                 'already_redeemed' => 'You have already redeemed that code.',
                 'invalid_amount' => 'That code cannot be redeemed right now.',
+                'capped' => 'That code would put you over the balance cap. Spend some credits and try again.',
             ];
             return $this->error($messages[$status] ?? 'That code cannot be redeemed.');
         }

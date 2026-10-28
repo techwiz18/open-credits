@@ -30,6 +30,7 @@ container; edits apply on next page load (templates recompile automatically).
 | `./scripts/dev.sh fix-perms` | **run after any `xf-make:*`** — generators run as root; Apache needs writable `_output` |
 | `docker compose exec web php /var/www/html/cmd.php xf-addon:upgrade OpenCredits/Credits` | import new `_output` (bump version first) |
 | `docker compose exec web php /var/www/html/cmd.php oc-credits:rebuild` | rebuild balances from ledger |
+| `docker compose exec web php /var/www/html/cmd.php oc-credits:demurrage --preview` | preview the next demurrage pass |
 | `docker compose exec -T web php /var/www/html/cmd.php <cmd>` | non-interactive (pipe `y` for confirms) |
 
 * Forum: http://localhost:8080 · phpMyAdmin: http://localhost:8081 (root/rootpass)

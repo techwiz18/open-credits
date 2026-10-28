@@ -1,0 +1,1 @@
+Maximum primary-currency balance a member can reach from earnings and redemptions. 0 disables. Transfers and charges are not capped.

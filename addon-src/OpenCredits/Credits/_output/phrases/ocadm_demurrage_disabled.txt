@@ -1,0 +1,1 @@
+Inflation control is disabled, the demurrage rate is 0, or the primary currency is unavailable. Configure it under OpenCredits options.

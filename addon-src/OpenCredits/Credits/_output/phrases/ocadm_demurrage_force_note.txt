@@ -1,0 +1,1 @@
+This ignores the configured period and runs a pass immediately.

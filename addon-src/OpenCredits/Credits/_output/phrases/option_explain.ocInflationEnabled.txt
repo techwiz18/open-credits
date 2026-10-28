@@ -1,0 +1,1 @@
+Master switch for the primary currency's balance cap, daily faucet, and demurrage.
