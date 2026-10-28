@@ -63,7 +63,11 @@ Covered today:
   demurrage with mirror + ledger checks, concurrent-pass busy, orphan purge,
   0-decimal headroom flooring, and stale faucet/claim pruning.
 - `AwardEligibilityTest` — banned, rejected, and disabled members earn nothing
-  from any trigger, while valid and awaiting-approval members earn normally.
+  from any trigger, while valid and awaiting-approval members earn normally;
+  ineligible members also leave no daily-claim marker behind.
+- `CreditEventTest` (unit) — the shared id-list decoder: comma-separated,
+  JSON, and array inputs dedupe to the same list, so repeated ids cannot slip
+  past the exact-duplicate guard.
 - `MemberCreditsTest` — the wallet page (pagination 10 by default with per-page links, currency switcher,
   retired transfer/redeem redirects) and the per-member profile Credits tab
   (balances; send form for other members; no history for self; single-currency self tab uses the wallet).
