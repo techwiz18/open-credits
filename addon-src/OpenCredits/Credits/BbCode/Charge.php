@@ -52,24 +52,6 @@ class Charge
     }
 
     /**
-     * The server-side price for a requested amount: the first parsed charge
-     * tag whose amount matches and is valid for the currency's precision.
-     */
-    public static function matchAmount(string $message, float $requested, int $decimals): ?float
-    {
-        foreach (self::amountsInMessage($message) AS $raw) {
-            $candidate = (float)$raw;
-            if ($candidate <= 0 || abs($candidate - round($candidate, $decimals)) > 0.00001) {
-                continue;
-            }
-            if (abs($candidate - $requested) < 0.00001) {
-                return $candidate;
-            }
-        }
-        return null;
-    }
-
-    /**
      * The highest valid charge price in a message. Because one purchase
      * unlocks the whole post, the post's price is the most expensive block —
      * otherwise a reader could pay the cheapest block and read the rest.
@@ -174,7 +156,6 @@ class Charge
             $balance = $visitor->user_id ? self::transact()->getBalance((int)$visitor->user_id, $currencyId) : 0.0;
 
             return \XF::app()->templater()->renderTemplate('public:oc_charge_locked', [
-                'amount' => $amount,
                 'price' => $currency->format($amount),
                 'currency' => $currency,
                 'contentType' => $contentType,
@@ -263,7 +244,6 @@ class Charge
         }
         return \XF::app()->templater()->renderTemplate('public:oc_charge_author_stats', [
             'count' => $count,
-            'amount' => $amount,
             'total' => $currency->format($count * $amount),
         ]);
     }

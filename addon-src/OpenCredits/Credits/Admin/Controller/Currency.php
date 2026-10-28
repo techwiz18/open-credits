@@ -100,6 +100,14 @@ class Currency extends AbstractController
                 /** @var \OpenCredits\Credits\Service\Transact $svc */
                 $svc = $this->service('OpenCredits\Credits:Transact');
                 \OpenCredits\Credits\Service\Transact::clearPrimaryCache();
+                // A new primary has never been burned: mark the last run now
+                // so the next cron does not fire an immediate surprise pass.
+                $this->app->db()->query(
+                    'INSERT INTO xf_oc_inflation (currency_id, last_run, cursor_user_id, pass_started, pass_token, pass_rate, pass_decimals)'
+                    . ' VALUES (?, ?, 0, 0, 0, 0, ?)'
+                    . ' ON DUPLICATE KEY UPDATE last_run = VALUES(last_run)',
+                    [$currency->currency_id, \XF::$time, (int)$currency->decimals]
+                );
                 $svc->rebuildAllBalancesFully();
             }
         });

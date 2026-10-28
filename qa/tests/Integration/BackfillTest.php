@@ -72,6 +72,7 @@ class BackfillTest extends TestCase
         $this->assertStringContainsString('t.node_id IN', $sql);
         $this->assertStringContainsString('FIND_IN_SET', $sql);
         $this->assertStringContainsString('event_id = ?', $sql);
+        $this->assertStringContainsString("u.is_banned = 0", $sql);
         $this->assertStringContainsString('COUNT(DISTINCT p.user_id)', $sql);
         $this->assertContains(1, $params);
         $this->assertContains(2, $params);

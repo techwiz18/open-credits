@@ -353,11 +353,15 @@ class Tools extends AbstractController
             );
         }
 
+        // A busy first step means another runner owns the pass: report it
+        // as ran so the template shows the busy message instead of the
+        // form again. An interval skip (not busy) still shows the form.
+        $ran = (bool)$result['ran'] || !empty($result['busy']);
         return $this->view(
             'OpenCredits\Credits:Tools\Demurrage',
             'oc_tools_demurrage',
             [
-                'ran' => (bool)$result['ran'],
+                'ran' => $ran,
                 'busy' => (bool)($result['busy'] ?? false),
                 'preview' => $svc->demurragePreview(),
                 'result' => $result,
@@ -623,6 +627,9 @@ class Tools extends AbstractController
         $from .= ' INNER JOIN xf_user AS u ON u.user_id = ' . $author . '.user_id';
 
         $where = "{$state} = 'visible' AND {$author}.user_id > 0";
+        // Match the earning rules: banned, rejected, and disabled members
+        // earn nothing, so backfilling them would contradict every award path.
+        $where .= " AND u.user_state NOT IN ('rejected', 'disabled') AND u.is_banned = 0";
         $params = [];
 
         if ($isPost) {
@@ -630,14 +637,14 @@ class Tools extends AbstractController
             $where .= ' AND p.position > 0';
         }
 
-        $forumIds = $this->decodeIdList($event->forum_ids);
+        $forumIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($event->forum_ids);
         if ($forumIds) {
             $placeholders = implode(',', array_fill(0, count($forumIds), '?'));
             $where .= " AND t.node_id IN ({$placeholders})";
             $params = array_merge($params, $forumIds);
         }
 
-        $groupIds = $this->decodeIdList($event->usergroup_ids);
+        $groupIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($event->usergroup_ids);
         if ($groupIds) {
             $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
             $clauses = ["u.user_group_id IN ({$placeholders})"];
@@ -674,20 +681,5 @@ class Tools extends AbstractController
         }
 
         return [$sql, $params];
-    }
-
-    protected function decodeIdList($value): array
-    {
-        if (is_array($value)) {
-            $ids = $value;
-        } elseif (is_string($value) && $value !== '') {
-            $decoded = json_decode($value, true);
-            $ids = is_array($decoded) ? $decoded : explode(',', $value);
-        } else {
-            return [];
-        }
-        return array_values(array_filter(array_map('intval', $ids), function ($id) {
-            return $id > 0;
-        }));
     }
 }

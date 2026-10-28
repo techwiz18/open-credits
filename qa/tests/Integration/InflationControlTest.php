@@ -631,6 +631,43 @@ class InflationControlTest extends TestCase
         );
     }
 
+    public function testStaleFaucetAndClaimRowsArePruned(): void
+    {
+        $old = Transact::dayStart() - 8 * 86400;
+        $this->db->insert('xf_oc_faucet', [
+            'user_id' => $this->memberId,
+            'currency_id' => $this->currencyId,
+            'day_start' => $old,
+            'amount' => 5.00,
+        ]);
+        $this->db->insert('xf_oc_daily_claim', [
+            'user_id' => $this->memberId,
+            'day_start' => $old,
+        ]);
+
+        // Any demurrage tick prunes, even with the rate at 0. Faucet-only
+        // setups must not accumulate rows forever. Other tests in this run
+        // leave same-day rows behind, so only the stale rows must be gone.
+        \XF::app()->options()->ocInflationDemurrageRate = 0;
+        $step = $this->transact->demurrageStep(500, true);
+        $this->assertFalse($step['ran']);
+
+        $this->assertSame(
+            0,
+            (int)$this->db->fetchOne(
+                'SELECT COUNT(*) FROM xf_oc_faucet WHERE user_id = ? AND day_start = ?',
+                [$this->memberId, $old]
+            )
+        );
+        $this->assertSame(
+            0,
+            (int)$this->db->fetchOne(
+                'SELECT COUNT(*) FROM xf_oc_daily_claim WHERE user_id = ? AND day_start = ?',
+                [$this->memberId, $old]
+            )
+        );
+    }
+
     public function testDemurragePurgesOrphanBalance(): void
     {
         \XF::app()->options()->ocInflationDemurrageRate = 10;

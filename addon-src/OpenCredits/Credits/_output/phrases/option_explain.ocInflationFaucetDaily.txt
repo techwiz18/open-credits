@@ -1,1 +1,1 @@
-Maximum primary-currency credits a member can earn per day. 0 disables. Per-event daily limits still apply.
+Maximum primary-currency credits a member can earn per day. 0 disables. All earning sources share the one allowance, and per-event daily limits still apply.
