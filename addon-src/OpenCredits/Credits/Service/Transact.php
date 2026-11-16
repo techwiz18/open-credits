@@ -44,6 +44,60 @@ class Transact extends AbstractService
         return self::$balanceCache[$key];
     }
 
+    /**
+     * Bulk-fill the balance cache for many users in two small queries.
+     * Thread views call this once per page so the postbit's per-author
+     * getter hits cache instead of issuing one query per author (N+1).
+     * Users/currencies already cached are skipped; unknown ids simply get
+     * zero-balance rows like balancesFor() returns.
+     */
+    public function preloadBalances(array $userIds, bool $visibleOnly = true): void
+    {
+        $key = $visibleOnly ? 'v' : 'a';
+        $missing = [];
+        foreach ($userIds as $id) {
+            $id = (int)$id;
+            if ($id > 0 && !isset(self::$balanceCache[$id . ':' . $key])) {
+                $missing[$id] = $id;
+            }
+        }
+        if (!$missing) {
+            return;
+        }
+        $currencies = $this->db()->fetchAll(
+            'SELECT currency_id, title, prefix, suffix, decimals, is_primary FROM xf_oc_currency WHERE active = 1'
+            . ($visibleOnly ? ' AND visible = 1' : '')
+            . ' ORDER BY currency_id'
+        );
+        $balances = [];
+        if ($currencies) {
+            $placeholders = implode(',', array_fill(0, count($missing), '?'));
+            foreach ($this->db()->fetchAll(
+                'SELECT user_id, currency_id, balance FROM xf_oc_balance'
+                . " WHERE user_id IN ({$placeholders})",
+                array_values($missing)
+            ) as $row) {
+                $balances[(int)$row['user_id']][(int)$row['currency_id']] = $row['balance'];
+            }
+        }
+        foreach ($missing as $id) {
+            $rows = [];
+            foreach ($currencies as $currency) {
+                $cid = (int)$currency['currency_id'];
+                $rows[] = [
+                    'currency_id' => $cid,
+                    'title' => (string)$currency['title'],
+                    'prefix' => (string)$currency['prefix'],
+                    'suffix' => (string)$currency['suffix'],
+                    'decimals' => (int)$currency['decimals'],
+                    'is_primary' => (int)$currency['is_primary'],
+                    'balance' => $balances[$id][$cid] ?? 0.0,
+                ];
+            }
+            self::$balanceCache[$id . ':' . $key] = $rows;
+        }
+    }
+
     public static function clearBalanceCache(?int $userId = null): void
     {
         if ($userId === null) {
