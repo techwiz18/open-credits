@@ -17,3 +17,8 @@ namespace OpenCredits\Credits\XF\Entity
 {
 	class XFCP_User extends \XF\Entity\User {}
 }
+
+namespace OpenCredits\Credits\XF\Pub\Controller
+{
+	class XFCP_ThreadController extends \XF\Pub\Controller\ThreadController {}
+}
