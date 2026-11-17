@@ -193,6 +193,66 @@ class MemberCreditsTest extends TestCase
         $this->assertSame($this->otherId, (int)$params['user']->user_id);
     }
 
+    public function testTransferSaveIsRateLimited(): void
+    {
+        $sender = \XF::em()->find('XF:User', $this->otherId);
+        $recipient = \XF::em()->find('XF:User', $this->memberId);
+        $this->assertNotNull($sender);
+        $this->assertNotNull($recipient);
+        \XF::setVisitor($sender);
+
+        // Pin the window so the test does not depend on the dev forum's
+        // configured flood interval.
+        $options = \XF::app()->options();
+        $originalFlood = $options->floodCheckLength ?? 30;
+        $options->floodCheckLength = 3600;
+
+        $before = (int)$this->db->fetchOne(
+            'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
+        );
+        $svc = \XF::app()->service('OpenCredits\Credits:Transact');
+        $svc->adjust($this->otherId, $this->currencyId, 10.00, 'octest_wallet_seed', 0, 'test');
+
+        $makeRequest = function () use ($recipient) {
+            return new \XF\Http\Request(
+                \XF::app()->inputFilterer(),
+                [
+                    'to' => $recipient->username,
+                    'amount' => 1,
+                    'currency_id' => $this->currencyId,
+                ],
+                [],
+                [],
+                ['REQUEST_METHOD' => 'POST']
+            );
+        };
+
+        try {
+            $controller = \XF::app()->controller(Credits::class, $makeRequest());
+            $reply = $controller->actionTransferSave(new \XF\Mvc\ParameterBag([]));
+            $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $reply);
+            $afterFirst = (int)$this->db->fetchOne('SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction');
+
+            $controller = \XF::app()->controller(Credits::class, $makeRequest());
+            try {
+                $controller->actionTransferSave(new \XF\Mvc\ParameterBag([]));
+                $this->fail('Second rapid transfer was not rate limited.');
+            } catch (\XF\Mvc\Reply\Exception $e) {
+                $this->assertInstanceOf(\XF\Mvc\Reply\Error::class, $e->getReply());
+            }
+            // Blocked attempt must not move money.
+            $this->assertSame(
+                $afterFirst,
+                (int)$this->db->fetchOne('SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction')
+            );
+        } finally {
+            $options->floodCheckLength = $originalFlood;
+            $this->db->delete('xf_oc_transaction', 'transaction_id > ?', [$before]);
+            $this->db->delete('xf_flood_check', 'user_id = ?', [$this->otherId]);
+            $svc->rebuildAllBalancesFully();
+        }
+    }
+
     public function testTabSendFormRedirectsToRecipientTab(): void
     {
         $sender = \XF::em()->find('XF:User', $this->otherId);
@@ -361,6 +421,13 @@ class MemberCreditsTest extends TestCase
                 'xf_oc_transaction',
                 'user_id = ? AND `trigger` = ?',
                 [$this->memberId, self::SEED_TRIGGER]
+            );
+            // Rate limiting writes xf_flood_check rows on every save action;
+            // clear them so back-to-back tests do not throttle each other.
+            $this->db->delete(
+                'xf_flood_check',
+                'user_id IN (?, ?)',
+                [$this->memberId, $this->otherId]
             );
             \XF::app()->service('OpenCredits\Credits:Transact')->rebuildAllBalancesFully();
         }
