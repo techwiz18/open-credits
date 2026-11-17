@@ -381,6 +381,7 @@ class Credits extends AbstractController
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
+        $this->assertNotFlooding('oc_transfer');
         try {
             $ok = $svc->transfer((int)$visitor->user_id, (int)$target->user_id, $amount, (int)$currency->currency_id);
         } catch (\Throwable $e) {
@@ -467,6 +468,7 @@ class Credits extends AbstractController
             return $this->error('This content cannot be unlocked right now.');
         }
 
+        $this->assertNotFlooding('oc_unlock');
         try {
             $result = $svc->chargeForContent(
                 (int)$visitor->user_id,
@@ -525,6 +527,7 @@ class Credits extends AbstractController
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
+        $this->assertNotFlooding('oc_redeem');
         try {
             $granted = null;
             $status = $svc->redeem((int)$visitor->user_id, $code, $granted);

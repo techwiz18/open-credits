@@ -74,6 +74,11 @@ class ChargeUnlockTest extends TestCase
             "content_type = 'post' AND content_id = ? AND user_id = ?",
             [$this->postId, $this->memberId]
         );
+        $this->db->delete(
+            'xf_flood_check',
+            'user_id = ? AND flood_action = ?',
+            [$this->memberId, 'oc_unlock']
+        );
         $this->db->update(
             'xf_post',
             ['message' => $this->originalMessage],
