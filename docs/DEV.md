@@ -40,7 +40,8 @@ container; edits apply on next page load (templates recompile automatically).
   and (consequently) a separate DB volume needing its own forum install:
   `COMPOSE_PROJECT_NAME=open-credits-b WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 docker compose up -d`.
   Record it in `HANDOFF.md` open threads so sessions don't chase each other's
-  containers.
+  containers. Claim the stack there before seeding or running integration
+  tests, and release it when done.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
 
 ## Release checklist (local — needs the licensed XF runtime, so not in CI)
@@ -80,6 +81,9 @@ See `qa/tests/README.md` for the test setup.
 * Test convention: assert verdicts and ledger outcomes, never SQL text —
   query shapes are transport, and asserting them breaks behavior-preserving
   refactors (see the `BackfillTest` preview-vs-action rewrite).
+* When a computation moves behind a delegate or shim, pin the old function's
+  boundary and sentinel inputs (zero, negative, disabled-sentinel) in unit
+  tests — the shim must preserve them exactly.
 
 ## Granting the credit permissions (dev shortcut)
 

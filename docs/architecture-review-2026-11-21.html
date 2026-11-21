@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Architecture review — OpenCredits</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+</script>
+<style>
+.seam { stroke-dasharray: 4 4; }
+.deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+.mass-iface { transition: height .3s; }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+<header class="space-y-3">
+<h1 class="font-serif text-4xl">Architecture review — OpenCredits</h1>
+<p class="text-sm text-slate-500">2026-11-21 · hotspots: Pub/Controller/Credits.php · Service/Transact.php · BbCode/Charge.php · Admin/Controller/Tools.php · hotspots from last ~40 commits</p>
+<div class="flex flex-wrap gap-3 text-xs">
+<span class="px-2 py-1 rounded border border-slate-300">▭ module</span>
+<span class="px-2 py-1 rounded border border-dashed border-slate-500">┄ seam</span>
+<span class="px-2 py-1 rounded border border-red-500 text-red-600">→ red = leakage</span>
+<span class="px-2 py-1 rounded bg-slate-900 text-white">■ thick dark = deep module</span>
+</div>
+</header>
+
+<section id="candidates" class="space-y-10">
+
+<!-- 1 -->
+<article id="c1" class="bg-white rounded-xl border border-slate-200 p-6 space-y-4 shadow-sm">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<h2 class="font-serif text-2xl">1. Collapse the earn-scope triplication</h2>
+<div class="flex gap-2 text-xs">
+<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+</div>
+</div>
+<p class="font-mono text-sm text-slate-600">Listener.php:22–41, 43–150, 218 · Service/Transact.php:141–247, 1418 · Admin/Controller/Tools.php:98–684 · Entity/CreditEvent.php:28–43</p>
+<div class="grid md:grid-cols-2 gap-4">
+<div class="rounded-lg border border-slate-200 bg-white p-4">
+<p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — scope decided in 3 places</p>
+<pre class="mermaid">
+flowchart LR
+A[Listener<br/>visible? banned?<br/>node probe] --> B[Transact awardByTrigger<br/>eventAppliesTo<br/>passesDailyLimit]
+C[Tools backfill<br/>own visible/banned<br/>first-post/forum/group] -.leak.-> B
+B --> D[adjust]
+classDef leak stroke:#dc2626,stroke-width:2px;
+class C leak
+</pre>
+</div>
+<div class="rounded-lg border border-slate-900 bg-slate-50 p-4">
+<p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one award-eligibility module</p>
+<div class="deep rounded-lg p-4 text-white text-center">
+<p class="text-xs uppercase tracking-wider text-slate-300">interface: eligible? user, content, event</p>
+<p class="font-semibold mt-1">Award eligibility module</p>
+<p class="text-xs text-slate-400 mt-2">Listener · awardByTrigger · backfill call it — faded inside</p>
+</div>
+<p class="text-xs text-slate-500 mt-2 text-center">seam ┄ ┄ ┄ callers cross one seam</p>
+</div>
+</div>
+<p><strong>Problem:</strong> Award scope is shallow and triplicated — live award, eligibility check, and backfill each re-encode visible/banned/forum/group/first-post rules.</p>
+<p><strong>Solution:</strong> Deepen one eligibility module behind a single interface; Listener, award path, and backfill all call it.</p>
+<ul class="list-disc ml-5 text-sm space-y-1">
+<li>locality: scope bugs concentrate in one module</li>
+<li>leverage: one interface, 3 call sites</li>
+<li>tests hit one interface, backfill drift disappears</li>
+</ul>
+</article>
+
+<!-- 2 -->
+<article id="c2" class="bg-white rounded-xl border border-slate-200 p-6 space-y-4 shadow-sm">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<h2 class="font-serif text-2xl">2. Deepen the inflation clamp</h2>
+<div class="flex gap-2 text-xs">
+<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+</div>
+</div>
+<p class="font-mono text-sm text-slate-600">Service/Transact.php:353–422, 596–747, 821–849, 1325–1416, 1448–1491</p>
+<div class="grid md:grid-cols-2 gap-4">
+<div class="rounded-lg border border-slate-200 p-4">
+<p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — pure math tested, decisions untested</p>
+<div class="space-y-2">
+<div class="h-10 border-l-4 border-slate-300 bg-slate-50 px-2 py-1 text-xs">calculateCredit <span class="text-emerald-600">● unit-tested</span></div>
+<div class="h-10 border-l-4 border-red-500 bg-red-50 px-2 py-1 text-xs">adjust() cap+faucet block <span class="text-red-600">→ leak</span></div>
+<div class="h-10 border-l-4 border-red-500 bg-red-50 px-2 py-1 text-xs">redeem() own cap+faucet copy <span class="text-red-600">→ drift</span></div>
+<div class="h-10 border-l-4 border-red-500 bg-red-50 px-2 py-1 text-xs">daily-claim marker write <span class="text-red-600">→ untested</span></div>
+</div>
+</div>
+<div class="rounded-lg border border-slate-900 bg-slate-50 p-4">
+<p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one thick clamp</p>
+<div class="deep rounded-lg p-6 text-white text-center">
+<p class="text-xs uppercase tracking-wider text-slate-300">interface: clamp(amount) → credited</p>
+<p class="font-semibold mt-1">Inflation clamp module</p>
+<p class="text-xs text-slate-400 mt-1">math + faucet write + claim marker inside</p>
+</div>
+</div>
+</div>
+<p><strong>Problem:</strong> Clamp math is deep but the seam is misplaced — <span class="font-mono text-sm">redeem()</span> re-implements the check inline and faucet/marker writes live in callers.</p>
+<p><strong>Solution:</strong> Move cap, faucet, and marker decisions behind one clamp interface; earn and redeem both cross it.</p>
+<ul class="list-disc ml-5 text-sm space-y-1">
+<li>locality: clamp drift fixed once</li>
+<li>interface shrinks; implementation absorbs the copies</li>
+<li>tests hit one interface incl. partial-vs-capped</li>
+</ul>
+</article>
+
+<!-- 3 -->
+<article id="c3" class="bg-white rounded-xl border border-slate-200 p-6 space-y-4 shadow-sm">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<h2 class="font-serif text-2xl">3. Collapse the premium-content price</h2>
+<div class="flex gap-2 text-xs">
+<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+</div>
+</div>
+<p class="font-mono text-sm text-slate-600">BbCode/Charge.php:38–73, 134–140 · Pub/Controller/Credits.php:463–469 · Service/Transact.php:596–747</p>
+<div class="grid md:grid-cols-2 gap-4">
+<div class="rounded-lg border border-slate-200 bg-white p-4">
+<p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — 3 files agree "highest wins"</p>
+<pre class="mermaid">
+flowchart LR
+R[Charge render<br/>maxAmount] --> P[actionUnlock<br/>re-derives price]
+P --> T[chargeForContent<br/>hasPaid/unlockCount]
+R -.leak.-> P
+classDef leak stroke:#dc2626,stroke-width:2px;
+class R,P leak
+</pre>
+</div>
+<div class="rounded-lg border border-slate-900 bg-slate-50 p-4">
+<p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one content-charge module</p>
+<div class="deep rounded-lg p-6 text-white text-center">
+<p class="text-xs uppercase tracking-wider text-slate-300">interface: priceFor(post) · chargeFor(post, reader)</p>
+<p class="font-semibold mt-1">Content-charge module</p>
+<p class="text-xs text-slate-400 mt-1">parse + price + purchase inside, faded</p>
+</div>
+</div>
+</div>
+<p><strong>Problem:</strong> Price rule ("highest block wins, one purchase per post") leaks across the render / unlock / ledger seam.</p>
+<p><strong>Solution:</strong> Deepen one content-charge module owning parse, price, and purchase; render and unlock become thin callers.</p>
+<ul class="list-disc ml-5 text-sm space-y-1">
+<li>locality: price divergence fixed in one module</li>
+<li>leverage: one interface, render + unlock + integrators</li>
+<li>preview/quote fallback covered by the same tests</li>
+</ul>
+</article>
+
+<!-- 4 -->
+<article id="c4" class="bg-white rounded-xl border border-slate-200 p-6 space-y-4 shadow-sm">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<h2 class="font-serif text-2xl">4. Deepen the demurrage pass runner</h2>
+<div class="flex gap-2 text-xs">
+<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600">ports &amp; adapters</span>
+</div>
+</div>
+<p class="font-mono text-sm text-slate-600">Service/Transact.php:952–1233 · Cron/Demurrage.php · Admin/Controller/Tools.php:349 · Cli/Command/Demurrage.php:52</p>
+<div class="grid md:grid-cols-2 gap-4">
+<div class="rounded-lg border border-slate-200 bg-white p-4">
+<p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — token protocol in 3 runners</p>
+<pre class="mermaid">
+sequenceDiagram
+Cron->>Transact: runDemurrage 10s
+Tools->>Transact: run 25s + preview
+CLI->>Transact: unbounded run
+Note over Cron,CLI: each honors busy + token
+</pre>
+</div>
+<div class="rounded-lg border border-slate-900 bg-slate-50 p-4">
+<p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — runners are adapters</p>
+<div class="deep rounded-lg p-6 text-white text-center">
+<p class="text-xs uppercase tracking-wider text-slate-300">interface: run(budget) → busy | done | resume</p>
+<p class="font-semibold mt-1">Demurrage pass module</p>
+<p class="text-xs text-slate-400 mt-1">token + cursor + burn inside; cron/tools/cli faded outside</p>
+</div>
+<p class="text-xs text-slate-500 mt-2 text-center">two adapters justify the seam: cron + CLI in prod, in-memory in tests</p>
+</div>
+</div>
+<p><strong>Problem:</strong> The pass-token/cursor protocol leaks into cron, admin, and CLI — zero integration tests touch the race.</p>
+<p><strong>Solution:</strong> Deepen the pass runner so budgets and busy handling sit behind one interface; runners become thin adapters.</p>
+<ul class="list-disc ml-5 text-sm space-y-1">
+<li>locality: race logic in one module</li>
+<li>tests hit one interface with time-travel + concurrent runners</li>
+<li>leverage: preview reuses the same cursor</li>
+</ul>
+</article>
+
+<!-- 5 -->
+<article id="c5" class="bg-white rounded-xl border border-slate-200 p-6 space-y-4 shadow-sm">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<h2 class="font-serif text-2xl">5. Fold history labels into the ledger module</h2>
+<div class="flex gap-2 text-xs">
+<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 font-semibold">Speculative</span>
+<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600">mock</span>
+</div>
+</div>
+<p class="font-mono text-sm text-slate-600">Pub/Controller/Credits.php:114–235 · Entity/CreditEvent.php:10–16 · Service/Transact.php:1423–1427, 1564–1586</p>
+<div class="grid md:grid-cols-2 gap-4 items-end">
+<div class="rounded-lg border border-slate-200 p-4 flex gap-3 items-end h-64">
+<div class="flex-1 text-center"><div class="mass-iface bg-amber-200 rounded-t mx-2" style="height:96px"></div><p class="text-xs mt-1">HISTORY_<br/>LABELS</p><div class="bg-slate-200 rounded-b mx-2" style="height:40px"></div></div>
+<div class="flex-1 text-center"><div class="mass-iface bg-amber-200 rounded-t mx-2" style="height:88px"></div><p class="text-xs mt-1">TRIGGER_<br/>LABELS</p><div class="bg-slate-200 rounded-b mx-2" style="height:36px"></div></div>
+<div class="flex-1 text-center"><div class="bg-red-200 rounded mx-2 px-1 text-xs py-6">note='Historical backfill'<br/>trigger='redeem'<br/>note LIKE 'reaction:%'</div><p class="text-xs mt-1 text-red-600">string contract → leak</p></div>
+</div>
+<div class="rounded-lg border border-slate-900 bg-slate-50 p-4 flex gap-3 items-end h-64">
+<div class="flex-1 text-center"><div class="mass-iface bg-emerald-500 rounded-t mx-2" style="height:28px"></div><p class="text-xs mt-1">historyFor()</p><div class="deep rounded-b mx-2 text-white text-xs py-10">ledger + labels<br/>inside</div></div>
+</div>
+</div>
+<p><strong>Problem:</strong> History rendering is shallow — two label maps plus load-bearing note/trigger strings shared by prune, dedupe, and display.</p>
+<p><strong>Solution:</strong> Deepen one history module owning labels and marker constants; prune and wallet cross its seam.</p>
+<ul class="list-disc ml-5 text-sm space-y-1">
+<li>locality: rename a marker once, fixed everywhere</li>
+<li>interface shrinks; implementation absorbs the maps</li>
+<li>new triggers need one update, not three</li>
+</ul>
+</article>
+
+</section>
+
+<section id="top-recommendation" class="bg-slate-900 text-white rounded-xl p-8">
+<h2 class="text-xs uppercase tracking-wider text-slate-400">Top recommendation</h2>
+<p class="font-serif text-2xl mt-2"><a href="#c1" class="underline">1. Collapse the earn-scope triplication</a> — then <a href="#c2" class="underline">2. Deepen the inflation clamp</a>.</p>
+<p class="text-sm text-slate-300 mt-2">Scope triplication is the live drift risk: backfill must match the award path commit-for-commit. Clamp drift (earn partial-credit vs redeem all-or-nothing) is the same shape one seam over. Fixing both puts the two money-moving decisions behind tested interfaces.</p>
+</section>
+
+</main>
+</body>
+</html>

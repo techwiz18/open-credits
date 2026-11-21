@@ -60,6 +60,19 @@ jobs:
           composer install --no-interaction
           ./vendor/bin/phpunit
 
+  phpstan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Install deps and run static analysis
+        working-directory: qa
+        run: |
+          composer install --no-interaction
+          ./vendor/bin/phpstan analyse --no-progress
+
   # NOTE: jobs needing the licensed XF runtime (xf-addon:validate-json,
   # build-release smoke, PHPUnit, Setup-step tests) cannot run in public CI
   # and stay local: see docs/DEV.md "Release checklist".
