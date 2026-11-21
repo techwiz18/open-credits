@@ -36,6 +36,11 @@ container; edits apply on next page load (templates recompile automatically).
 * Forum: http://localhost:8080 · phpMyAdmin: http://localhost:8081 (root/rootpass)
 * Port clash (something else on 8080)? Copy `.env.example` to `.env` and set
   `WEB_PORT=8082` — the compose file honors it, defaulting to 8080.
+* Parallel agent session? Isolate the whole stack — project name, all ports,
+  and (consequently) a separate DB volume needing its own forum install:
+  `COMPOSE_PROJECT_NAME=open-credits-b WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 docker compose up -d`.
+  Record it in `HANDOFF.md` open threads so sessions don't chase each other's
+  containers.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
 
 ## Release checklist (local — needs the licensed XF runtime, so not in CI)
@@ -71,6 +76,10 @@ conventions into the dev root (`src/`). The committed copies live at `AGENTS.md`
   (the skill's `compose.yaml`/`xf` detection does not apply here).
 
 See `qa/tests/README.md` for the test setup.
+
+* Test convention: assert verdicts and ledger outcomes, never SQL text —
+  query shapes are transport, and asserting them breaks behavior-preserving
+  refactors (see the `BackfillTest` preview-vs-action rewrite).
 
 ## Granting the credit permissions (dev shortcut)
 

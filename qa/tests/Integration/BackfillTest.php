@@ -57,25 +57,22 @@ class BackfillTest extends TestCase
         }
     }
 
-    public function testContentQueryAppliesScopeAndFirstPost(): void
+    public function testPreviewMatchesActionUsers(): void
     {
-        $event = \XF::em()->create('OpenCredits\Credits:CreditEvent');
-        $event->trigger = 'post';
-        $event->forum_ids = [1];
-        $event->usergroup_ids = [2];
-        $event->amount = 1.0;
-        $event->currency_id = 1;
+        $users = $this->backfillUserCount();
+        if ($users === 0) {
+            $this->markTestSkipped('No backfillable content for the post event.');
+        }
 
-        [$sql, $params] = $this->invoke('backfillContentQuery', $event, 0, 0, 100, true);
+        $this->runAction([$this->eventId]);
 
-        $this->assertStringContainsString('p.position > 0', $sql);
-        $this->assertStringContainsString('t.node_id IN', $sql);
-        $this->assertStringContainsString('FIND_IN_SET', $sql);
-        $this->assertStringContainsString('event_id = ?', $sql);
-        $this->assertStringContainsString("u.is_banned = 0", $sql);
-        $this->assertStringContainsString('COUNT(DISTINCT p.user_id)', $sql);
-        $this->assertContains(1, $params);
-        $this->assertContains(2, $params);
+        // Preview and action share the verdict seam (backfillEligibleCounts),
+        // so the promised user count must equal the paid distinct users.
+        $paid = (int)$this->db->fetchOne(
+            "SELECT COUNT(DISTINCT user_id) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
+            [$this->eventId]
+        );
+        $this->assertSame($users, $paid);
     }
 
     public function testActionBackfillsOnceAndSkipsReruns(): void
@@ -169,8 +166,8 @@ class BackfillTest extends TestCase
         if (!$event) {
             return 0;
         }
-        [$sql, $params] = $this->invoke('backfillContentQuery', $event, 0, 0, 0, true);
-        return (int)$this->db->fetchOne($sql, $params);
+        $counts = $this->invoke('backfillEligibleCounts', $event, 0, 0, 0);
+        return count($counts);
     }
 
     protected function runAction(array $eventIds, string $username = ''): void
