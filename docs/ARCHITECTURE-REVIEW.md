@@ -20,15 +20,29 @@ Domain terms per `GLOSSARY.md` (award eligibility vs award limits).
 - Residuals (cosmetic): dual node lookups in `Listener`, register double-check,
   group-parse duality, `needsForumContext` probe.
 
-## 2. Deepen the inflation clamp — Strong — OPEN
+## 2. Deepen the inflation clamp — Strong — IMPLEMENTED
 
-- Files: `Service/Transact.php` (`adjust()`, `redeem()`, `calculateCredit()` et al.)
-- Problem: `redeem()` re-implements the cap+faucet check inline; earn clamps
-  partial credit while redeem goes all-or-nothing `capped`. Drift risk.
-- Note: unifying the two changes what members receive — a product decision,
-  not a pure refactor. Do not ship as cleanup.
-- (A parallel session has `Service/InflationClamp.php` in progress in the
-  working tree — coordinate before touching this.)
+- Files: `Service/Transact.php` (`adjust()`, `redeem()`, `calculateCredit()`,
+  daily-claim marker), new `Service/InflationClamp.php`
+- Problem: `redeem()` re-implemented the cap+faucet check inline while earn
+  took partial credit — the two verdicts could drift. Faucet/marker writes
+  lived in callers, untested.
+- Solution: one pure clamp module behind one seam — `credited()` (partial
+  math) + `fitsFull()` (redeem all-or-nothing, defined as `credited()` covering
+  the amount). `adjust()` delegates bit-identically; `redeem()`'s inline copy
+  is gone; both faucet writes share `trackFaucetMint()`; the marker verdicts
+  (`shouldMarkClaimed()`, `allFaucetBound()`) live in the module while the
+  writes stay in `Transact` (needs `$db`). `calculateCredit` stays as a BC shim.
+- Product notes (decided, not cleanup): redeem's cap verdict now floors
+  headroom exactly like earn (stricter in sub-unit edges only); redeem tracks
+  the faucet whenever inflation is enabled; only faucet-bound clamps mark the
+  day, so freed cap headroom retries instead of finding a stale marker.
+- Proof: new `InflationClampTest` (partial-vs-capped matrix, marker verdicts);
+  rewritten cap/faucet daily-login integration tests; full suite unit 53/601,
+  integration 68/209, 0 failures.
+- Residuals (deliberate): the "thick module" end-state (writes inside the
+  clamp object) skipped — cost exceeds value; cap-bound members retry a
+  rolled-back write transaction per pageview until the faucet exhausts.
 
 ## 3. Collapse the premium-content price — Worth exploring — OPEN
 
