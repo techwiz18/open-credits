@@ -69,8 +69,10 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
   as the award, so duplicating/disabling/deleting an event mid-day cannot move
   the allowance and custom integrator triggers count the same as built-in ones.
 * `xf_oc_daily_claim(user_id, day_start)` — daily-visit claim markers written
-  when the cap/faucet clamps the daily award to zero, so the per-request
+  when the faucet clamps the daily award to zero, so the per-request
   visitor path short-circuits instead of retrying a write transaction.
+  Cap-bound clamps leave no marker: freed cap headroom retries later the
+  same day.
 
 ## Trigger matrix (listener → service call)
 

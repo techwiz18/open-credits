@@ -817,19 +817,20 @@ class Transact extends AbstractService
             $faucetDayStart = 0;
             if ($this->inflationApplies($currencyId)) {
                 $settings = $this->inflationSettings();
-                if ($settings['enabled']) {                    $balance = (float)$db->fetchOne(
+                if ($settings['enabled']) {
+                    $balance = (float)$db->fetchOne(
                         'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
                         [$userId, $currencyId]
                     );
-                    // Same faucet ledger as adjust(): every member mint counts
-                    // toward the one allowance, tracked whenever inflation is
-                    // enabled so a mid-day faucet switch-on sees redemptions
-                    // too. Redeem is all-or-nothing — a capped code stays
+                    // Redeem is all-or-nothing — a capped code stays
                     // unused instead of half-consumed — while adjust() takes
                     // partial credit; both verdicts come out of credited().
-                    $faucetDayStart = self::dayStart();
+                    // Faucet rows only when the faucet is on (historic redeem
+                    // behavior); adjust() alone keeps the always-track ledger
+                    // for a mid-day faucet switch-on.
                     $earnedToday = 0.0;
                     if ($settings['faucet'] > 0) {
+                        $faucetDayStart = self::dayStart();
                         $earnedToday = (float)$db->fetchOne(
                             'SELECT COALESCE(amount, 0) FROM xf_oc_faucet'
                             . ' WHERE user_id = ? AND currency_id = ? AND day_start = ? FOR UPDATE',
@@ -1373,12 +1374,14 @@ class Transact extends AbstractService
         float $faucetRemaining,
         int $decimals
     ): float {
-        if ($faucetRemaining <= 0.0) {
-            // A finite zero/negative remaining allowance clamps everything;
-            // only the PHP_FLOAT_MAX sentinel disables the faucet.
+        if ($faucetRemaining == 0.0) {
             return 0.0;
         }
-        $faucet = $faucetRemaining >= (PHP_FLOAT_MAX / 2) ? 0.0 : $faucetRemaining;
+        // Negative or PHP_FLOAT_MAX sentinel: faucet disabled, ignore it
+        // (historic behavior); only a finite positive remainder clamps.
+        $faucet = ($faucetRemaining < 0.0 || $faucetRemaining >= (PHP_FLOAT_MAX / 2))
+            ? 0.0
+            : $faucetRemaining;
         return InflationClamp::credited($requested, $balance, 0.0, $cap, $faucet, $decimals);
     }
 
