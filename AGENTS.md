@@ -68,3 +68,17 @@ Load the relevant skill from `.agents/skills/` for the task at hand:
 Load only the skills relevant to the task; combine when work spans areas. The
 universal rules in `xf-shared-policy` take precedence, except where this file
 documents a project-specific runner or path.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `techwiz18/open-credits`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the five default labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
