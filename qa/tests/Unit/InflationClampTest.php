@@ -93,8 +93,9 @@ class InflationClampTest extends TestCase
         $this->assertFalse(InflationClamp::allFaucetBound([10.0], 5.0, 3.0, 8.0, 2));
         // One retry-worthy amount vetoes the marker for the whole day.
         $this->assertFalse(InflationClamp::allFaucetBound([10.0, 1.0], 8.0, 7.0, 8.0, 2));
-        // No primary amounts (dust or no primary event): nothing to retry.
-        $this->assertTrue(InflationClamp::allFaucetBound([], 5.0, 0.0, 0.0, 2));
+        // No primary amounts (dust or no primary event): nothing proved
+        // faucet-bound, so leave no marker and let the day retry.
+        $this->assertFalse(InflationClamp::allFaucetBound([], 5.0, 0.0, 0.0, 2));
         $this->assertTrue(InflationClamp::allFaucetBound([0.001], 0.0, 0.0, 0.0, 2));
     }
 

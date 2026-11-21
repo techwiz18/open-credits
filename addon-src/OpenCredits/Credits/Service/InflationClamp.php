@@ -86,6 +86,10 @@ class InflationClamp
      */
     public static function allFaucetBound(array $amounts, float $balance, float $earnedToday, float $faucet, int $decimals): bool
     {
+        // No amounts: nothing faucet-bound, leave no marker so the day retries.
+        if ($amounts === []) {
+            return false;
+        }
         foreach ($amounts as $amount) {
             if (self::credited((float)$amount, $balance, $earnedToday, 0.0, $faucet, $decimals) > 0) {
                 return false;
