@@ -15,4 +15,7 @@ RUN { \
     echo 'max_execution_time=120'; \
   } > /usr/local/etc/php/conf.d/xenforo.ini
 
+# Composer for the qa suite (integration tests install phpunit in-container)
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+
 WORKDIR /var/www/html

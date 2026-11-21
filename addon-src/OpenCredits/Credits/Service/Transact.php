@@ -190,7 +190,11 @@ class Transact extends AbstractService
             ? $userGroupIds
             : ($needsGroups ? $this->loadEarnerGroupIds($userId) : []);
         foreach ($rows as $row) {
-            if (!$this->eventAppliesTo($row, $nodeId, $groupIds)) {
+            // Eligibility lives in AwardScope. Participation was enforced
+            // above (isAwardEligible); visibility and first-post are vetted
+            // by callers (Listener) before this point, so they arrive true —
+            // no new refusals for direct awardByTrigger callers.
+            if (!AwardScope::eligible($row, $nodeId, $groupIds, true, false, true)) {
                 continue;
             }
             if (!$this->passesDailyLimit($userId, $trigger, (int)$row['max_per_day'], (int)$row['currency_id'])) {
@@ -227,24 +231,6 @@ class Transact extends AbstractService
             \XF::logException($e, false, 'OpenCredits eligibility check failed: ');
             return false;
         }
-    }
-
-    /**
-     * Whether an event row's forum/usergroup restrictions admit this award.
-     * Empty restrictions always pass; a forum restriction requires the content
-     * to live in one of the listed forums.
-     */
-    protected function eventAppliesTo(array $row, int $nodeId, array $userGroupIds): bool
-    {
-        $forumIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($row['forum_ids'] ?? null);
-        if ($forumIds && ($nodeId <= 0 || !in_array($nodeId, $forumIds, true))) {
-            return false;
-        }
-        $groupIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($row['usergroup_ids'] ?? null);
-        if ($groupIds && !array_intersect($groupIds, array_map('intval', $userGroupIds))) {
-            return false;
-        }
-        return true;
     }
 
     protected function dedupeKeyUsed(int $userId, string $trigger, string $contentType, int $contentId, string $dedupeKey): bool

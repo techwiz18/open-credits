@@ -11,8 +11,12 @@ throwaway copy inside the `web` container (gitignored `src/`):
 
 ```bash
 rm -rf src/.qatmp && cp -r qa src/.qatmp
-docker compose exec -T web bash -c "cd /var/www/html/.qatmp && php -r 'copy(\"https://getcomposer.org/installer\", \"/tmp/cs.php\");' && php /tmp/cs.php --install-dir=/usr/local/bin --filename=composer && composer install && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
+docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
 ```
+
+Re-running? Reuse the warm copy — skip the copy/install and run only the
+`phpunit` line above. Rebuild `.qatmp` only when `qa/` or the addon changed.
+(composer ships in the `web` image; no installer download needed.)
 
 (On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI does exactly that.)
 
@@ -27,6 +31,11 @@ runtime) stays green.
 rm -rf src/.qatmp && cp -r qa src/.qatmp
 docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
 ```
+
+Same warm-copy rule as unit: re-run with only the `phpunit` line unless
+`qa/` or the addon changed. Content-dependent tests (backfill, charge-render,
+negative-balance) skip cleanly on a bare forum — seed with
+`qa/seed-dev-content.php` (below) when you need them to execute.
 
 Covered today:
 - `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,

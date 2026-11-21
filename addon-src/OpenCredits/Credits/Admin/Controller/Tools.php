@@ -512,8 +512,11 @@ class Tools extends AbstractController
             if (!$previewCurrency || !$previewCurrency->active) {
                 continue;
             }
-            [$sql, $params] = $this->backfillContentQuery($event, 0, 0, 0, true);
-            $users = (int)$this->app->db()->fetchOne($sql, $params);
+            [$sql, $params] = $this->backfillContentQuery($event, 0, 0, 0);
+            // Same verdict path as the run: preview promises exactly the
+            // users the action will pay. A full row fetch on large boards is
+            // the price of that guarantee; backfill is a one-shot admin op.
+            $users = count($this->backfillEligibleCounts($event));
             $preview[] = [
                 'event_id' => (int)$event->event_id,
                 'label' => \OpenCredits\Credits\Entity\CreditEvent::TRIGGER_LABELS[$event->trigger] ?? $event->trigger,
@@ -555,8 +558,12 @@ class Tools extends AbstractController
             ? $maxUserId
             : ($batchSize > 0 ? $startAfterUserId + $batchSize : $maxUserId);
 
-        [$sql, $params] = $this->backfillContentQuery($event, $onlyUserId, $startAfterUserId, $endUserId, false);
-        $counts = $db->fetchPairs($sql, $params);
+        [$sql, $params] = $this->backfillContentQuery($event, $onlyUserId, $startAfterUserId, $endUserId);
+        // Row-level verdict, tallied per author: every paid row passed
+        // AwardScope::eligible(), so the backfill pays exactly what the live
+        // path would have paid. Ledger shape is unchanged (one lump sum per
+        // author), as are batch boundaries and resume markers.
+        $counts = $this->backfillEligibleCounts($event, $onlyUserId, $startAfterUserId, $endUserId);
         $next = ($batchSize > 0 && $onlyUserId <= 0 && $endUserId < $maxUserId) ? $endUserId : null;
 
         $rows = 0;
@@ -600,10 +607,29 @@ class Tools extends AbstractController
     }
 
     /**
-     * Builds the scoped content query for a backfill. Applies the event's
-     * forum/usergroup restrictions, the first-post rule for post events, the
-     * user-id range, and (for site-wide runs) excludes members who already
-     * received a per-member backfill for the same event.
+     * Eligible content counts per author for one backfill scope. Single seam
+     * for preview, run, and tests: fetch candidate rows, verdict each one
+     * through AwardScope, tally per author.
+     *
+     * @return array<int,int> author user_id => eligible row count
+     */
+    protected function backfillEligibleCounts($event, int $onlyUserId = 0, int $startAfterUserId = 0, int $endUserId = 0): array
+    {
+        [$sql, $params] = $this->backfillContentQuery($event, $onlyUserId, $startAfterUserId, $endUserId);
+        return \OpenCredits\Credits\Service\AwardScope::countEligible(
+            ['forum_ids' => $event->forum_ids, 'usergroup_ids' => $event->usergroup_ids],
+            $event->trigger === 'post',
+            $this->app->db()->fetchAll($sql, $params)
+        );
+    }
+
+    /**
+     * Builds the candidate content query for a backfill. Selects per-row
+     * facts (author, node, state, position, member standing and groups) over
+     * the user-id range; every eligibility rule is decided per row by
+     * AwardScope, never here. Keeps the user-id range and (for site-wide
+     * runs) the exclusion of members who already received a per-member
+     * backfill for the same event — that is bookkeeping, not eligibility.
      *
      * @return array{0: string, 1: array}
      */
@@ -611,50 +637,24 @@ class Tools extends AbstractController
         $event,
         int $onlyUserId = 0,
         int $startAfterUserId = 0,
-        int $endUserId = 0,
-        bool $countOnly = false
+        int $endUserId = 0
     ): array {
         $isPost = $event->trigger === 'post';
         if ($isPost) {
             $from = 'xf_post AS p INNER JOIN xf_thread AS t ON t.thread_id = p.thread_id';
             $author = 'p';
-            $state = 'p.message_state';
+            $select = 'p.user_id AS author_id, t.node_id AS node_id,'
+                . ' p.position AS position, p.message_state AS content_state,';
         } else {
             $from = 'xf_thread AS t';
             $author = 't';
-            $state = 't.discussion_state';
+            $select = 't.user_id AS author_id, t.node_id AS node_id,'
+                . ' t.discussion_state AS content_state,';
         }
         $from .= ' INNER JOIN xf_user AS u ON u.user_id = ' . $author . '.user_id';
 
-        $where = "{$state} = 'visible' AND {$author}.user_id > 0";
-        // Match the earning rules: banned, rejected, and disabled members
-        // earn nothing, so backfilling them would contradict every award path.
-        $where .= " AND u.user_state NOT IN ('rejected', 'disabled') AND u.is_banned = 0";
+        $where = "{$author}.user_id > 0";
         $params = [];
-
-        if ($isPost) {
-            // The thread event already pays the first post.
-            $where .= ' AND p.position > 0';
-        }
-
-        $forumIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($event->forum_ids);
-        if ($forumIds) {
-            $placeholders = implode(',', array_fill(0, count($forumIds), '?'));
-            $where .= " AND t.node_id IN ({$placeholders})";
-            $params = array_merge($params, $forumIds);
-        }
-
-        $groupIds = \OpenCredits\Credits\Entity\CreditEvent::decodeIdList($event->usergroup_ids);
-        if ($groupIds) {
-            $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
-            $clauses = ["u.user_group_id IN ({$placeholders})"];
-            $params = array_merge($params, $groupIds);
-            foreach ($groupIds AS $groupId) {
-                $clauses[] = 'FIND_IN_SET(?, u.secondary_group_ids)';
-                $params[] = $groupId;
-            }
-            $where .= ' AND (' . implode(' OR ', $clauses) . ')';
-        }
 
         if ($onlyUserId > 0) {
             $where .= " AND {$author}.user_id = ?";
@@ -672,14 +672,8 @@ class Tools extends AbstractController
             $params[] = (int)$event->event_id;
         }
 
-        $select = $countOnly
-            ? 'COUNT(DISTINCT ' . $author . '.user_id)'
-            : $author . '.user_id, COUNT(*)';
-        $sql = 'SELECT ' . $select . ' FROM ' . $from . ' WHERE ' . $where;
-        if (!$countOnly) {
-            $sql .= ' GROUP BY ' . $author . '.user_id';
-        }
-
-        return [$sql, $params];
+        $select .= ' u.user_state AS user_state, u.is_banned AS is_banned,'
+            . ' u.user_group_id AS user_group_id, u.secondary_group_ids AS secondary_group_ids';
+        return ['SELECT ' . $select . ' FROM ' . $from . ' WHERE ' . $where, $params];
     }
 }
