@@ -376,7 +376,6 @@ class Transact extends AbstractService
                         'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
                         [$userId, $currencyId]
                     );
-                    $faucetRemaining = PHP_FLOAT_MAX;
                     // The faucet ledger counts exactly what member mints
                     // credited today — never event rows, so duplicating,
                     // disabling, or deleting an event mid-day cannot move
@@ -385,19 +384,20 @@ class Transact extends AbstractService
                     // is enabled so switching the faucet on mid-day still
                     // sees this morning's earnings.
                     $faucetDayStart = self::dayStart();
+                    $earnedToday = 0.0;
                     if ($settings['faucet'] > 0) {
-                        $earned = (float)$db->fetchOne(
+                        $earnedToday = (float)$db->fetchOne(
                             'SELECT COALESCE(amount, 0) FROM xf_oc_faucet'
                             . ' WHERE user_id = ? AND currency_id = ? AND day_start = ? FOR UPDATE',
                             [$userId, $currencyId, $faucetDayStart]
                         );
-                        $faucetRemaining = max(0.0, $settings['faucet'] - $earned);
                     }
-                    $amount = self::calculateCredit(
+                    $amount = InflationClamp::credited(
                         $amount,
                         $balance,
+                        $earnedToday,
                         $settings['cap'],
-                        $faucetRemaining,
+                        $settings['faucet'],
                         (int)$currency['decimals']
                     );
                     if ($amount <= 0.0) {
@@ -422,11 +422,7 @@ class Transact extends AbstractService
                 'log_date' => \XF::$time,
             ]);
             if ($faucetDayStart > 0) {
-                $db->query(
-                    'INSERT INTO xf_oc_faucet (user_id, currency_id, day_start, amount) VALUES (?, ?, ?, ?)'
-                    . ' ON DUPLICATE KEY UPDATE amount = amount + VALUES(amount)',
-                    [$userId, $currencyId, $faucetDayStart, $amount]
-                );
+                $this->trackFaucetMint($userId, $currencyId, $faucetDayStart, $amount);
             }
             $db->commit();
             $credited = $amount;
@@ -489,6 +485,20 @@ class Transact extends AbstractService
                 [$amount, $userId]
             );
         }
+    }
+
+    /**
+     * Records a member mint in the daily faucet ledger. Must run inside the
+     * caller's transaction so the row commits with the award. Shared by
+     * adjust() and redeem() so every mint counts toward the one allowance.
+     */
+    protected function trackFaucetMint(int $userId, int $currencyId, int $dayStart, float $amount): void
+    {
+        $this->db()->query(
+            'INSERT INTO xf_oc_faucet (user_id, currency_id, day_start, amount) VALUES (?, ?, ?, ?)'
+            . ' ON DUPLICATE KEY UPDATE amount = amount + VALUES(amount)',
+            [$userId, $currencyId, $dayStart, $amount]
+        );
     }
 
     public function transfer(int $fromUserId, int $toUserId, float $amount, int $currencyId = 1): bool
@@ -804,32 +814,38 @@ class Transact extends AbstractService
                 $db->rollBack();
                 return 'invalid_amount';
             }
+            $faucetDayStart = 0;
             if ($this->inflationApplies($currencyId)) {
                 $settings = $this->inflationSettings();
-                if ($settings['enabled']) {
-                    $balance = (float)$db->fetchOne(
+                if ($settings['enabled']) {                    $balance = (float)$db->fetchOne(
                         'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
                         [$userId, $currencyId]
                     );
-                    if ($settings['cap'] > 0
-                        && self::floorToDecimals($balance, (int)$currency['decimals'])
-                            + $amount > $settings['cap']
-                    ) {
-                        $db->rollBack();
-                        return 'capped';
-                    }
-                    $faucetDayStart = 0;
+                    // Same faucet ledger as adjust(): every member mint counts
+                    // toward the one allowance, tracked whenever inflation is
+                    // enabled so a mid-day faucet switch-on sees redemptions
+                    // too. Redeem is all-or-nothing — a capped code stays
+                    // unused instead of half-consumed — while adjust() takes
+                    // partial credit; both verdicts come out of credited().
+                    $faucetDayStart = self::dayStart();
+                    $earnedToday = 0.0;
                     if ($settings['faucet'] > 0) {
-                        $faucetDayStart = self::dayStart();
-                        $earned = (float)$db->fetchOne(
+                        $earnedToday = (float)$db->fetchOne(
                             'SELECT COALESCE(amount, 0) FROM xf_oc_faucet'
                             . ' WHERE user_id = ? AND currency_id = ? AND day_start = ? FOR UPDATE',
                             [$userId, $currencyId, $faucetDayStart]
                         );
-                        if ($earned + $amount > $settings['faucet']) {
-                            $db->rollBack();
-                            return 'capped';
-                        }
+                    }
+                    if (!InflationClamp::fitsFull(
+                        $amount,
+                        $balance,
+                        $earnedToday,
+                        $settings['cap'],
+                        $settings['faucet'],
+                        (int)$currency['decimals']
+                    )) {
+                        $db->rollBack();
+                        return 'capped';
                     }
                 }
             }
@@ -850,11 +866,7 @@ class Transact extends AbstractService
                 'log_date' => \XF::$time,
             ]);
             if ($faucetDayStart > 0) {
-                $db->query(
-                    'INSERT INTO xf_oc_faucet (user_id, currency_id, day_start, amount) VALUES (?, ?, ?, ?)'
-                    . ' ON DUPLICATE KEY UPDATE amount = amount + VALUES(amount)',
-                    [$userId, $currencyId, $faucetDayStart, $amount]
-                );
+                $this->trackFaucetMint($userId, $currencyId, $faucetDayStart, $amount);
             }
             $db->query(
                 'UPDATE xf_oc_code SET uses = uses + 1 WHERE code_id = ?',
@@ -1350,11 +1362,9 @@ class Transact extends AbstractService
 
     /**
      * Actual member credit after the balance cap and daily faucet.
-     * $cap = 0 disables the cap; $faucetRemaining = PHP_FLOAT_MAX disables
-     * the faucet. Headroom is floored to the currency's smallest unit before
-     * clamping, so a legacy sub-unit balance can never round its way over the
-     * cap on a 0-decimal currency. Pure so it can be unit-tested without
-     * booting XenForo.
+     * Historic signature kept for integrators: $faucetRemaining is today's
+     * remaining allowance (PHP_FLOAT_MAX disables the faucet). New code
+     * should call InflationClamp::credited() directly.
      */
     public static function calculateCredit(
         float $requested,
@@ -1363,29 +1373,22 @@ class Transact extends AbstractService
         float $faucetRemaining,
         int $decimals
     ): float {
-        if ($requested <= 0) {
+        if ($faucetRemaining <= 0.0) {
+            // A finite zero/negative remaining allowance clamps everything;
+            // only the PHP_FLOAT_MAX sentinel disables the faucet.
             return 0.0;
         }
-        $decimals = max(0, $decimals);
-        $amount = $requested;
-        if ($cap > 0) {
-            $amount = min($amount, self::floorToDecimals($cap - $balance, $decimals));
-        }
-        if ($faucetRemaining >= 0) {
-            $amount = min($amount, self::floorToDecimals($faucetRemaining, $decimals));
-        }
-        $amount = round($amount, $decimals);
-        return $amount > 0 ? $amount : 0.0;
+        $faucet = $faucetRemaining >= (PHP_FLOAT_MAX / 2) ? 0.0 : $faucetRemaining;
+        return InflationClamp::credited($requested, $balance, 0.0, $cap, $faucet, $decimals);
     }
 
     /**
-     * Round down to the currency's smallest unit. Pure for unit tests.
+     * Round down to the currency's smallest unit. Kept here for integrators;
+     * new code should call InflationClamp::floorToDecimals() directly.
      */
     public static function floorToDecimals(float $value, int $decimals): float
     {
-        $decimals = max(0, $decimals);
-        $mult = 10 ** $decimals;
-        return floor(max(0.0, $value) * $mult + 1e-9) / $mult;
+        return InflationClamp::floorToDecimals($value, $decimals);
     }
 
     /**
@@ -1420,9 +1423,10 @@ class Transact extends AbstractService
      * Fast path avoids the transaction when already awarded; the user-row lock
      * serializes concurrent first-requests of the day.
      *
-     * When the cap or faucet clamps the award to zero, a claim marker is
-     * recorded so later requests today short-circuit on the fast path instead
-     * of retrying a write transaction on every page view.
+     * When the faucet clamps the award to zero, a claim marker is recorded
+     * so later requests today short-circuit on the fast path instead of
+     * retrying a write transaction on every page view. Cap-bound clamps
+     * leave no marker: cap headroom can free later the same day.
      */
     public function awardDailyLoginIfNeeded(int $userId): bool
     {
@@ -1465,11 +1469,25 @@ class Transact extends AbstractService
                 return false;
             }
             $awarded = $this->awardByTrigger('daily_login', $userId, $userId);
-            if (!$awarded && $this->hasActiveEvents('daily_login') && $this->isAwardEligible($userId)) {
-                // Configured but clamped to zero by the cap/faucet: mark the
-                // day claimed so later requests skip the write transaction.
-                // Ineligible members get no marker — unbanning later the same
-                // day must not find a stale claim blocking their award.
+            $mark = InflationClamp::shouldMarkClaimed(
+                $awarded,
+                $this->hasActiveEvents('daily_login'),
+                $this->isAwardEligible($userId)
+            );
+            if ($mark) {
+                // Only faucet-bound clamps mark the day: faucet exhaustion
+                // never frees the same day, but cap headroom can (a later
+                // transfer, charge, or demurrage burn frees it), so a
+                // cap-bound member retries instead of finding a stale
+                // marker. Every amount must clamp on the faucet alone.
+                $mark = $this->dailyAwardsFaucetBound($userId, $start);
+            }
+            if ($mark) {
+                // Faucet-bound: the day is claimed so later requests skip the
+                // write transaction. The write itself stays here (needs $db);
+                // only the verdict lives in the clamp module. Ineligible
+                // members get no marker — unbanning later the same day must
+                // not find a stale claim blocking their award.
                 $db->query(
                     'INSERT IGNORE INTO xf_oc_daily_claim (user_id, day_start) VALUES (?, ?)',
                     [$userId, $start]
@@ -1481,6 +1499,43 @@ class Transact extends AbstractService
             $db->rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Whether every active primary-currency daily_login event clamps to zero
+     * on the faucet alone (cap ignored). Reads under the caller's locks.
+     * Secondary-currency events need no check: with no clamp they either
+     * awarded (contradicting the marker path) or are dust that never credits.
+     */
+    protected function dailyAwardsFaucetBound(int $userId, int $dayStart): bool
+    {
+        $primaryId = $this->primaryCurrencyId();
+        $amounts = [];
+        $decimals = 2;
+        foreach (self::$eventRowsCache['daily_login'] ?? [] as $row) {
+            if ((int)($row['currency_id'] ?? 0) === $primaryId) {
+                $amounts[] = (float)($row['amount'] ?? 0);
+                $decimals = (int)($row['decimals'] ?? $decimals);
+            }
+        }
+        if ($amounts === []) {
+            return true;
+        }
+        $settings = $this->inflationSettings();
+        $db = $this->db();
+        $balance = (float)$db->fetchOne(
+            'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
+            [$userId, $primaryId]
+        );
+        $earnedToday = 0.0;
+        if ($settings['faucet'] > 0) {
+            $earnedToday = (float)$db->fetchOne(
+                'SELECT COALESCE(amount, 0) FROM xf_oc_faucet'
+                . ' WHERE user_id = ? AND currency_id = ? AND day_start = ? FOR UPDATE',
+                [$userId, $primaryId, $dayStart]
+            );
+        }
+        return InflationClamp::allFaucetBound($amounts, $balance, $earnedToday, $settings['faucet'], $decimals);
     }
 
     /**

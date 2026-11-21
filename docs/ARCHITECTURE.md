@@ -138,8 +138,8 @@ change fires the `oc_credits_adjust` code event with
   (code left unused) when they would breach the cap or exhaust the faucet.
   Transfers and charges are supply-neutral and never clamped. The public
   `adjust()` is privileged and bypasses both; member-facing callers pass
-  `$respectInflation = true`. A daily award clamped to zero writes an
-  `xf_oc_daily_claim` marker so the per-request visitor path short-circuits.
+  `$respectInflation = true`. A daily award clamped to zero by an exhausted faucet writes a marker
+  in `xf_oc_daily_claim`, so the per-request visitor path short-circuits; cap-bound clamps leave no marker since headroom can free later the same day.
   Demurrage burns `rate%` of positive primary balances once per `days`,
   rounds to the currency, floors at zero, skips (and purges the cached rows
   of) deleted members, and runs from a resumable pass: the `ocDemurrage` cron

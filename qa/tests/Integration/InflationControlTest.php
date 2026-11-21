@@ -504,7 +504,17 @@ class InflationControlTest extends TestCase
         $this->assertEqualsWithDelta(10.0, $this->transact->getBalance($this->memberId, $this->currencyId), 0.0001);
     }
 
-    public function testAtCapDailyLoginMarksClaim(): void
+    /**
+     * Seeds a 10-credit daily_login event on the test currency, suppresses
+     * other currencies' daily events, and stashes the member's real daily
+     * rows for today (the fast path counts every daily_login row, so a
+     * member who already visited today would short-circuit before the
+     * claim logic). Returns [suppressed event ids, stashed rows] for
+     * restoreDailyLoginScenario() in a finally block.
+     *
+     * @return array{0: int[], 1: array[]}
+     */
+    protected function seedDailyLoginScenario(): array
     {
         $this->db->insert('xf_oc_event', [
             'currency_id' => $this->currencyId,
@@ -526,65 +536,125 @@ class InflationControlTest extends TestCase
             $in = implode(',', array_map('intval', $others));
             $this->db->query("UPDATE xf_oc_event SET active = 0 WHERE event_id IN ({$in})");
         }
-        // Stash today's real daily rows: the fast path counts every
-        // daily_login row, so a member who already visited today would
-        // short-circuit before the claim logic (restored in finally).
-        $start = Transact::dayStart();
         $stashed = $this->db->fetchAll(
             'SELECT user_id, currency_id, amount, `trigger`, content_type, content_id,'
             . ' event_id, note, log_date FROM xf_oc_transaction'
             . ' WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
-            [$this->memberId, 'daily_login', $start]
+            [$this->memberId, 'daily_login', Transact::dayStart()]
         );
         if ($stashed) {
             $this->db->query(
                 'DELETE FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
-                [$this->memberId, 'daily_login', $start]
+                [$this->memberId, 'daily_login', Transact::dayStart()]
             );
         }
+        return [$others, $stashed];
+    }
+
+    protected function restoreDailyLoginScenario(array $others, array $stashed): void
+    {
+        if (!empty($others)) {
+            $in = implode(',', array_map('intval', $others));
+            $this->db->query("UPDATE xf_oc_event SET active = 1 WHERE event_id IN ({$in})");
+            Transact::clearEventCache();
+        }
+        foreach ($stashed as $row) {
+            $this->db->insert('xf_oc_transaction', $row);
+        }
+    }
+
+    public function testAtCapDailyLoginLeavesNoMarker(): void
+    {
+        [$others, $stashed] = $this->seedDailyLoginScenario();
         try {
             Transact::clearEventCache();
             \XF::app()->options()->ocInflationBalanceCap = 5;
             $this->transact->adjust($this->memberId, $this->currencyId, 5.0, 'admin_adjust');
 
-        // At the cap the daily award clamps to zero and marks the day claimed.
-        $this->assertFalse($this->transact->awardDailyLoginIfNeeded($this->memberId));
-        $this->assertSame(
-            1,
-            (int)$this->db->fetchOne(
-                'SELECT COUNT(*) FROM xf_oc_daily_claim WHERE user_id = ?',
-                [$this->memberId]
-            ),
-            'A clamped daily award leaves a claim marker.'
-        );
-        $this->assertSame(
-            0,
-            (int)$this->db->fetchOne(
-                "SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = 'daily_login'"
-                . ' AND log_date >= ?',
-                [$this->memberId, Transact::dayStart()]
-            ),
-            'A clamped daily award writes no ledger row.'
-        );
+            // At the cap the daily award clamps to zero but leaves no
+            // marker: cap headroom can free later the same day.
+            $this->assertFalse($this->transact->awardDailyLoginIfNeeded($this->memberId));
+            $this->assertSame(
+                0,
+                (int)$this->db->fetchOne(
+                    'SELECT COUNT(*) FROM xf_oc_daily_claim WHERE user_id = ?',
+                    [$this->memberId]
+                ),
+                'A cap-bound daily award leaves no claim marker.'
+            );
+            $this->assertSame(
+                0,
+                (int)$this->db->fetchOne(
+                    "SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = 'daily_login'"
+                    . ' AND log_date >= ?',
+                    [$this->memberId, Transact::dayStart()]
+                ),
+                'A clamped daily award writes no ledger row.'
+            );
 
-        // The retry short-circuits on the marker: no second marker, no row.
-        $this->assertFalse($this->transact->awardDailyLoginIfNeeded($this->memberId));
-        $this->assertSame(
-            1,
-            (int)$this->db->fetchOne(
-                'SELECT COUNT(*) FROM xf_oc_daily_claim WHERE user_id = ?',
-                [$this->memberId]
-            )
-        );
+            // Freeing cap headroom lets the retry award: the morning clamp
+            // must not become a day-long block.
+            $this->assertTrue(
+                $this->transact->transfer($this->memberId, $this->otherId, 5.0, $this->currencyId)
+            );
+            $this->assertTrue($this->transact->awardDailyLoginIfNeeded($this->memberId));
+            $this->assertEqualsWithDelta(
+                5.0,
+                $this->transact->getBalance($this->memberId, $this->currencyId),
+                0.0001,
+                'The freed headroom takes the daily award on retry.'
+            );
         } finally {
-            if (!empty($others)) {
-                $in = implode(',', array_map('intval', $others));
-                $this->db->query("UPDATE xf_oc_event SET active = 1 WHERE event_id IN ({$in})");
-                Transact::clearEventCache();
-            }
-            foreach ($stashed as $row) {
-                $this->db->insert('xf_oc_transaction', $row);
-            }
+            $this->restoreDailyLoginScenario($others, $stashed);
+        }
+    }
+
+    public function testFaucetExhaustedDailyLoginMarksClaim(): void
+    {
+        [$others, $stashed] = $this->seedDailyLoginScenario();
+        try {
+            Transact::clearEventCache();
+            \XF::app()->options()->ocInflationFaucetDaily = 8;
+            // Exhaust the faucet through another trigger first.
+            $this->assertTrue($this->transact->awardByTrigger(self::TRIGGER, $this->memberId));
+            $this->assertEqualsWithDelta(
+                8.0,
+                $this->transact->getBalance($this->memberId, $this->currencyId),
+                0.0001
+            );
+
+            // The daily award clamps on the exhausted faucet and marks the
+            // day: faucet exhaustion never frees the same day.
+            $this->assertFalse($this->transact->awardDailyLoginIfNeeded($this->memberId));
+            $this->assertSame(
+                1,
+                (int)$this->db->fetchOne(
+                    'SELECT COUNT(*) FROM xf_oc_daily_claim WHERE user_id = ?',
+                    [$this->memberId]
+                ),
+                'A faucet-bound daily award leaves a claim marker.'
+            );
+
+            // The retry short-circuits on the marker: no second marker, no row.
+            $this->assertFalse($this->transact->awardDailyLoginIfNeeded($this->memberId));
+            $this->assertSame(
+                1,
+                (int)$this->db->fetchOne(
+                    'SELECT COUNT(*) FROM xf_oc_daily_claim WHERE user_id = ?',
+                    [$this->memberId]
+                )
+            );
+            $this->assertSame(
+                0,
+                (int)$this->db->fetchOne(
+                    "SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = 'daily_login'"
+                    . ' AND log_date >= ?',
+                    [$this->memberId, Transact::dayStart()]
+                ),
+                'A clamped daily award writes no ledger row.'
+            );
+        } finally {
+            $this->restoreDailyLoginScenario($others, $stashed);
         }
     }
 
