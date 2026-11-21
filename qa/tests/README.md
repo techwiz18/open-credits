@@ -20,6 +20,26 @@ Re-running? Reuse the warm copy — skip the copy/install and run only the
 
 (On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI does exactly that.)
 
+## Static analysis (`qa/phpstan.neon`, level 5, no XenForo boot)
+
+`php -l` and the unit suite both pass undefined variables silently (PHP
+warns; the expression evaluates as intended), so phpstan covers `Service/`
+plus `tests/Unit`. XF parents are analysis-only doubles:
+`tests/bootstrap.php` owns them (it must stay the single definition —
+a second static copy shadows the runtime one and blinds the analysis) and
+`tests/phpstan-bootstrap.php` adds the `XF` facade. Run:
+
+```bash
+cd qa && composer install && ./vendor/bin/phpstan analyse --no-progress
+```
+
+From the warm container copy the addon path differs, so pass paths
+explicitly (the `OC_ADDON_SRC` override is the same as for phpunit):
+
+```bash
+docker compose exec -T web bash -c "cd /var/www/html/.qatmp && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
+```
+
 ## Integration (`qa/tests/Integration`, real XenForo boot)
 
 DB-backed service tests run against the licensed dev forum. The bootstrap

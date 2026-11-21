@@ -1,0 +1,7 @@
+parameters:
+    level: 5
+    bootstrapFiles:
+        - tests/phpstan-bootstrap.php
+    paths:
+        - ../addon-src/OpenCredits/Credits/Service
+        - tests/Unit

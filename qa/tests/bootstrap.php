@@ -37,8 +37,20 @@ namespace XF\Service {
     if (!class_exists('XF\Service\AbstractService', false)) {
         class AbstractService
         {
+            // Note: this stub is the single definition phpstan sees. The
+            // analysis bootstrap (tests/phpstan-bootstrap.php) requires
+            // this file and must NOT redeclare anything here: a second
+            // static definition shadows the runtime one and blinds the
+            // analysis to these members.
+            /** @var mixed */
+            protected $app;
             public function __construct(...$args)
             {
+            }
+            /** @return mixed */
+            protected function db()
+            {
+                return null;
             }
         }
     }
