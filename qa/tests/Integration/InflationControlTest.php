@@ -664,15 +664,7 @@ class InflationControlTest extends TestCase
         $this->transact->adjust($this->memberId, $this->currencyId, 10.0, 'admin_adjust');
 
         // Simulate a runner that claimed a pass but has not processed anyone.
-        $this->db->insert('xf_oc_inflation', [
-            'currency_id' => $this->currencyId,
-            'last_run' => 0,
-            'cursor_user_id' => 0,
-            'pass_started' => \XF::$time,
-            'pass_token' => 424242,
-            'pass_rate' => 10,
-            'pass_decimals' => 2,
-        ]);
+        $this->seedClaimedPass(424242);
 
         $step = $this->transact->demurrageStep(500, true);
         $this->assertTrue($step['busy'], 'A second runner must report busy, not double-burn.');
@@ -699,6 +691,290 @@ class InflationControlTest extends TestCase
             $this->transact->getBalance($this->memberId, $this->currencyId),
             0.0001
         );
+    }
+
+    /**
+     * A second runner owns a freshly claimed pass (token set, no progress).
+     * The runner reports busy through runDemurrage(), exits before burning,
+     * and leaves the owner's claim untouched.
+     */
+    public function testRunnerReportsBusyWithoutBurningWhenPassIsClaimed(): void
+    {
+        $this->seedDemurrageBalances();
+        $this->seedClaimedPass(424242);
+
+        $result = $this->transact->runDemurrage(1, true);
+
+        $this->assertFalse($result['ran'], 'The losing runner did not run.');
+        $this->assertTrue($result['busy'], 'The runner surfaces the lost race as busy.');
+        $this->assertFalse($result['done']);
+        $this->assertSame(0, $result['processed']);
+        $this->assertEqualsWithDelta(0.0, $result['burned'], 0.0001);
+        $this->assertSame(0, $this->demurrageRowCount(), 'The losing runner burned nothing.');
+        $this->assertEqualsWithDelta(10.0, $this->transact->getBalance($this->memberId, $this->currencyId), 0.0001);
+        $this->assertEqualsWithDelta(5.0, $this->transact->getBalance($this->otherId, $this->currencyId), 0.0001);
+        $state = $this->demurrageState();
+        $this->assertSame(424242, (int)$state['pass_token'], "The owner's claim is untouched.");
+        $this->assertSame(0, (int)$state['last_run'], 'The losing runner does not advance last_run.');
+    }
+
+    /**
+     * A cursor advance is conditional on the owning token: after our first
+     * batch another runner swaps the pass token (cursor untouched), so the
+     * advance is rejected and the untouched member is not burned.
+     */
+    public function testCursorAdvanceIsRejectedWhenPassTokenChanges(): void
+    {
+        $this->seedDemurrageBalances();
+
+        $racer = $this->racer($this->stealPassAfterCommits(1, 777777));
+
+        $result = $racer->runDemurrage(10, true);
+
+        $this->assertTrue($result['busy'], 'A busy batch aborts the runner.');
+        $this->assertFalse($result['done']);
+        $this->assertEqualsWithDelta(9.0, $this->transact->getBalance($this->memberId, $this->currencyId), 0.0001);
+        $this->assertEqualsWithDelta(
+            5.0,
+            $this->transact->getBalance($this->otherId, $this->currencyId),
+            0.0001,
+            'The rejected advance burns nothing.'
+        );
+        $this->assertSame(1, $this->demurrageRowCount());
+        $state = $this->demurrageState();
+        $this->assertSame($this->memberId, (int)$state['cursor_user_id'], 'The cursor matches; only the token changed.');
+        $this->assertSame(777777, (int)$state['pass_token']);
+        $this->assertSame(0, (int)$state['last_run']);
+    }
+
+    /**
+     * Busy propagation through the multi-batch runner: batch one commits, the
+     * token is stolen before the runner re-reads the pass for batch two, and
+     * the runner reports busy instead of starting another batch.
+     */
+    public function testRunnerAbortsWhenTokenIsStolenBetweenBatches(): void
+    {
+        $this->seedDemurrageBalances();
+
+        $racer = $this->racer();
+        $racer->racingDb->afterFetchRow = $this->stealTokenOnStateRead(2, 777777);
+
+        $result = $racer->runDemurrage(1, true);
+
+        $this->assertTrue($result['busy']);
+        $this->assertFalse($result['done']);
+        $this->assertEqualsWithDelta(9.0, $this->transact->getBalance($this->memberId, $this->currencyId), 0.0001);
+        $this->assertEqualsWithDelta(5.0, $this->transact->getBalance($this->otherId, $this->currencyId), 0.0001);
+        $this->assertSame(1, $this->demurrageRowCount());
+        $state = $this->demurrageState();
+        $this->assertSame($this->memberId, (int)$state['cursor_user_id']);
+        $this->assertSame(777777, (int)$state['pass_token']);
+        $this->assertSame(0, (int)$state['last_run']);
+    }
+
+    /**
+     * The completion write is conditional on the owning token: when another
+     * runner swaps the token between our last batch and our completion, our
+     * completion is rejected (busy) and last_run is not advanced.
+     */
+    public function testCompletionIsRejectedWhenPassTokenNoLongerMatches(): void
+    {
+        $this->seedDemurrageBalances();
+
+        $handledAt = \XF::$time - 1000;
+        $racer = $this->racer($this->stealPassAfterCommits(2, 777777, $handledAt));
+
+        $step = $racer->demurrageStep(10, true);
+
+        $this->assertTrue($step['ran']);
+        $this->assertTrue($step['busy'], 'Completion is rejected when the pass token no longer matches.');
+        $this->assertFalse($step['done']);
+        $this->assertSame(2, $step['processed']);
+        $this->assertEqualsWithDelta(1.5, $step['burned'], 0.0001);
+        $this->assertEqualsWithDelta(9.0, $this->transact->getBalance($this->memberId, $this->currencyId), 0.0001);
+        $this->assertEqualsWithDelta(4.5, $this->transact->getBalance($this->otherId, $this->currencyId), 0.0001);
+        $this->assertSame(2, $this->demurrageRowCount());
+        $state = $this->demurrageState();
+        $this->assertSame($handledAt, (int)$state['last_run'], 'The losing runner must not advance last_run.');
+        $this->assertSame($this->otherId, (int)$state['cursor_user_id'], 'The cursor matches; only the token changed.');
+        $this->assertSame(777777, (int)$state['pass_token']);
+    }
+
+    /**
+     * The cron/admin time budget stops the runner mid-pass; the next run
+     * resumes at the saved cursor and only burns the remaining members.
+     */
+    public function testTimeBudgetStopResumesFromCursor(): void
+    {
+        $this->seedDemurrageBalances();
+
+        // A zero budget always breaks after the first successful batch.
+        $first = $this->transact->runDemurrage(1, true, 0);
+        $this->assertTrue($first['ran']);
+        $this->assertFalse($first['done'], 'The budget stops an unfinished pass.');
+        $this->assertFalse($first['busy']);
+        $this->assertSame(1, $first['processed']);
+        $this->assertEqualsWithDelta(1.0, $first['burned'], 0.0001);
+        $this->assertSame(1, $first['accounts']);
+        $state = $this->demurrageState();
+        $this->assertSame($this->memberId, (int)$state['cursor_user_id'], 'The cursor is saved for the resume.');
+        $this->assertNotSame(0, (int)$state['pass_token']);
+        $this->assertSame(0, (int)$state['last_run']);
+
+        $second = $this->transact->runDemurrage(500, true);
+        $this->assertTrue($second['ran']);
+        $this->assertTrue($second['done']);
+        $this->assertFalse($second['busy']);
+        $this->assertSame(1, $second['processed'], 'The resume continues from the cursor, not the start.');
+        $this->assertEqualsWithDelta(0.5, $second['burned'], 0.0001);
+        $this->assertSame(2, $this->demurrageRowCount(), 'No member is burned twice across the resume.');
+        $amounts = [];
+        foreach ($this->db->fetchAll(
+            'SELECT user_id, amount FROM xf_oc_transaction WHERE currency_id = ? AND `trigger` = ?',
+            [$this->currencyId, 'demurrage']
+        ) as $row) {
+            $amounts[(int)$row['user_id']] = (float)$row['amount'];
+        }
+        $this->assertEqualsWithDelta(-1.0, $amounts[$this->memberId], 0.0001);
+        $this->assertEqualsWithDelta(-0.5, $amounts[$this->otherId], 0.0001);
+        $state = $this->demurrageState();
+        $this->assertGreaterThan(0, (int)$state['last_run']);
+        $this->assertSame(0, (int)$state['cursor_user_id']);
+        $this->assertSame(0, (int)$state['pass_token']);
+    }
+
+    /**
+     * An interval skip is a distinct verdict from a lost pass: both report
+     * ran=false, but only the lost race is busy.
+     */
+    public function testIntervalSkipIsNotBusy(): void
+    {
+        $this->seedDemurrageBalances();
+        $this->assertTrue($this->transact->runDemurrage(500, true)['done']);
+        $lastRun = (int)$this->demurrageState()['last_run'];
+
+        $skip = $this->transact->runDemurrage(500, false);
+        $this->assertFalse($skip['ran']);
+        $this->assertFalse($skip['busy'], 'An interval skip is not a busy pass.');
+        $this->assertTrue($skip['done']);
+        $this->assertSame(0, $skip['processed']);
+        $this->assertEqualsWithDelta(9.0, $this->transact->getBalance($this->memberId, $this->currencyId), 0.0001);
+        $this->assertEqualsWithDelta(4.5, $this->transact->getBalance($this->otherId, $this->currencyId), 0.0001);
+        $this->assertSame(2, $this->demurrageRowCount());
+        $this->assertSame($lastRun, (int)$this->demurrageState()['last_run']);
+
+        // The same ran=false verdict from a live claim is busy instead.
+        $this->db->update(
+            'xf_oc_inflation',
+            ['pass_started' => \XF::$time, 'pass_token' => 999, 'cursor_user_id' => 0],
+            'currency_id = ?',
+            [$this->currencyId]
+        );
+        $busy = $this->transact->runDemurrage(500, true);
+        $this->assertFalse($busy['ran']);
+        $this->assertTrue($busy['busy']);
+        $this->assertFalse($busy['done']);
+        $this->assertSame(2, $this->demurrageRowCount());
+    }
+
+    /**
+     * A few real members hold balances the whole pass walks in user_id order.
+     */
+    protected function seedDemurrageBalances(): void
+    {
+        \XF::app()->options()->ocInflationDemurrageRate = 10;
+        $this->transact->adjust($this->memberId, $this->currencyId, 10.0, 'admin_adjust');
+        $this->transact->adjust($this->otherId, $this->currencyId, 5.0, 'admin_adjust');
+    }
+
+    /** A pass claimed a moment ago that has not processed anyone yet. */
+    protected function seedClaimedPass(int $token): void
+    {
+        $this->db->insert('xf_oc_inflation', [
+            'currency_id' => $this->currencyId,
+            'last_run' => 0,
+            'cursor_user_id' => 0,
+            'pass_started' => \XF::$time,
+            'pass_token' => $token,
+            'pass_rate' => 10,
+            'pass_decimals' => 2,
+        ]);
+    }
+
+    protected function demurrageRowCount(): int
+    {
+        return (int)$this->db->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_transaction WHERE currency_id = ? AND `trigger` = ?',
+            [$this->currencyId, 'demurrage']
+        );
+    }
+
+    /** @return array<string, mixed> */
+    protected function demurrageState(): array
+    {
+        return $this->db->fetchRow(
+            'SELECT last_run, cursor_user_id, pass_token FROM xf_oc_inflation WHERE currency_id = ?',
+            [$this->currencyId]
+        ) ?: [];
+    }
+
+    /**
+     * A Transact wired to a wrapper that acts like another runner at a commit
+     * boundary, where its state write survives the batch transaction.
+     */
+    protected function racer(?callable $afterCommit = null): RacingTransact
+    {
+        $racer = new RacingTransact(\XF::app());
+        $racer->racingDb = new RacingDb($this->db);
+        $racer->racingDb->afterCommit = $afterCommit;
+        return $racer;
+    }
+
+    /**
+     * Hook that swaps only the pass token (and optionally last_run) after the
+     * given commit count, so a lone cursor mismatch cannot explain a rejection.
+     */
+    protected function stealPassAfterCommits(int $commitCount, int $stolenToken, int $lastRun = 0): callable
+    {
+        $db = $this->db;
+        $currencyId = $this->currencyId;
+        return function () use ($db, $currencyId, $commitCount, $stolenToken, $lastRun): void {
+            static $commits = 0;
+            if (++$commits !== $commitCount) {
+                return;
+            }
+            $db->update(
+                'xf_oc_inflation',
+                ['pass_token' => $stolenToken, 'last_run' => $lastRun],
+                'currency_id = ?',
+                [$currencyId]
+            );
+        };
+    }
+
+    /**
+     * Hook that steals the token on the Nth full pass-state read, as a runner
+     * landing between our read and our next write would, leaving the cursor.
+     */
+    protected function stealTokenOnStateRead(int $readCount, int $stolenToken): callable
+    {
+        $db = $this->db;
+        $currencyId = $this->currencyId;
+        return function (string $sql) use ($db, $currencyId, $readCount, $stolenToken): void {
+            if (!str_contains($sql, 'pass_rate, pass_decimals')) {
+                return;
+            }
+            static $reads = 0;
+            if (++$reads !== $readCount) {
+                return;
+            }
+            $db->update(
+                'xf_oc_inflation',
+                ['pass_token' => $stolenToken],
+                'currency_id = ?',
+                [$currencyId]
+            );
+        };
     }
 
     public function testStaleFaucetAndClaimRowsArePruned(): void
@@ -791,5 +1067,61 @@ class InflationControlTest extends TestCase
             $this->transact->adjust($this->memberId, $zero, 10.0, self::TRIGGER, 0, '', '', true, $credited),
             '0.50 headroom floors to 0 on a 0-decimal currency.'
         );
+    }
+}
+
+/**
+ * Test-only DB proxy: forwards every call to the real adapter and fires hooks
+ * at the moments a competing runner's write can land: after a batch commit
+ * (outside its transaction) and after a pass-state read.
+ */
+class RacingDb
+{
+    /** @var \XF\Db\AbstractAdapter */
+    public $adapter;
+
+    /** @var (callable(): void)|null */
+    public $afterCommit;
+
+    /** @var (callable(string): void)|null */
+    public $afterFetchRow;
+
+    public function __construct($adapter)
+    {
+        $this->adapter = $adapter;
+    }
+
+    public function commit(): void
+    {
+        $this->adapter->commit();
+        if ($this->afterCommit) {
+            ($this->afterCommit)();
+        }
+    }
+
+    public function fetchRow($query, $params = [])
+    {
+        $row = $this->adapter->fetchRow($query, $params);
+        if ($this->afterFetchRow) {
+            ($this->afterFetchRow)((string)$query);
+        }
+        return $row;
+    }
+
+    public function __call(string $name, array $args)
+    {
+        return $this->adapter->{$name}(...$args);
+    }
+}
+
+/** Transact bound to a RacingDb instead of the app's real adapter. */
+class RacingTransact extends Transact
+{
+    /** @var RacingDb|null */
+    public $racingDb;
+
+    protected function db()
+    {
+        return $this->racingDb ?: parent::db();
     }
 }
