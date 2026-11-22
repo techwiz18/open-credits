@@ -10,6 +10,6 @@ class Demurrage
 	{
 		/** @var \OpenCredits\Credits\Service\Transact $svc */
 		$svc = \XF::app()->service('OpenCredits\Credits:Transact');
-		$svc->runDemurrage(500, false, 10);
+		$svc->demurrageRunner()->run(500, false, 10);
 	}
 }

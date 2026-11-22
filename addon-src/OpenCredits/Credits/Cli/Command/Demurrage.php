@@ -32,9 +32,10 @@ class Demurrage extends AbstractCommand
 
 		/** @var \OpenCredits\Credits\Service\Transact $svc */
 		$svc = \XF::app()->service('OpenCredits\Credits:Transact');
+		$runner = $svc->demurrageRunner();
 
 		if ($input->getOption('preview')) {
-			$preview = $svc->demurragePreview();
+			$preview = $runner->preview();
 			if (!$preview['enabled'] || $preview['rate'] <= 0 || !$preview['currency']) {
 				$io->warning('Inflation control is disabled, the demurrage rate is 0, or the primary currency is unavailable.');
 				return Command::SUCCESS;
@@ -49,19 +50,20 @@ class Demurrage extends AbstractCommand
 			return Command::SUCCESS;
 		}
 
-		$result = $svc->runDemurrage(500, true);
-		if (!empty($result['busy'])) {
+		// null budget: an operator-run command completes the pass (Ctrl-C stops it).
+		$result = $runner->run(500, true, null);
+		if ($result['verdict'] === 'busy') {
 			$io->warning('Another demurrage pass is already in progress. Re-run once it finishes.');
 			return Command::SUCCESS;
 		}
-		if (!$result['ran']) {
+		if ($result['verdict'] === 'done' && !$result['ran']) {
 			$io->warning('Nothing to do: inflation control is disabled, the demurrage rate is 0, or the primary currency is unavailable.');
 			return Command::SUCCESS;
 		}
 
-		$preview = $svc->demurragePreview();
+		$preview = $runner->preview();
 		$decimals = (int)($preview['currency']['decimals'] ?? 2);
-		if (!$result['done']) {
+		if ($result['verdict'] === 'resume') {
 			$io->warning(sprintf(
 				'Demurrage pass incomplete: processed %d account(s), burned %s. Re-run to resume.',
 				$result['accounts'],

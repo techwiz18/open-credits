@@ -12,14 +12,15 @@ The licensed XenForo runtime in `src/` is gitignored and never committed.
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
+| `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; burns and orphan purges go through callables supplied by `Transact` |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
 | `BbCode/Charge.php` | `[charge=X]` callback: premium-content gate + locked box |
 | `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect |
 | `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated) |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
-| `Cli/Command/Demurrage.php` | `oc-credits:demurrage` CLI (`--preview` or run now) |
+| `Cli/Command/Demurrage.php` | `oc-credits:demurrage` CLI (`--preview` or run now; calls the runner) |
 | `Cron/DailyLogin.php` | Stub (daily_login is awarded via `visitor_setup`, not cron) |
-| `Cron/Demurrage.php` | Demurrage cron (every 15 min); 10s budget per tick, resumable |
+| `Cron/Demurrage.php` | Demurrage cron (every 15 min); 10s budget per tick through `Service/DemurrageRunner`, resumable |
 | `_output/` | Dev-output JSON/HTML/TXT synced into XF on install/upgrade |
 
 ## Database
@@ -144,11 +145,14 @@ change fires the `oc_credits_adjust` code event with
   in `xf_oc_daily_claim`, so the per-request visitor path short-circuits; cap-bound clamps leave no marker since headroom can free later the same day.
   Demurrage burns `rate%` of positive primary balances once per `days`,
   rounds to the currency, floors at zero, skips (and purges the cached rows
-  of) deleted members, and runs from a resumable pass: the `ocDemurrage` cron
-  ticks every 15 minutes with a 10s budget while a pass is in flight, Tools
-  offers preview (excluding already-processed members) + a time-bounded
-  run-now with resume state, and the CLI runs full. Overlapping runners get
-  `busy`, never a second pass. Switching primary seeds `last_run` so the new
+  of) deleted members, and runs from a resumable pass owned by
+  `Service/DemurrageRunner`: the `ocDemurrage` cron ticks every 15 minutes
+  with a 10s budget while a pass is in flight, Tools offers preview
+  (excluding already-processed members) + a time-bounded run-now with resume
+  state, and the CLI runs full. All three pass a budget and branch on the
+  runner's `busy` / `done` / `resume` verdict; none reads or writes pass
+  tokens or cursors. Overlapping runners get `busy`, never a second pass.
+  Switching primary seeds `last_run` so the new
   currency does not burn immediately. The legacy `xf_user.oc_credits` mirror
   follows the same deltas. These are economy controls, not a security
   boundary.
@@ -226,7 +230,9 @@ change fires the `oc_credits_adjust` code event with
 
 ## Conventions for new work
 
-* Never write balances outside `Service/Transact.php`.
+* Never write balances outside `Service/Transact.php`. `DemurrageRunner`
+  mutates balances only through the `burn` / `purgeOrphan` callables that
+  `Transact::demurrageRunner()` supplies.
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly
   one place: `CreditEvent::decodeIdList()`. Do not add local copies.
 * New triggers must be unique per (trigger, currency) while active — the admin

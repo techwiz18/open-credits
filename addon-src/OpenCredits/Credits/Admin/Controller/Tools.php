@@ -330,7 +330,7 @@ class Tools extends AbstractController
             'oc_tools_demurrage',
             [
                 'ran' => false,
-                'preview' => $svc->demurragePreview(),
+                'preview' => $svc->demurrageRunner()->preview(),
                 'result' => null,
             ]
         );
@@ -342,10 +342,11 @@ class Tools extends AbstractController
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
+        $runner = $svc->demurrageRunner();
         try {
             // Bounded so a large board cannot exceed the web request limit;
             // an unfinished pass reports its progress and can be resumed.
-            $result = $svc->runDemurrage(500, true, 25);
+            $result = $runner->run(500, true, 25);
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits demurrage failed: ');
             return $this->error(
@@ -356,14 +357,14 @@ class Tools extends AbstractController
         // A busy first step means another runner owns the pass: report it
         // as ran so the template shows the busy message instead of the
         // form again. An interval skip (not busy) still shows the form.
-        $ran = (bool)$result['ran'] || !empty($result['busy']);
+        $ran = (bool)$result['ran'] || $result['verdict'] === 'busy';
         return $this->view(
             'OpenCredits\Credits:Tools\Demurrage',
             'oc_tools_demurrage',
             [
                 'ran' => $ran,
-                'busy' => (bool)($result['busy'] ?? false),
-                'preview' => $svc->demurragePreview(),
+                'busy' => $result['verdict'] === 'busy',
+                'preview' => $runner->preview(),
                 'result' => $result,
             ]
         );
