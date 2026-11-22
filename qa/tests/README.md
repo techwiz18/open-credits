@@ -89,8 +89,10 @@ Covered today:
   duplicate-event and event-toggle faucet stability, custom-trigger sharing,
   redeem cap/faucet rejection without consuming the code, secondary-currency
   bypass, disabled no-op, at-cap daily-login claim markers, resumable/forced
-  demurrage with mirror + ledger checks, concurrent-pass busy, orphan purge,
-  0-decimal headroom flooring, and stale faucet/claim pruning.
+  demurrage with mirror + ledger checks, concurrent-pass busy (single step and
+  multi-batch runner), token-checked cursor advance/completion, time-budget
+  stop then cursor resume, interval skip vs busy, orphan purge, 0-decimal
+  headroom flooring, and stale faucet/claim pruning.
 - `AwardEligibilityTest` — banned, rejected, and disabled members earn nothing
   from any trigger, while valid and awaiting-approval members earn normally;
   ineligible members also leave no daily-claim marker behind.
