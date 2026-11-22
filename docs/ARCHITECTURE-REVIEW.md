@@ -52,15 +52,31 @@ Domain terms per `GLOSSARY.md` (award eligibility vs award limits).
   render / unlock / ledger seams. Price re-derived in the controller.
 - Direction: one content-charge module owning parse, price, and purchase.
 
-## 4. Deepen the demurrage pass runner — Strong — OPEN
+## 4. Deepen the demurrage pass runner — Strong — IMPLEMENTED
 
-- Files: `Service/Transact.php` (pass-token protocol), `Cron/Demurrage.php`,
-  `Admin/Controller/Tools.php`, `Cli/Command/Demurrage.php`
-- Problem: token/cursor protocol leaks into three runners; zero integration
+- Files: new `Service/DemurrageRunner.php`, `Service/Transact.php` (factory +
+  legacy shims), `Cron/Demurrage.php`, `Admin/Controller/Tools.php`,
+  `Cli/Command/Demurrage.php`
+- Problem: token/cursor protocol leaked into three runners; zero integration
   coverage of races (`busy`, stale-claim recovery, cursor advance).
-- Direction: runners become thin adapters over one budgeted
-  `run(budget) → busy | done | resume` interface. Freeze token semantics;
-  add concurrent-runner tests first — highest blast radius of the five.
+- Solution: one module behind a budgeted
+  `run(batchSize, ignoreInterval, timeBudget) → busy | done | resume` call.
+  It owns pass claim, stale-claim recovery, rate/decimals snapshot, cursor
+  advance, orphan purge, interval gate, and the completion write; `preview()`
+  moved with it so the in-flight cursor exclusion has one owner, and the
+  new-primary `last_run` seed moved too, so no caller writes pass fields.
+  Cron, admin, and CLI call `Transact::demurrageRunner()` and branch only on
+  the verdict; `Transact` keeps delegating `demurrageStep()` /
+  `runDemurrage()` / `demurragePreview()` shims for existing callers and
+  characterization tests. No caller reads or writes pass tokens or cursors.
+- Proof: #13 characterization suite unchanged — `InflationControlTest` 23/23
+  (161 assertions, incl. busy, stale claim, token-checked advance/completion,
+  budget resume, interval skip); full integration 74 tests / 279 assertions,
+  14 content-dependent skips, 0 failures; unit 53/601; phpstan clean; CLI
+  `oc-credits:demurrage --preview` smoke.
+- Residuals (deliberate): `Transact` still hosts the budgeted entry points as
+  shims; a `busy` verdict now reports the aborted batch's progress instead of
+  discarding it (the old `runDemurrage()` undercounted a lost race).
 
 ## 5. Fold history labels into the ledger module — Speculative — OPEN
 
