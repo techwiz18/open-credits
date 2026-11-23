@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Admin\Controller;
 
+use OpenCredits\Credits\Service\DemurrageRunner;
 use OpenCredits\Credits\Service\Ledger;
 use XF\Admin\Controller\AbstractController;
 use XF\Mvc\ParameterBag;
@@ -323,15 +324,12 @@ class Tools extends AbstractController
 
     public function actionDemurrage(): \XF\Mvc\Reply\AbstractReply
     {
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
-        $svc = $this->service('OpenCredits\Credits:Transact');
-
         return $this->view(
             'OpenCredits\Credits:Tools\Demurrage',
             'oc_tools_demurrage',
             [
                 'ran' => false,
-                'preview' => $svc->demurrageRunner()->preview(),
+                'preview' => $this->demurrageRunner()->preview(),
                 'result' => null,
             ]
         );
@@ -341,9 +339,7 @@ class Tools extends AbstractController
     {
         $this->assertPostOnly();
 
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
-        $svc = $this->service('OpenCredits\Credits:Transact');
-        $runner = $svc->demurrageRunner();
+        $runner = $this->demurrageRunner();
         try {
             // Bounded so a large board cannot exceed the web request limit;
             // an unfinished pass reports its progress and can be resumed.
@@ -369,6 +365,14 @@ class Tools extends AbstractController
                 'result' => $result,
             ]
         );
+    }
+
+    protected function demurrageRunner(): DemurrageRunner
+    {
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+
+        return $svc->demurrageRunner();
     }
 
     public function actionPrune(): \XF\Mvc\Reply\AbstractReply
