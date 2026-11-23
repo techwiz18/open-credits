@@ -84,6 +84,13 @@ PHP
     ;;
   test)
     kind="${2:-unit}"
+    # Extra args (e.g. --filter Foo) go straight to PHPUnit. They used to be
+    # dropped silently, so a filtered run quietly ran the whole suite.
+    extra=""
+    if [ "$#" -gt 2 ]; then
+      shift 2
+      extra="$*"
+    fi
     mkdir -p src
     # One copy is shared by every test command; serialize runs so a sync or a
     # first-run install cannot race another run's PHPUnit process.
@@ -96,13 +103,13 @@ PHP
         addon_lint
         ;;
       unit)
-        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
+        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit $extra"
         ;;
       integration)
-        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml --display-skipped --fail-on-skipped"
+        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml --display-skipped --fail-on-skipped $extra"
         ;;
       stan)
-        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
+        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit $extra"
         ;;
       seed|clean)
         docker_qatmp "OC_XF_ROOT=/var/www/html php seed-dev-content.php $kind"
