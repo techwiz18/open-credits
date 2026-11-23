@@ -39,6 +39,13 @@ jobs:
         run: |
           python3 -c "import json; d=json.load(open('addon-src/OpenCredits/Credits/addon.json')); assert d['version_id'] and d['version_string'], 'version missing'; print(d['version_string'], d['version_id'])"
 
+  balance-writes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Only Transact writes balances
+        run: ./scripts/check-balance-writes.sh
+
   secrets-scan:
     runs-on: ubuntu-latest
     steps:

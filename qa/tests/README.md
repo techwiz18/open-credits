@@ -91,7 +91,8 @@ Covered today:
   bypass, disabled no-op, at-cap daily-login claim markers, resumable/forced
   demurrage with mirror + ledger checks, concurrent-pass busy (single step and
   multi-batch runner), token-checked cursor advance/completion, time-budget
-  stop then cursor resume, interval skip vs busy, orphan purge, 0-decimal
+  stop then cursor resume, interval skip vs busy, mid-pass disable stop,
+  primary-switch `last_run` seed, orphan purge, 0-decimal
   headroom flooring, and stale faucet/claim pruning.
 - `AwardEligibilityTest` — banned, rejected, and disabled members earn nothing
   from any trigger, while valid and awaiting-approval members earn normally;

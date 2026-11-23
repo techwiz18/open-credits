@@ -878,6 +878,50 @@ class InflationControlTest extends TestCase
     }
 
     /**
+     * Disabling inflation while a pass is in flight stops the runner at the
+     * next batch (the settings are re-read per step, not snapshotted). The
+     * pass stays resumable; a later run picks it up from the cursor.
+     */
+    public function testDisablingInflationMidPassStopsTheRunner(): void
+    {
+        $this->seedDemurrageBalances();
+
+        $first = $this->transact->runDemurrage(1, true, 0);
+        $this->assertSame('resume', $first['verdict']);
+        $this->assertSame($this->memberId, (int)$this->demurrageState()['cursor_user_id']);
+
+        \XF::app()->options()->ocInflationEnabled = false;
+        $second = $this->transact->runDemurrage(500, true);
+
+        $this->assertSame('done', $second['verdict']);
+        $this->assertFalse($second['ran'], 'A disabled control stops the pass.');
+        $this->assertSame(0, $second['processed']);
+        $this->assertEqualsWithDelta(9.0, $this->transact->getBalance($this->memberId, $this->currencyId), 0.0001);
+        $this->assertEqualsWithDelta(
+            5.0,
+            $this->transact->getBalance($this->otherId, $this->currencyId),
+            0.0001,
+            'The remaining member is not burned after the disable.'
+        );
+        $this->assertSame(1, $this->demurrageRowCount());
+    }
+
+    /**
+     * The primary-switch seed owns the inflation row shape: a new primary is
+     * marked as just burned, with no cursor or pass claim left behind.
+     */
+    public function testSeedLastRunMarksNewPrimaryAsBurned(): void
+    {
+        $now = \XF::$time - 10;
+        $this->transact->demurrageRunner()->seedLastRun($now, 2);
+
+        $state = $this->demurrageState();
+        $this->assertSame($now, (int)$state['last_run']);
+        $this->assertSame(0, (int)$state['cursor_user_id']);
+        $this->assertSame(0, (int)$state['pass_token']);
+    }
+
+    /**
      * A few real members hold balances the whole pass walks in user_id order.
      */
     protected function seedDemurrageBalances(): void
