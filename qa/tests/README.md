@@ -104,6 +104,11 @@ Covered today:
   stop then cursor resume, interval skip vs busy, mid-pass disable stop,
   primary-switch `last_run` seed, orphan purge, 0-decimal
   headroom flooring, and stale faucet/claim pruning.
+- `DemurrageAdaptersTest` — #17 pins the three thin adapters (needs the XF
+  boot; no DB writes): the cron budget
+  (10s) and interval flag, the admin 25s budget plus `ran = ran || busy`
+  verdict mapping (busy reports busy, an interval skip still shows the form),
+  and the CLI full-run/no-budget path with busy vs incomplete wording.
 - `AwardEligibilityTest` — banned, rejected, and disabled members earn nothing
   from any trigger, while valid and awaiting-approval members earn normally;
   ineligible members also leave no daily-claim marker behind.

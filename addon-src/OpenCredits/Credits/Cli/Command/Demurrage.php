@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Cli\Command;
 
+use OpenCredits\Credits\Service\DemurrageRunner;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -30,9 +31,7 @@ class Demurrage extends AbstractCommand
 	{
 		$io = new SymfonyStyle($input, $output);
 
-		/** @var \OpenCredits\Credits\Service\Transact $svc */
-		$svc = \XF::app()->service('OpenCredits\Credits:Transact');
-		$runner = $svc->demurrageRunner();
+		$runner = $this->runner();
 
 		if ($input->getOption('preview')) {
 			$preview = $runner->preview();
@@ -79,5 +78,13 @@ class Demurrage extends AbstractCommand
 		));
 
 		return Command::SUCCESS;
+	}
+
+	protected function runner(): DemurrageRunner
+	{
+		/** @var \OpenCredits\Credits\Service\Transact $svc */
+		$svc = \XF::app()->service('OpenCredits\Credits:Transact');
+
+		return $svc->demurrageRunner();
 	}
 }
