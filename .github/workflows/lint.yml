@@ -20,7 +20,7 @@ jobs:
           fail=0
           while IFS= read -r f; do
             php -l "$f" || fail=1
-          done < <(find addon-src -name '*.php')
+          done < <(find addon-src qa -name '*.php' -not -path '*/vendor/*')
           exit $fail
       - name: JSON validation
         run: |

@@ -56,6 +56,7 @@ docker compose exec -T web php /var/www/html/cmd.php xf-addon:validate-json Open
 ./scripts/dev.sh test unit
 ./scripts/dev.sh test integration
 ./scripts/dev.sh test stan
+./scripts/dev.sh test lint
 docker compose exec -T web php /var/www/html/cmd.php xf-addon:build-release OpenCredits/Credits
 # fresh-install smoke on a scratch copy, then upgrade smoke 0.9.x → current
 # (for pre-release 0.12 dev installs, also verify the 937 charge-key migration)

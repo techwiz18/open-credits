@@ -8,9 +8,8 @@
 //
 //   OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml
 //
-// When OC_XF_ROOT is unset (or has no XF.php), the framework is not loaded and
-// the integration tests mark themselves skipped, so public CI stays green
-// without a licensed runtime.
+// Without OC_XF_ROOT the framework is not loaded; public CI runs only the
+// unit suite, so there is nothing for a bare checkout to boot.
 
 $root = getenv('OC_XF_ROOT') ?: '';
 if ($root !== '' && is_file($root . '/src/XF.php')) {
