@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Admin\Controller;
 
 use OpenCredits\Credits\Entity\CreditEvent as EventEntity;
+use OpenCredits\Credits\Service\Ledger;
 use XF\Admin\Controller\AbstractController;
 use XF\ControllerPlugin\DeletePlugin;
 use XF\Mvc\ParameterBag;
 
 class CreditEvent extends AbstractController
 {
-    public const TRIGGERS = EventEntity::TRIGGER_LABELS;
-
     protected function preDispatchController($action, ParameterBag $params)
     {
         $this->assertAdminPermission('ocCredits');
@@ -59,7 +58,7 @@ class CreditEvent extends AbstractController
                 ->where('active', 1)
                 ->order('currency_id')
                 ->fetch(),
-            'triggers' => self::TRIGGERS,
+            'triggers' => Ledger::eventTriggers(),
             'userGroups' => $this->finder('XF:UserGroup')->order('title')->fetch(),
             'eventForumIds' => $this->implodeIds($event->forum_ids),
             'eventGroupIds' => EventEntity::decodeIdList($event->usergroup_ids),
@@ -100,7 +99,7 @@ class CreditEvent extends AbstractController
             'usergroup_ids' => 'array-uint',
         ]);
 
-        if (!isset(self::TRIGGERS[$input['trigger']])) {
+        if (!isset(Ledger::eventTriggers()[$input['trigger']])) {
             return $this->error('Unknown event trigger.');
         }
         $currency = $this->em()->find('OpenCredits\Credits:Currency', $input['currency_id']);
@@ -166,7 +165,7 @@ class CreditEvent extends AbstractController
             $this->buildLink('oc-events/delete', $event),
             $this->buildLink('oc-events/edit', $event),
             $this->buildLink('oc-events'),
-            self::TRIGGERS[$event->trigger] ?? $event->trigger
+            Ledger::label((string)$event->trigger)
         );
     }
 

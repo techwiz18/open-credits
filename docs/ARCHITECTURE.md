@@ -13,6 +13,7 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log; supplies balance/event callables to module classes |
+| `Service/Ledger.php` | Ledger vocabulary: the one trigger-label map (`label()`, award-only `eventTriggers()`), trigger constants, and stored markers (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) shared by history, alerts, and the prune guard |
 | `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; burns and orphan purges go through callables supplied by `Transact` |
 | `Service/ContentCharge.php` | `[charge]` premium-content decision: parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
@@ -248,8 +249,13 @@ change fires the `oc_credits_adjust` code event with
   one place: `CreditEvent::decodeIdList()`. Do not add local copies.
 * New triggers must be unique per (trigger, currency) while active — the admin
   save refuses duplicates because `awardByTrigger()` pays every active row.
-* New triggers: add seed row in `Setup::seedDefaultEvents()`, listener method in
-  `Listener.php`, `_output/code_event_listeners/*.json`, version bump + upgrade step.
+* Trigger names, display labels, and the ledger marker strings live in
+  `Service/Ledger.php` only. History, admin lists, alerts, and prune read it;
+  unknown triggers humanise through `Ledger::label()`.
+* New triggers: add a `Ledger::TRIGGER_*` const + `TRIGGER_LABELS` entry (and an
+  `eventTriggers()` entry if awardable), seed row in `Setup::seedDefaultEvents()`,
+  listener method in `Listener.php`, `_output/code_event_listeners/*.json`,
+  version bump + upgrade step.
 * New widgets: add the class under `Widget/`, `_output/widget_definitions/{id}.json`
   (only `definition_class`; id comes from the filename), public + admin option
   templates, and the `widget_def.{id}` / `widget_def_desc.{id}` phrases. Version
