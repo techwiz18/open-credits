@@ -26,10 +26,17 @@ sync_qatmp() {
   fi
 }
 
-# Lints the synced qa tree (the addon tree is linted by public CI).
+# Lints the synced qa tree and the bind-mounted addon tree (the same files
+# public CI lints), so a syntax error fails before commit, not after push.
 qa_lint() {
   docker_qatmp 'find . -path ./vendor -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null' \
     && echo "qa lint OK"
+}
+
+addon_lint() {
+  docker compose exec -T web bash -c \
+    'find /var/www/html/src/addons/OpenCredits/Credits -path "*/_releases" -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null' \
+    && echo "addon lint OK"
 }
 
 case "$cmd" in
@@ -86,6 +93,7 @@ PHP
     case "$kind" in
       lint)
         qa_lint
+        addon_lint
         ;;
       unit)
         docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
@@ -101,6 +109,7 @@ PHP
         ;;
       all)
         qa_lint
+        addon_lint
         docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
         docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml --display-skipped --fail-on-skipped"
         docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"

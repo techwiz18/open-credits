@@ -29,7 +29,9 @@ docker compose exec -T web php /var/www/html/cmd.php <command>
 `./scripts/dev.sh` wraps the common lifecycle/packaging helpers.
 
 The host has no PHP; run every PHP command (including `php -l`, PHPUnit, and
-PHPStan) inside the `web` container.
+PHPStan) inside the `web` container. Inside it the addon is
+`/var/www/html/src/addons/OpenCredits/Credits`; the synced test copy is
+`/var/www/html/.qatmp`.
 
 ## Workflow
 
@@ -47,6 +49,9 @@ PHPStan) inside the `web` container.
   manually.
 - After manual `_output` edits: `xf-dev:import --addon=OpenCredits/Credits`
   (scoped), then `./scripts/dev.sh fix-perms`.
+- A diff that moves or removes a module, public constant, or documented
+  convention updates `docs/ARCHITECTURE.md` (file map + conventions) in the
+  same commit.
 - Release: build from a clean/scratch install, run `xf-addon:validate-json`,
   `./scripts/dev.sh test all`, fresh-install + upgrade smokes, then tag/publish. See `docs/DEV.md`.
 
