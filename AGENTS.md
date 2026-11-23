@@ -9,6 +9,7 @@ lives in `.agents/skills/` (load it as described below).
 
 - **Add-on source:** `addon-src/OpenCredits/Credits/` (bind-mounted into the dev forum).
 - **Runtime `src/`:** licensed XenForo 2.3.10, gitignored — never commit it.
+  The XF tree unpacks at `src/src/XF/` (not `src/XF/`); see `docs/DEV.md`.
 - **`_output/`:** the development surface (templates, phrases, options, routes, etc.).
 - **`_data/`:** generated release artifacts (gitignored); never edit by hand.
 - **Tests:** `qa/tests/Unit` (no XF boot) and `qa/tests/Integration` (real XF boot
@@ -26,6 +27,9 @@ docker compose exec -T web php /var/www/html/cmd.php <command>
 ```
 
 `./scripts/dev.sh` wraps the common lifecycle/packaging helpers.
+
+The host has no PHP; run every PHP command (including `php -l`, PHPUnit, and
+PHPStan) inside the `web` container.
 
 ## Workflow
 

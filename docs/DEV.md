@@ -46,8 +46,9 @@ container; edits apply on next page load (templates recompile automatically).
 
 ## Release checklist (local — needs the licensed XF runtime, so not in CI)
 
-Public CI covers `php -l` (8.2/8.3/8.4), `_output` JSON validity, and
-gitleaks. Everything below runs on the dev stack before any release:
+Public CI covers `php -l` (8.2/8.3/8.4), `_output` JSON validity, gitleaks, and
+the balance-write guardrail (`scripts/check-balance-writes.sh`). Everything
+below runs on the dev stack before any release:
 
 ```bash
 docker compose exec -T web php /var/www/html/cmd.php xf-addon:validate-json OpenCredits/Credits

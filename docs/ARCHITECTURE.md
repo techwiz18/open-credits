@@ -2,7 +2,8 @@
 
 Source of truth: `addon-src/OpenCredits/Credits/`. It is bind-mounted into the
 dev forum container at `src/addons/OpenCredits/Credits/` (see `docker-compose.yml`).
-The licensed XenForo runtime in `src/` is gitignored and never committed.
+The licensed XenForo runtime unpacks under `src/`, with the XF tree at
+`src/src/XF/`; it is gitignored and never committed.
 
 ## File map
 
@@ -233,6 +234,9 @@ change fires the `oc_credits_adjust` code event with
 * Never write balances outside `Service/Transact.php`. `DemurrageRunner`
   mutates balances only through the `burn` / `purgeOrphan` callables that
   `Transact::demurrageRunner()` supplies.
+* Domain logic that is not an XF service is a plain class under `Service/`
+  (`AwardScope`, `InflationClamp`, `DemurrageRunner`), constructed directly or
+  through a `Transact` factory. You do not need `\XF::app()->service()` for it.
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly
   one place: `CreditEvent::decodeIdList()`. Do not add local copies.
 * New triggers must be unique per (trigger, currency) while active — the admin
