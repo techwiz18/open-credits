@@ -79,8 +79,14 @@ class ChargeRenderTest extends TestCase
         );
         $this->adminId = $this->findUser('user_id <> ? AND (is_admin = 1 OR is_staff = 1)', [$this->authorId]);
 
-        if ($this->authorId <= 0 || $this->memberId <= 0 || $this->adminId <= 0) {
-            $this->markTestSkipped('Need an author, a regular member, and an admin/staff user. Run ./scripts/dev.sh test seed.');
+        if ($this->authorId <= 0) {
+            $this->markTestSkipped('No post author available for the render test. Run ./scripts/dev.sh test seed.');
+        }
+        if ($this->memberId <= 0) {
+            $this->markTestSkipped('No non-staff reader available for the render test. Run ./scripts/dev.sh test seed.');
+        }
+        if ($this->adminId <= 0) {
+            $this->markTestSkipped('No admin/staff user available for the render test. Run ./scripts/dev.sh test seed.');
         }
 
         $this->db->delete(

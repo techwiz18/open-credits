@@ -33,12 +33,15 @@ a second static copy shadows the runtime one and blinds the analysis) and
 ./scripts/dev.sh test stan
 ```
 
+`./scripts/dev.sh test lint` lints the synced `qa/` tree with `php -l` (public
+CI lints `addon-src` and `qa`). Use it after editing the seeder or tests; a
+syntax error there is otherwise only discovered when the file is executed.
+
 ## Integration (`qa/tests/Integration`, real XenForo boot)
 
 DB-backed service tests run against the licensed dev forum. The bootstrap
-(`tests/integration-bootstrap.php`) boots the real app from `OC_XF_ROOT`; when
-that is unset the tests mark themselves skipped, so public CI (no licensed
-runtime) stays green.
+(`tests/integration-bootstrap.php`) boots the real app from `OC_XF_ROOT`;
+without it the framework is not loaded (public CI runs only the unit suite).
 
 ```bash
 ./scripts/dev.sh test seed    # once per dev forum: content-dependent tests
@@ -47,10 +50,12 @@ runtime) stays green.
 ```
 
 Content-dependent tests (backfill, charge render/unlock, negative-balance)
-skip cleanly on a bare forum. `test seed` creates three plain members, a
-thread/reply, and an inactive 0-decimal currency; `test clean` removes them.
-The integration suite runs in random order (`executionOrder="random"`) so
-static-cache leaks between tests surface instead of hiding.
+skip on a bare forum; `test seed` creates three plain members, a
+thread/reply, and an inactive 0-decimal currency, and `test clean` removes
+them. The wrapper runs integration with `--display-skipped
+--fail-on-skipped`, so an unseeded forum fails with the seed hint instead of
+passing silently. The suite also runs in random order
+(`executionOrder="random"`) so static-cache leaks between tests surface.
 
 Covered today:
 - `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,

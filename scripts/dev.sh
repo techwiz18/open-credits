@@ -26,6 +26,12 @@ sync_qatmp() {
   fi
 }
 
+# Lints the synced qa tree (the addon tree is linted by public CI).
+qa_lint() {
+  docker_qatmp 'find . -path ./vendor -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null' \
+    && echo "qa lint OK"
+}
+
 case "$cmd" in
   up)
     cp -n .env.example .env || true
@@ -71,13 +77,21 @@ PHP
     ;;
   test)
     kind="${2:-unit}"
+    mkdir -p src
+    # One copy is shared by every test command; serialize runs so a sync or a
+    # first-run install cannot race another run's PHPUnit process.
+    exec 9>src/.qatmp.lock
+    flock -w 300 9
     sync_qatmp
     case "$kind" in
+      lint)
+        qa_lint
+        ;;
       unit)
         docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
         ;;
       integration)
-        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
+        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml --display-skipped --fail-on-skipped"
         ;;
       stan)
         docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
@@ -86,12 +100,13 @@ PHP
         docker_qatmp "OC_XF_ROOT=/var/www/html php seed-dev-content.php $kind"
         ;;
       all)
+        qa_lint
         docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
-        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
+        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml --display-skipped --fail-on-skipped"
         docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
         ;;
       *)
-        echo "usage: dev.sh test {unit|integration|stan|all|seed|clean}" >&2
+        echo "usage: dev.sh test {lint|unit|integration|stan|all|seed|clean}" >&2
         exit 1
         ;;
     esac

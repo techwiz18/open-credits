@@ -12,8 +12,8 @@ lives in `.agents/skills/` (load it as described below).
   The XF tree unpacks at `src/src/XF/` (not `src/XF/`); see `docs/DEV.md`.
 - **`_output/`:** the development surface (templates, phrases, options, routes, etc.).
 - **`_data/`:** generated release artifacts (gitignored); never edit by hand.
-- **Tests:** `qa/tests/Unit` (no XF boot) and `qa/tests/Integration` (real XF boot
-  via `OC_XF_ROOT=/var/www/html`). See `qa/tests/README.md`.
+- **Tests:** run `./scripts/dev.sh test {lint|unit|integration|stan|all|seed|clean}`;
+  details in `qa/tests/README.md`.
 - **Docs:** `docs/DEV.md`, `docs/ARCHITECTURE.md`, `docs/XF-DEV-GOTCHAS.md`, `docs/API.md`.
 - **`HANDOFF.md`:** local-only session notes (gitignored).
 
@@ -35,6 +35,8 @@ PHPStan) inside the `web` container.
 
 - Features on `dev/*`; merge to `main` only after full testing; cut releases
   from `main`. `main` is always release-ready.
+- An implemented issue is finished when it is committed, pushed, and closed on
+  GitHub with a short proof comment (commits + verification).
 - Read `docs/DEV.md` (release checklist) and `docs/XF-DEV-GOTCHAS.md` before
   touching `_output`.
 - **Never run `xf-dev:export` manually.** It is destructive and is only invoked
@@ -46,7 +48,7 @@ PHPStan) inside the `web` container.
 - After manual `_output` edits: `xf-dev:import --addon=OpenCredits/Credits`
   (scoped), then `./scripts/dev.sh fix-perms`.
 - Release: build from a clean/scratch install, run `xf-addon:validate-json`,
-  PHPUnit, fresh-install + upgrade smokes, then tag/publish. See `docs/DEV.md`.
+  `./scripts/dev.sh test all`, fresh-install + upgrade smokes, then tag/publish. See `docs/DEV.md`.
 
 ## Deferred to the 1.0.0 cycle
 
