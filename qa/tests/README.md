@@ -19,6 +19,10 @@ can no longer report a false green) and installs dev dependencies on the first
 run. Delete `src/.qatmp` if `qa/composer.json` changes.
 `qa/phpunit.xml` sets `failOnEmptyTestSuite`, so a zero-test run fails.
 
+`./scripts/dev.sh test check` runs lint + unit + PHPStan (no seeded content
+needed); it is the target of the tracked pre-commit hook. Install it once per
+clone with `./scripts/dev.sh install-hooks`.
+
 (On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI does exactly that.)
 
 ## Assertions
