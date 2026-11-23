@@ -44,13 +44,36 @@ Domain terms per `GLOSSARY.md` (award eligibility vs award limits).
   clamp object) skipped — cost exceeds value; cap-bound members retry a
   rolled-back write transaction per pageview until the faucet exhausts.
 
-## 3. Collapse the premium-content price — Worth exploring — OPEN
+## 3. Collapse the premium-content price — Worth exploring — IMPLEMENTED
 
-- Files: `BbCode/Charge.php`, `Pub/Controller/Credits.php` (`actionUnlock`),
-  `Service/Transact.php` (`chargeForContent()`)
+- Files: new `Service/ContentCharge.php`, `BbCode/Charge.php`
+  (renderer), `Pub/Controller/Credits.php` (`actionUnlock`),
+  `Service/Transact.php` (factory + legacy shims)
 - Problem: "highest block wins, one purchase per post" agreed across
-  render / unlock / ledger seams. Price re-derived in the controller.
-- Direction: one content-charge module owning parse, price, and purchase.
+  render / unlock / ledger seams. Price re-derived in the controller and the
+  purchase lived in `Transact`.
+- Solution: one content-charge module behind one seam. It owns the
+  parser-based price (`priceForMessage()`), the pure price rules
+  (`priceOf()`: highest valid block at the currency's precision, malformed /
+  non-positive / over-precise ignored), the idempotent per-(content, member,
+  currency) purchase, and the buyer/unlock-count reads the renderer uses.
+  Render, unlock, and the ledger call the same price; the unlock endpoint
+  charges the module price and calls `purchase()` directly instead of
+  trusting the submitted amount. `BbCode\Charge` keeps the render gates and
+  delegates price/access/stats; `Transact` keeps `chargeForContent()` /
+  `hasPaidForContent()` / `unlockCountFor()` as shims for existing callers
+  and tests.
+- Proof: new `ContentChargeTest` unit cover for the price rules (including a
+  float-overflow price); existing
+  `ChargeTest`/`ChargeAmountsTest`/`ChargeUnlockTest`/`ChargeRenderTest`/
+  `ChargeCleanupTest` pass unchanged, including a random-order run of
+  `ChargeTest`; full suite unit 59/613, integration
+  76/290 (14 content-dependent skips), 0 failures; phpstan clean.
+- Residuals: `Transact` still hosts the purchase/read entry points as shims;
+  the renderer keeps its per-request price/buyer/stats caches, so the module
+  reads stay fresh for moderation purges. The purchase key remains
+  (content, member, currency), as before — v1 charges in the primary currency
+  only.
 
 ## 4. Deepen the demurrage pass runner — Strong — IMPLEMENTED
 
