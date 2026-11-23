@@ -46,7 +46,7 @@ class ChargeUnlockTest extends TestCase
             . " ORDER BY p.post_id LIMIT 1"
         );
         if (!$this->postId) {
-            $this->markTestSkipped('No charge-free visible post available.');
+            $this->markTestSkipped('No charge-free visible post available. Run ./scripts/dev.sh test seed.');
         }
         $this->authorId = (int)$this->db->fetchOne(
             'SELECT user_id FROM xf_post WHERE post_id = ?',
@@ -59,7 +59,7 @@ class ChargeUnlockTest extends TestCase
             [$this->authorId]
         );
         if (!$this->memberId) {
-            $this->markTestSkipped('No regular member available.');
+            $this->markTestSkipped('No regular member available. Run ./scripts/dev.sh test seed.');
         }
         $this->originalMessage = (string)$this->db->fetchOne(
             'SELECT message FROM xf_post WHERE post_id = ?',

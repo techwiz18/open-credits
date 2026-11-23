@@ -240,6 +240,10 @@ change fires the `oc_credits_adjust` code event with
 * Domain logic that is not an XF service is a plain class under `Service/`
   (`AwardScope`, `InflationClamp`, `DemurrageRunner`, `ContentCharge`), constructed directly or
   through a `Transact` factory. You do not need `\XF::app()->service()` for it.
+* Per-request caches belong to the presentation layer (renderer/controller).
+  Service reads stay DB-fresh so moderation and cleanup see deletions
+  immediately; `BbCode\Charge` caches its renders, `ContentCharge` queries each
+  time.
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly
   one place: `CreditEvent::decodeIdList()`. Do not add local copies.
 * New triggers must be unique per (trigger, currency) while active — the admin

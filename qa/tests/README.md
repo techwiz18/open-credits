@@ -7,16 +7,16 @@ minus `_output`/`_releases`/dotfiles; no exclusion config needed).
 ## Unit (`qa/tests/Unit`, plain PHPUnit, no XenForo boot)
 
 Dependency-free static helpers only. Host has no PHP, so tests run from a
-throwaway copy inside the `web` container (gitignored `src/`):
+synced copy inside the `web` container (gitignored `src/.qatmp`):
 
 ```bash
-rm -rf src/.qatmp && cp -r qa src/.qatmp
-docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
+./scripts/dev.sh test unit
 ```
 
-Re-running? Reuse the warm copy — skip the copy/install and run only the
-`phpunit` line above. Rebuild `.qatmp` only when `qa/` or the addon changed.
-(composer ships in the `web` image; no installer download needed.)
+The wrapper re-syncs `qa/tests/` into `.qatmp` before every run (a stale copy
+can no longer report a false green) and installs dev dependencies on the first
+run. Delete `src/.qatmp` if `qa/composer.json` changes.
+`qa/phpunit.xml` sets `failOnEmptyTestSuite`, so a zero-test run fails.
 
 (On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI does exactly that.)
 
@@ -30,14 +30,7 @@ a second static copy shadows the runtime one and blinds the analysis) and
 `tests/phpstan-bootstrap.php` adds the `XF` facade. Run:
 
 ```bash
-cd qa && composer install && ./vendor/bin/phpstan analyse --no-progress
-```
-
-From the warm container copy the addon path differs, so pass paths
-explicitly (the `OC_ADDON_SRC` override is the same as for phpunit):
-
-```bash
-docker compose exec -T web bash -c "cd /var/www/html/.qatmp && OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
+./scripts/dev.sh test stan
 ```
 
 ## Integration (`qa/tests/Integration`, real XenForo boot)
@@ -48,14 +41,16 @@ that is unset the tests mark themselves skipped, so public CI (no licensed
 runtime) stays green.
 
 ```bash
-rm -rf src/.qatmp && cp -r qa src/.qatmp
-docker compose exec -T web bash -c "cd /var/www/html/.qatmp && composer install && OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
+./scripts/dev.sh test seed    # once per dev forum: content-dependent tests
+./scripts/dev.sh test integration
+./scripts/dev.sh test clean   # remove the seeded content again
 ```
 
-Same warm-copy rule as unit: re-run with only the `phpunit` line unless
-`qa/` or the addon changed. Content-dependent tests (backfill, charge-render,
-negative-balance) skip cleanly on a bare forum — seed with
-`qa/seed-dev-content.php` (below) when you need them to execute.
+Content-dependent tests (backfill, charge render/unlock, negative-balance)
+skip cleanly on a bare forum. `test seed` creates three plain members, a
+thread/reply, and an inactive 0-decimal currency; `test clean` removes them.
+The integration suite runs in random order (`executionOrder="random"`) so
+static-cache leaks between tests surface instead of hiding.
 
 Covered today:
 - `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,

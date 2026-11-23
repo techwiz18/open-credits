@@ -62,7 +62,7 @@ class ChargeRenderTest extends TestCase
             . " ORDER BY p.post_id LIMIT 1"
         );
         if ($this->postId <= 0) {
-            $this->markTestSkipped('No charge-free visible post available for the render test.');
+            $this->markTestSkipped('No charge-free visible post available for the render test. Run ./scripts/dev.sh test seed.');
         }
         $this->authorId = (int)$this->db->fetchOne(
             'SELECT user_id FROM xf_post WHERE post_id = ?',
@@ -80,7 +80,7 @@ class ChargeRenderTest extends TestCase
         $this->adminId = $this->findUser('user_id <> ? AND (is_admin = 1 OR is_staff = 1)', [$this->authorId]);
 
         if ($this->authorId <= 0 || $this->memberId <= 0 || $this->adminId <= 0) {
-            $this->markTestSkipped('Need an author, a regular member, and an admin/staff user.');
+            $this->markTestSkipped('Need an author, a regular member, and an admin/staff user. Run ./scripts/dev.sh test seed.');
         }
 
         $this->db->delete(
@@ -158,7 +158,7 @@ class ChargeRenderTest extends TestCase
     public function testInactiveCurrencyFailsClosedButPaidKeepAccess(): void
     {
         if ($this->member2Id <= 0) {
-            $this->markTestSkipped('Need a second regular member.');
+            $this->markTestSkipped('Need a second regular member. Run ./scripts/dev.sh test seed.');
         }
         $this->seedCharge($this->memberId, 5.00);
         $this->db->update('xf_oc_currency', ['active' => 0], 'currency_id = ?', [$this->currencyId]);
@@ -179,7 +179,7 @@ class ChargeRenderTest extends TestCase
             [$this->currencyId]
         );
         if ($zeroDecimal <= 0) {
-            $this->markTestSkipped('No 0-decimal currency available.');
+            $this->markTestSkipped('No 0-decimal currency available. Run ./scripts/dev.sh test seed.');
         }
 
         // [charge=1.5] is a valid tag but invalid for a 0-decimal currency.
