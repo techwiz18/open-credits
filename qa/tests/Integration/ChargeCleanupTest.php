@@ -58,6 +58,16 @@ class ChargeCleanupTest extends TestCase
 
         Listener::postEntityPostDelete($post);
         $this->assertSame(0, $this->chargeCount());
+        // Reads are DB-fresh: a cached paid flag would keep the deleted row
+        // visible to the service after cleanup.
+        $this->assertFalse(
+            \XF::app()->service('OpenCredits\Credits:Transact')->hasPaidForContent(
+                (int)$post->user_id,
+                'post',
+                $this->postId,
+                1
+            )
+        );
     }
 
     public function testMemberDeleteCleanupCoversPayerAndAuthor(): void

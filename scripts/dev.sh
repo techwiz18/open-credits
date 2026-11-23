@@ -5,6 +5,27 @@ cd "$(dirname "$0")/.."
 cmd="${1:-help}"
 ZIP=$(ls ../xenforo_*.zip 2>/dev/null | head -n 1 || true)
 
+# Tests run from a synced copy under the mounted src/ tree (qa/ itself is not
+# mounted in the container). Tests are re-synced every run so a stale copy can
+# never report a false green; dev dependencies are installed only when the
+# copy is first created.
+docker_qatmp() {
+  docker compose exec -T web bash -c "cd /var/www/html/.qatmp && $1"
+}
+
+sync_qatmp() {
+  mkdir -p src
+  if [ ! -f src/.qatmp/vendor/autoload.php ]; then
+    rm -rf src/.qatmp
+    cp -r qa src/.qatmp
+    docker_qatmp "composer install --no-interaction --quiet"
+  else
+    rsync -a --delete qa/tests/ src/.qatmp/tests/
+    cp qa/seed-dev-content.php qa/phpunit.xml qa/phpunit-integration.xml \
+      qa/phpstan.neon qa/composer.json qa/composer.lock src/.qatmp/
+  fi
+}
+
 case "$cmd" in
   up)
     cp -n .env.example .env || true
@@ -48,10 +69,37 @@ PHP
     # Never chmod _output files to 644 — Apache writes will fail (E_WARNING).
     docker compose exec web bash -c "find /var/www/html/src/addons/OpenCredits/Credits/_output -type d -exec chmod 0777 {} + -o -type f -exec chmod 0666 {} +"
     ;;
+  test)
+    kind="${2:-unit}"
+    sync_qatmp
+    case "$kind" in
+      unit)
+        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
+        ;;
+      integration)
+        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
+        ;;
+      stan)
+        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
+        ;;
+      seed|clean)
+        docker_qatmp "OC_XF_ROOT=/var/www/html php seed-dev-content.php $kind"
+        ;;
+      all)
+        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
+        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml"
+        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
+        ;;
+      *)
+        echo "usage: dev.sh test {unit|integration|stan|all|seed|clean}" >&2
+        exit 1
+        ;;
+    esac
+    ;;
   logs)
     docker compose logs -f "${2:-web}"
     ;;
   *)
-    echo "usage: dev.sh {up|down|unpack|enable-debug|link-addon|fix-perms|logs}"
+    echo "usage: dev.sh {up|down|unpack|enable-debug|link-addon|fix-perms|test|logs}"
     ;;
 esac

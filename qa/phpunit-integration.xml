@@ -3,6 +3,8 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="tests/integration-bootstrap.php"
          colors="true"
+         failOnEmptyTestSuite="true"
+         executionOrder="random"
          cacheResult="false">
   <testsuites>
     <testsuite name="integration">
