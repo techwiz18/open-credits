@@ -12,10 +12,11 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `addon.json` | Add-on meta. Current: 0.13.1 / 941. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
-| `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log |
+| `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log; supplies balance/event callables to module classes |
 | `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; burns and orphan purges go through callables supplied by `Transact` |
+| `Service/ContentCharge.php` | `[charge]` premium-content decision: parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
-| `BbCode/Charge.php` | `[charge=X]` callback: premium-content gate + locked box |
+| `BbCode/Charge.php` | `[charge=X]` renderer: view gates, locked box, author stats |
 | `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect |
 | `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated) |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
@@ -221,8 +222,10 @@ change fires the `oc_credits_adjust` code event with
   checks `canView()` and the visitor's account state (banned/email-confirm are
   refused), derives the price from the post's parsed `[charge]` blocks (the
   **highest** valid block, since one purchase unlocks the post; the client
-  cannot set it), calls `Transact::chargeForContent()`, and redirects back.
-  One purchase per (post, member) unlocks every block in that post. The author also sees a per-block "Members unlocked: N · total earned"
+  cannot set it), calls `ContentCharge::purchase()`, and redirects back.
+  Render, unlock, and the ledger read the same `ContentCharge::priceForMessage()`
+  decision. One purchase per (post, member) unlocks every block in that post.
+  The author also sees a per-block "Members unlocked: N · total earned"
   line.
 * The `charge` button is added once to the editor toolbar (`moreText` group,
   all viewports) by `Setup::syncEditorButton()` on install/upgrade; existing
@@ -235,7 +238,7 @@ change fires the `oc_credits_adjust` code event with
   mutates balances only through the `burn` / `purgeOrphan` callables that
   `Transact::demurrageRunner()` supplies.
 * Domain logic that is not an XF service is a plain class under `Service/`
-  (`AwardScope`, `InflationClamp`, `DemurrageRunner`), constructed directly or
+  (`AwardScope`, `InflationClamp`, `DemurrageRunner`, `ContentCharge`), constructed directly or
   through a `Transact` factory. You do not need `\XF::app()->service()` for it.
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly
   one place: `CreditEvent::decodeIdList()`. Do not add local copies.

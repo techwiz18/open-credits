@@ -582,6 +582,27 @@ class Transact extends AbstractService
     }
 
     /**
+     * Content-charge module for [charge] premium content. Owns the post price
+     * and the purchase; the legacy wrappers below keep existing callers and
+     * tests on their entry points.
+     */
+    public function contentCharge(): ContentCharge
+    {
+        $db = $this->db();
+
+        return new ContentCharge(
+            $db,
+            function (int $userId, int $currencyId, float $amount): void {
+                $this->applyBalanceDelta($userId, $currencyId, $amount);
+            },
+            function (int $userId, int $currencyId, float $amount, string $contentType, int $contentId): void {
+                self::clearBalanceCache($userId);
+                $this->fireAdjustEvent([$userId, $currencyId, $amount, 'charge', $contentId]);
+            }
+        );
+    }
+
+    /**
      * Charges a member to unlock premium content and credits the author.
      * Idempotent per (content, payer, currency): a member never pays twice
      * for the same content, even if its price changes. Never overdraws.
@@ -597,100 +618,14 @@ class Transact extends AbstractService
         string $contentType,
         int $contentId
     ): string {
-        if ($fromUserId <= 0 || $toUserId <= 0 || $contentId <= 0 || $amount <= 0 || $contentType === '') {
-            return 'invalid';
-        }
-        if ($fromUserId === $toUserId) {
-            return 'self';
-        }
-        $type = substr($contentType, 0, 25);
-        $db = $this->db();
-        $db->beginTransaction();
-        try {
-            $first = min($fromUserId, $toUserId);
-            $second = max($fromUserId, $toUserId);
-            $locked = $db->fetchAll(
-                'SELECT user_id, user_state, is_banned FROM xf_user'
-                . ' WHERE user_id IN (?, ?) ORDER BY user_id FOR UPDATE',
-                [$first, $second]
-            );
-            if (count($locked) !== 2) {
-                $db->rollBack();
-                return 'invalid_author';
-            }
-            foreach ($locked AS $row) {
-                if ((string)$row['user_state'] !== 'valid' || !empty($row['is_banned'])) {
-                    $db->rollBack();
-                    return 'invalid_author';
-                }
-            }
-            $currency = $db->fetchRow(
-                'SELECT decimals, active FROM xf_oc_currency WHERE currency_id = ?',
-                $currencyId
-            );
-            if (!$currency || !(int)$currency['active']) {
-                $db->rollBack();
-                return 'invalid';
-            }
-            $amount = round($amount, (int)$currency['decimals']);
-            if ($amount <= 0) {
-                $db->rollBack();
-                return 'invalid';
-            }
-            // One purchase per content item, regardless of the price paid.
-            $existing = $db->fetchOne(
-                'SELECT charge_id FROM xf_oc_charge WHERE content_type = ? AND content_id = ?'
-                . ' AND user_id = ? AND currency_id = ?',
-                [$type, $contentId, $fromUserId, $currencyId]
-            );
-            if ($existing) {
-                $db->commit();
-                return 'already_paid';
-            }
-            // Charges never overdraw, regardless of the currency's allow_negative.
-            $senderBalance = (float)$db->fetchOne(
-                'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
-                [$fromUserId, $currencyId]
-            );
-            if ($senderBalance < $amount) {
-                $db->rollBack();
-                return 'no_funds';
-            }
-            $this->applyBalanceDelta($fromUserId, $currencyId, -$amount);
-            $this->applyBalanceDelta($toUserId, $currencyId, $amount);
-            $now = \XF::$time;
-            $note = 'Charge: ' . $type . ' #' . $contentId;
-            $db->insert('xf_oc_transaction', [
-                'user_id' => $fromUserId, 'currency_id' => $currencyId,
-                'amount' => -$amount, 'trigger' => 'charge',
-                'content_type' => $type, 'content_id' => $contentId,
-                'note' => $note, 'log_date' => $now,
-            ]);
-            $db->insert('xf_oc_transaction', [
-                'user_id' => $toUserId, 'currency_id' => $currencyId,
-                'amount' => $amount, 'trigger' => 'charge',
-                'content_type' => $type, 'content_id' => $contentId,
-                'note' => $note, 'log_date' => $now,
-            ]);
-            $db->insert('xf_oc_charge', [
-                'content_type' => $type,
-                'content_id' => $contentId,
-                'user_id' => $fromUserId,
-                'author_user_id' => $toUserId,
-                'currency_id' => $currencyId,
-                'amount' => $amount,
-                'charge_date' => $now,
-            ]);
-            $db->commit();
-            self::clearBalanceCache($fromUserId);
-            self::clearBalanceCache($toUserId);
-            $this->fireAdjustEvent([$fromUserId, $currencyId, -$amount, 'charge', $contentId]);
-            $this->fireAdjustEvent([$toUserId, $currencyId, $amount, 'charge', $contentId]);
-            return 'ok';
-        } catch (\Throwable $e) {
-            $db->rollBack();
-            throw $e;
-        }
+        return $this->contentCharge()->purchase(
+            $fromUserId,
+            $toUserId,
+            $currencyId,
+            $amount,
+            $contentType,
+            $contentId
+        );
     }
 
     /**
@@ -713,17 +648,7 @@ class Transact extends AbstractService
      */
     public function hasPaidForContent(int $userId, string $contentType, int $contentId, int $currencyId = 0): bool
     {
-        if ($userId <= 0 || $contentId <= 0 || $contentType === '') {
-            return false;
-        }
-        $sql = 'SELECT charge_id FROM xf_oc_charge WHERE user_id = ? AND content_type = ? AND content_id = ?';
-        $params = [$userId, substr($contentType, 0, 25), $contentId];
-        if ($currencyId > 0) {
-            $sql .= ' AND currency_id = ?';
-            $params[] = $currencyId;
-        }
-        $sql .= ' LIMIT 1';
-        return (bool)$this->db()->fetchOne($sql, $params);
+        return $this->contentCharge()->hasPaid($userId, $contentType, $contentId, $currencyId);
     }
 
     /**
@@ -732,14 +657,7 @@ class Transact extends AbstractService
      */
     public function unlockCountFor(string $contentType, int $contentId, int $currencyId, float $amount): int
     {
-        if ($contentId <= 0 || $contentType === '') {
-            return 0;
-        }
-        return (int)$this->db()->fetchOne(
-            'SELECT COUNT(*) FROM xf_oc_charge WHERE content_type = ? AND content_id = ?'
-            . ' AND currency_id = ? AND amount = ?',
-            [$contentType, $contentId, $currencyId, $amount]
-        );
+        return $this->contentCharge()->unlockCount($contentType, $contentId, $currencyId, $amount);
     }
 
     /**

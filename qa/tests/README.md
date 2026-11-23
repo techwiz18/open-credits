@@ -70,6 +70,9 @@ Covered today:
 - `ChargeAmountsTest` — the unlock endpoint's parser-based price extractor:
   malformed tags, casing, `[code]`/`[code=rich]`, `[plain]` contents, and
   `maxAmount` picking the highest valid block.
+- `ContentChargeTest` (unit) — the pure [charge] price rules: highest valid
+  block wins, and non-positive, over-precise (at the currency's decimals), and
+  malformed blocks are ignored.
 - `ChargeRenderTest` — the renderer gates and fail-closed states: guest,
   non-paid/paid member, author stats, admin bypass, inactive currency,
   invalid price, and two-price posts using the highest price; blocked

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Pub\Controller;
 
+use OpenCredits\Credits\Service\ContentCharge;
 use XF\Mvc\ParameterBag;
 use XF\Mvc\Reply\AbstractReply;
 use XF\Pub\Controller\AbstractController;
@@ -459,18 +460,17 @@ class Credits extends AbstractController
         $decimals = (int)$currency->decimals;
 
         // One purchase unlocks the whole post, so the post's price is the
-        // most expensive valid block. Never trust the submitted amount.
-        $amount = \OpenCredits\Credits\BbCode\Charge::maxAmount(
-            (string)$content->message,
-            $decimals
-        );
+        // module's decision (highest valid block). Never trust the submitted
+        // amount.
+        $charge = $svc->contentCharge();
+        $amount = ContentCharge::priceForMessage((string)$content->message, $decimals);
         if ($amount === null) {
             return $this->error('This content cannot be unlocked right now.');
         }
 
         $this->assertNotFlooding('oc_unlock');
         try {
-            $result = $svc->chargeForContent(
+            $result = $charge->purchase(
                 (int)$visitor->user_id,
                 $authorId,
                 $currencyId,

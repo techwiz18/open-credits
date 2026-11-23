@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\BbCode;
 
+use OpenCredits\Credits\Service\ContentCharge;
 use XF\BbCode\Renderer\Html;
 use XF\Mvc\Entity\Entity;
 
@@ -37,18 +38,7 @@ class Charge
      */
     public static function amountsInMessage(string $message): array
     {
-        try {
-            $app = \XF::app();
-            $parser = $app->bbCode()->parser();
-            $rules = $app->bbCode()->rules('post:post');
-            $ast = $parser->parse($message, $rules);
-        } catch (\Throwable $e) {
-            return [];
-        }
-
-        $amounts = [];
-        self::collectAmounts($ast, $amounts);
-        return array_values(array_unique($amounts));
+        return ContentCharge::amountsInMessage($message);
     }
 
     /**
@@ -58,18 +48,7 @@ class Charge
      */
     public static function maxAmount(string $message, int $decimals): ?float
     {
-        $max = null;
-        foreach (self::amountsInMessage($message) AS $raw) {
-            $candidate = (float)$raw;
-            if ($candidate <= 0 || abs($candidate - round($candidate, $decimals)) > 0.00001) {
-                continue;
-            }
-            $candidate = round($candidate, $decimals);
-            if ($max === null || $candidate > $max) {
-                $max = $candidate;
-            }
-        }
-        return $max;
+        return ContentCharge::priceForMessage($message, $decimals);
     }
 
     public static function render(array $children, $option, array $tag, array $options, Html $renderer)
@@ -124,7 +103,10 @@ class Charge
 
             $maxKey = $contentType . ':' . $contentId . ':' . $decimals;
             if (!array_key_exists($maxKey, self::$maxAmounts)) {
-                self::$maxAmounts[$maxKey] = self::maxAmount((string)$entity->message, $decimals);
+                self::$maxAmounts[$maxKey] = ContentCharge::priceForMessage(
+                    (string)$entity->message,
+                    $decimals
+                );
             }
             $amount = self::$maxAmounts[$maxKey];
 
@@ -132,11 +114,7 @@ class Charge
             // post; fall back to the block's own price when the entity message
             // has no valid charge blocks.
             if ($amount === null) {
-                $rawAmount = (float)$option;
-                $candidate = round($rawAmount, $decimals);
-                if ($rawAmount > 0 && $candidate > 0 && abs($rawAmount - $candidate) < 0.00001) {
-                    $amount = $candidate;
-                }
+                $amount = ContentCharge::priceOf([(string)$option], $decimals);
             }
 
             if ($amount === null || $amount <= 0) {
@@ -179,29 +157,6 @@ class Charge
         self::$maxAmounts = [];
     }
 
-    protected static function collectAmounts(array $tree, array &$out): void
-    {
-        foreach ($tree AS $node) {
-            if (!is_array($node)) {
-                continue;
-            }
-            $tag = (string)($node['tag'] ?? '');
-            if ($tag === 'charge') {
-                $out[] = (string)($node['option'] ?? '');
-                continue;
-            }
-            if ($tag === 'plain') {
-                continue;
-            }
-            if ($tag === 'code' && strtolower((string)($node['option'] ?? '')) !== 'rich') {
-                continue;
-            }
-            if (!empty($node['children']) && is_array($node['children'])) {
-                self::collectAmounts($node['children'], $out);
-            }
-        }
-    }
-
     protected static function renderChildren(array $children, array $options, Html $renderer): string
     {
         return $renderer->renderSubTree($children, $options);
@@ -231,7 +186,7 @@ class Charge
     ): string {
         $key = $contentType . ':' . $contentId . ':' . $currencyId . ':' . sprintf('%.2f', $amount);
         if (!isset(self::$unlockCounts[$key])) {
-            self::$unlockCounts[$key] = self::transact()->unlockCountFor(
+            self::$unlockCounts[$key] = self::charge()->unlockCount(
                 $contentType,
                 $contentId,
                 $currencyId,
@@ -261,12 +216,7 @@ class Charge
     {
         $key = $userId . ':' . $contentType . ':' . $contentId . ':' . $currencyId;
         if (!isset(self::$paid[$key])) {
-            self::$paid[$key] = self::transact()->hasPaidForContent(
-                $userId,
-                $contentType,
-                $contentId,
-                $currencyId
-            );
+            self::$paid[$key] = self::charge()->hasPaid($userId, $contentType, $contentId, $currencyId);
         }
         return self::$paid[$key];
     }
@@ -284,5 +234,10 @@ class Charge
     protected static function transact()
     {
         return \XF::app()->service('OpenCredits\Credits:Transact');
+    }
+
+    protected static function charge(): ContentCharge
+    {
+        return self::transact()->contentCharge();
     }
 }
