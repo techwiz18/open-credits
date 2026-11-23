@@ -82,6 +82,11 @@ PHP
     # Never chmod _output files to 644 — Apache writes will fail (E_WARNING).
     docker compose exec web bash -c "find /var/www/html/src/addons/OpenCredits/Credits/_output -type d -exec chmod 0777 {} + -o -type f -exec chmod 0666 {} +"
     ;;
+  install-hooks)
+    git config core.hooksPath .githooks
+    chmod +x .githooks/pre-commit
+    echo "Git hooks installed from .githooks (core.hooksPath)."
+    ;;
   test)
     kind="${2:-unit}"
     # Extra args (e.g. --filter Foo) go straight to PHPUnit. They used to be
@@ -111,6 +116,14 @@ PHP
       stan)
         docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit $extra"
         ;;
+      check)
+        # Pre-commit guard: everything CI checks except integration, which
+        # needs seeded content and would block commits on a bare forum.
+        qa_lint
+        addon_lint
+        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
+        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
+        ;;
       seed|clean)
         docker_qatmp "OC_XF_ROOT=/var/www/html php seed-dev-content.php $kind"
         ;;
@@ -122,7 +135,7 @@ PHP
         docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
         ;;
       *)
-        echo "usage: dev.sh test {lint|unit|integration|stan|all|seed|clean}" >&2
+        echo "usage: dev.sh test {lint|unit|integration|stan|check|all|seed|clean}" >&2
         exit 1
         ;;
     esac
@@ -131,6 +144,6 @@ PHP
     docker compose logs -f "${2:-web}"
     ;;
   *)
-    echo "usage: dev.sh {up|down|unpack|enable-debug|link-addon|fix-perms|test|logs}"
+    echo "usage: dev.sh {up|down|unpack|enable-debug|link-addon|fix-perms|install-hooks|test|logs}"
     ;;
 esac

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Pre-commit guardrail. Host checks always run; the PHP checks mirror public CI
+# plus PHPStan and run only when the Docker web container is up, so a checkout
+# with the stack down can still commit. Install with
+# `./scripts/dev.sh install-hooks`.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+./scripts/check-balance-writes.sh
+
+python3 - <<'PY'
+import glob, json, sys
+
+bad = 0
+for path in glob.glob('addon-src/**/_output/**/*.json', recursive=True):
+    try:
+        json.load(open(path))
+    except Exception as exc:
+        print(f'{path}: {exc}')
+        bad = 1
+
+try:
+    addon = json.load(open('addon-src/OpenCredits/Credits/addon.json'))
+    assert addon['version_id'] and addon['version_string'], 'version missing'
+except Exception as exc:
+    print(f'addon.json: {exc}')
+    bad = 1
+
+sys.exit(bad)
+PY
+
+if docker compose ps web --format '{{.State}}' 2>/dev/null | grep -qx running; then
+    ./scripts/dev.sh test check
+else
+    echo "pre-commit: web container not running; skipped php lint/unit/phpstan."
+fi
