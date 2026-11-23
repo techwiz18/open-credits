@@ -20,6 +20,12 @@ run. Delete `src/.qatmp` if `qa/composer.json` changes.
 
 (On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI does exactly that.)
 
+## Assertions
+
+Every assertion pins a value or behaviour. If it would still pass when the
+code under test changed, delete it — a tautology buys a green tick and no
+coverage.
+
 ## Static analysis (`qa/phpstan.neon`, level 5, no XenForo boot)
 
 `php -l` and the unit suite both pass undefined variables silently (PHP
@@ -33,9 +39,10 @@ a second static copy shadows the runtime one and blinds the analysis) and
 ./scripts/dev.sh test stan
 ```
 
-`./scripts/dev.sh test lint` lints the synced `qa/` tree with `php -l` (public
-CI lints `addon-src` and `qa`). Use it after editing the seeder or tests; a
-syntax error there is otherwise only discovered when the file is executed.
+`./scripts/dev.sh test lint` lints the synced `qa/` tree and the bind-mounted
+`addon-src` tree with `php -l` (the same files public CI lints). Use it after
+editing the seeder or tests; a syntax error is otherwise only discovered when
+the file is executed or after push.
 
 ## Integration (`qa/tests/Integration`, real XenForo boot)
 
@@ -103,6 +110,9 @@ Covered today:
 - `CreditEventTest` (unit) — the shared id-list decoder: comma-separated,
   JSON, and array inputs dedupe to the same list, so repeated ids cannot slip
   past the exact-duplicate guard.
+- `LedgerTest` (unit) — the one trigger-label map: every label, the humanised
+  unknown-trigger fallback, the awardable subset, and the stored marker strings
+  the prune guard relies on.
 - `MemberCreditsTest` — the wallet page (pagination 10 by default with per-page links, currency switcher,
   retired transfer/redeem redirects) and the per-member profile Credits tab
   (balances; send form for other members; no history for self; single-currency self tab uses the wallet).
