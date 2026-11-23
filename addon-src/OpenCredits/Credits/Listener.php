@@ -2,6 +2,7 @@
 
 namespace OpenCredits\Credits;
 
+use OpenCredits\Credits\Service\Ledger;
 use XF\Mvc\Entity\Entity;
 use XF\Mvc\Entity\Manager as EntityManager;
 use XF\Mvc\Entity\Structure;
@@ -51,7 +52,7 @@ class Listener
         if ((!$isNewVisible && !$becameVisible)) {
             return;
         }
-        self::applyTrigger('thread', (int)$entity->user_id, (int)$entity->thread_id, 'thread', (int)$entity->get('node_id'),
+        self::applyTrigger(Ledger::TRIGGER_THREAD, (int)$entity->user_id, (int)$entity->thread_id, 'thread', (int)$entity->get('node_id'),
             'thread:' . (int)$entity->thread_id);
     }
 
@@ -69,7 +70,7 @@ class Listener
             return;
         }
         $nodeId = 0;
-        if (self::needsForumContext('post')) {
+        if (self::needsForumContext(Ledger::TRIGGER_POST)) {
             try {
                 $thread = $entity->Thread;
                 $nodeId = $thread ? (int)$thread->node_id : 0;
@@ -77,7 +78,7 @@ class Listener
                 \XF::logException($e, false, 'OpenCredits post forum lookup failed: ');
             }
         }
-        self::applyTrigger('post', (int)$entity->user_id, (int)$entity->post_id, 'post', $nodeId,
+        self::applyTrigger(Ledger::TRIGGER_POST, (int)$entity->user_id, (int)$entity->post_id, 'post', $nodeId,
             'post:' . (int)$entity->post_id);
     }
 
@@ -92,7 +93,7 @@ class Listener
         if (in_array($entity->get('user_state'), ['banned', 'rejected', 'disabled'], true)) {
             return;
         }
-        self::applyTrigger('register', (int)$entity->user_id, (int)$entity->user_id, 'user');
+        self::applyTrigger(Ledger::TRIGGER_REGISTER, (int)$entity->user_id, (int)$entity->user_id, 'user');
     }
 
     public static function userEntityStructure(EntityManager $em, Structure &$structure)
@@ -117,9 +118,9 @@ class Listener
         $contentId = (int)$entity->get('content_id');
         // One award per reactor per content: un-react is a row delete, so a
         // re-react would otherwise pay again without limit.
-        $dedupeKey = 'reaction:' . $reactorId;
+        $dedupeKey = Ledger::NOTE_REACTION_PREFIX . $reactorId;
         self::applyTrigger(
-            'reaction_received',
+            Ledger::TRIGGER_REACTION,
             $authorId,
             $contentId,
             $contentType,
@@ -130,7 +131,7 @@ class Listener
 
     protected static function resolveReactionNodeId(string $contentType, int $contentId): int
     {
-        if ($contentId <= 0 || !self::needsForumContext('reaction_received')) {
+        if ($contentId <= 0 || !self::needsForumContext(Ledger::TRIGGER_REACTION)) {
             return 0;
         }
         try {

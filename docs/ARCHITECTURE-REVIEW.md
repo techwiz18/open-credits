@@ -101,9 +101,30 @@ Domain terms per `GLOSSARY.md` (award eligibility vs award limits).
   shims; a `busy` verdict now reports the aborted batch's progress instead of
   discarding it (the old `runDemurrage()` undercounted a lost race).
 
-## 5. Fold history labels into the ledger module — Speculative — OPEN
+## 5. Fold history labels into the ledger module — Speculative — IMPLEMENTED
 
-- Files: `Pub/Controller/Credits.php` (`HISTORY_LABELS`), `Entity/CreditEvent.php`
-  (`TRIGGER_LABELS`), note/trigger marker strings shared with prune/dedupe.
+- Files: new `Service/Ledger.php`, `Pub/Controller/Credits.php`, `Entity/CreditEvent.php`,
+  `Admin/Controller/CreditEvent.php`, `Admin/Controller/Tools.php`,
+  `Service/Transact.php`, `Service/ContentCharge.php`, `Listener.php`
 - Problem: two label maps + load-bearing marker strings; new triggers need
   three updates. Cosmetic; worst case is a mislabeled row.
+- Solution: one vocabulary module. `Ledger::TRIGGER_LABELS` is the only label
+  map (wallet history, admin event list, earn-alert reason, backfill preview),
+  `Ledger::label()` keeps the humanised unknown-trigger fallback, and
+  `Ledger::eventTriggers()` still offers only the awardable triggers to the
+  admin form (the single label map minus `LEDGER_ONLY_TRIGGERS`, so a new
+  awardable trigger is one map entry). Trigger names and the stored markers
+  (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) are constants written by the
+  ledger/listener and read by the prune guard via `Ledger::pruneGuardParams()`
+  + `isBackfillNote()`, so old rows keep matching.
+- Proof: new `LedgerTest` pins every label, the unknown-trigger fallback, the
+  award-trigger subset, and the exact marker strings the prune guard/backfill
+  check relies on; full suite unit 64 tests / 635 assertions, integration
+  76 tests / 325 assertions, 0 failures; phpstan clean; addon files lint clean;
+  `docs/ARCHITECTURE.md` file map and new-trigger checklist updated.
+- Residuals (deliberate): `Setup.php` default-event seeds still spell their
+  trigger names literally (install data, not a reader); the write-only
+  `Demurrage` / `Charge: …` row notes are display text no code matches on, so
+  they stay at their write sites; removing the old public
+  `CreditEvent::TRIGGER_LABELS` / admin `TRIGGERS` constants is a pre-1.0 API
+  break (nothing in-repo referenced them).

@@ -287,8 +287,7 @@ class Transact extends AbstractService
             }
             $decimals = (int)($eventRow['decimals'] ?? 2);
             if ($reason === null) {
-                $reason = \OpenCredits\Credits\Entity\CreditEvent::TRIGGER_LABELS[$trigger]
-                    ?? ucwords(str_replace('_', ' ', $trigger));
+                $reason = Ledger::label($trigger);
             }
             $extra = [
                 'amount' => round($amount ?? (float)$eventRow['amount'], $decimals),
@@ -545,19 +544,19 @@ class Transact extends AbstractService
             $now = \XF::$time;
             $db->insert('xf_oc_transaction', [
                 'user_id' => $fromUserId, 'currency_id' => $currencyId,
-                'amount' => -$amount, 'trigger' => 'transfer',
+                'amount' => -$amount, 'trigger' => Ledger::TRIGGER_TRANSFER,
                 'content_id' => $toUserId, 'note' => '', 'log_date' => $now,
             ]);
             $db->insert('xf_oc_transaction', [
                 'user_id' => $toUserId, 'currency_id' => $currencyId,
-                'amount' => $amount, 'trigger' => 'transfer',
+                'amount' => $amount, 'trigger' => Ledger::TRIGGER_TRANSFER,
                 'content_id' => $fromUserId, 'note' => '', 'log_date' => $now,
             ]);
             $db->commit();
             self::clearBalanceCache($fromUserId);
             self::clearBalanceCache($toUserId);
-            $this->fireAdjustEvent([$fromUserId, $currencyId, -$amount, 'transfer', $toUserId]);
-            $this->fireAdjustEvent([$toUserId, $currencyId, $amount, 'transfer', $fromUserId]);
+            $this->fireAdjustEvent([$fromUserId, $currencyId, -$amount, Ledger::TRIGGER_TRANSFER, $toUserId]);
+            $this->fireAdjustEvent([$toUserId, $currencyId, $amount, Ledger::TRIGGER_TRANSFER, $fromUserId]);
             $sender = $this->app->em()->find('XF:User', $fromUserId);
             $currency = $this->app->em()->find('OpenCredits\Credits:Currency', $currencyId);
             $this->sendEarnAlert(
@@ -570,7 +569,7 @@ class Transact extends AbstractService
                     'currency_prefix' => $currency ? (string)$currency->prefix : '',
                     'currency_suffix' => $currency ? (string)$currency->suffix : '',
                 ],
-                'transfer',
+                Ledger::TRIGGER_TRANSFER,
                 $sender ?: null,
                 'Transfer from ' . ($sender ? $sender->username : 'a member')
             );
@@ -597,7 +596,7 @@ class Transact extends AbstractService
             },
             function (int $userId, int $currencyId, float $amount, string $contentType, int $contentId): void {
                 self::clearBalanceCache($userId);
-                $this->fireAdjustEvent([$userId, $currencyId, $amount, 'charge', $contentId]);
+                $this->fireAdjustEvent([$userId, $currencyId, $amount, Ledger::TRIGGER_CHARGE, $contentId]);
             }
         );
     }
@@ -702,7 +701,7 @@ class Transact extends AbstractService
             $already = (int)$db->fetchOne(
                 'SELECT COUNT(*) FROM xf_oc_transaction'
                 . ' WHERE user_id = ? AND `trigger` = ? AND content_id = ?',
-                [$userId, 'redeem', (int)$row['code_id']]
+                [$userId, Ledger::TRIGGER_REDEEM, (int)$row['code_id']]
             );
             if ($already > 0) {
                 $db->rollBack();
@@ -778,7 +777,7 @@ class Transact extends AbstractService
                 'user_id' => $userId,
                 'currency_id' => $currencyId,
                 'amount' => $amount,
-                'trigger' => 'redeem',
+                'trigger' => Ledger::TRIGGER_REDEEM,
                 'content_type' => 'code',
                 'content_id' => (int)$row['code_id'],
                 'note' => 'code #' . (int)$row['code_id'],
@@ -793,7 +792,7 @@ class Transact extends AbstractService
             );
             $db->commit();
             self::clearBalanceCache($userId);
-            $this->fireAdjustEvent([$userId, $currencyId, $amount, 'redeem', (int)$row['code_id']]);
+            $this->fireAdjustEvent([$userId, $currencyId, $amount, Ledger::TRIGGER_REDEEM, (int)$row['code_id']]);
             $granted = ['amount' => $amount, 'currency_id' => $currencyId];
             return 'ok';
         } catch (\Throwable $e) {
@@ -825,7 +824,7 @@ class Transact extends AbstractService
                     'user_id' => $userId,
                     'currency_id' => $currencyId,
                     'amount' => -$amount,
-                    'trigger' => 'demurrage',
+                    'trigger' => Ledger::TRIGGER_DEMURRAGE,
                     'content_type' => '',
                     'content_id' => 0,
                     'note' => 'Demurrage',
@@ -837,7 +836,7 @@ class Transact extends AbstractService
             },
             function (int $userId, float $amount) use ($currencyId): void {
                 self::clearBalanceCache($userId);
-                $this->fireAdjustEvent([$userId, $currencyId, -$amount, 'demurrage', 0]);
+                $this->fireAdjustEvent([$userId, $currencyId, -$amount, Ledger::TRIGGER_DEMURRAGE, 0]);
             }
         );
     }
@@ -994,7 +993,7 @@ class Transact extends AbstractService
         $count = (int)$this->db()->fetchOne(
             'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND currency_id = ? AND log_date >= ?'
             . ' AND note != ? AND `trigger` = ?',
-            [$userId, $currencyId, self::dayStart(), 'Historical backfill', $trigger]
+            [$userId, $currencyId, self::dayStart(), Ledger::NOTE_BACKFILL, $trigger]
         );
         return $count < $maxPerDay;
     }
@@ -1019,7 +1018,7 @@ class Transact extends AbstractService
         $start = self::dayStart();
         $already = (int)$db->fetchOne(
             'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
-            [$userId, 'daily_login', $start]
+            [$userId, Ledger::TRIGGER_DAILY_LOGIN, $start]
         );
         if ($already > 0) {
             return false;
@@ -1036,7 +1035,7 @@ class Transact extends AbstractService
             $db->query('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
             $recheck = (int)$db->fetchOne(
                 'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND `trigger` = ? AND log_date >= ?',
-                [$userId, 'daily_login', $start]
+                [$userId, Ledger::TRIGGER_DAILY_LOGIN, $start]
             );
             if ($recheck > 0) {
                 $db->commit();
@@ -1050,10 +1049,10 @@ class Transact extends AbstractService
                 $db->commit();
                 return false;
             }
-            $awarded = $this->awardByTrigger('daily_login', $userId, $userId);
+            $awarded = $this->awardByTrigger(Ledger::TRIGGER_DAILY_LOGIN, $userId, $userId);
             $mark = InflationClamp::shouldMarkClaimed(
                 $awarded,
-                $this->hasActiveEvents('daily_login'),
+                $this->hasActiveEvents(Ledger::TRIGGER_DAILY_LOGIN),
                 $this->isAwardEligible($userId)
             );
             if ($mark) {
@@ -1094,7 +1093,7 @@ class Transact extends AbstractService
         $primaryId = $this->primaryCurrencyId();
         $amounts = [];
         $decimals = 2;
-        foreach (self::$eventRowsCache['daily_login'] ?? [] as $row) {
+        foreach (self::$eventRowsCache[Ledger::TRIGGER_DAILY_LOGIN] ?? [] as $row) {
             if ((int)($row['currency_id'] ?? 0) === $primaryId) {
                 $amounts[] = (float)($row['amount'] ?? 0);
                 $decimals = (int)($row['decimals'] ?? $decimals);
@@ -1188,7 +1187,7 @@ class Transact extends AbstractService
                     'SELECT COALESCE(SUM(amount), 0) FROM xf_oc_transaction'
                     . ' WHERE user_id = ? AND currency_id = ? AND log_date <= ?'
                     . " AND `trigger` != ? AND note != ? AND note NOT LIKE ?",
-                    [$uid, $cid, $cutoff, 'redeem', 'Historical backfill', 'reaction:%']
+                    array_merge([$uid, $cid, $cutoff], Ledger::pruneGuardParams())
                 );
                 if ($sum != 0.0) {
                     $new = round($existing + $sum, $decimals);
@@ -1205,7 +1204,7 @@ class Transact extends AbstractService
                     'DELETE FROM xf_oc_transaction'
                     . ' WHERE user_id = ? AND currency_id = ? AND log_date <= ?'
                     . " AND `trigger` != ? AND note != ? AND note NOT LIKE ?",
-                    [$uid, $cid, $cutoff, 'redeem', 'Historical backfill', 'reaction:%']
+                    array_merge([$uid, $cid, $cutoff], Ledger::pruneGuardParams())
                 );
                 $deleted += (int)$stmt->rowsAffected();
             }

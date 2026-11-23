@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Pub\Controller;
 
 use OpenCredits\Credits\Service\ContentCharge;
+use OpenCredits\Credits\Service\Ledger;
 use XF\Mvc\ParameterBag;
 use XF\Mvc\Reply\AbstractReply;
 use XF\Pub\Controller\AbstractController;
@@ -112,17 +113,6 @@ class Credits extends AbstractController
         ];
     }
 
-    protected const HISTORY_LABELS = [
-        'thread' => 'New thread',
-        'post' => 'Reply',
-        'reaction_received' => 'Reaction received',
-        'register' => 'Registration',
-        'daily_login' => 'Daily visit',
-        'redeem' => 'Redeem code',
-        'charge' => 'Premium content',
-        'demurrage' => 'Demurrage',
-    ];
-
     /**
      * Smallest input step for an amount field, e.g. "1" for 0-decimal
      * currencies, "0.01" for 2-decimal ones.
@@ -142,22 +132,22 @@ class Credits extends AbstractController
         $threadIds = [];
         $postIds = [];
         foreach ($transactions as $txn) {
-            if (($txn->note ?? '') === 'Historical backfill') {
+            if (Ledger::isBackfillNote((string)($txn->note ?? ''))) {
                 // Backfill rows aggregate many items; content_id is 0 (or the
                 // member id for a per-member run), so never treat it as a link.
                 continue;
             }
-            if ($txn->trigger === 'transfer') {
+            if ($txn->trigger === Ledger::TRIGGER_TRANSFER) {
                 $userIds[] = (int)$txn->content_id;
-            } elseif ($txn->trigger === 'thread'
-                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'thread')
+            } elseif ($txn->trigger === Ledger::TRIGGER_THREAD
+                || ($txn->trigger === Ledger::TRIGGER_REACTION && $txn->content_type === 'thread')
             ) {
                 $threadIds[] = (int)$txn->content_id;
-            } elseif ($txn->trigger === 'post'
-                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'post')
+            } elseif ($txn->trigger === Ledger::TRIGGER_POST
+                || ($txn->trigger === Ledger::TRIGGER_REACTION && $txn->content_type === 'post')
             ) {
                 $postIds[] = (int)$txn->content_id;
-            } elseif ($txn->trigger === 'charge' && $txn->content_type === 'post') {
+            } elseif ($txn->trigger === Ledger::TRIGGER_CHARGE && $txn->content_type === 'post') {
                 $postIds[] = (int)$txn->content_id;
             }
         }
@@ -183,43 +173,43 @@ class Credits extends AbstractController
         foreach ($transactions as $txn) {
             $amount = (float)$txn->amount;
             $entry = [
-                'label' => self::HISTORY_LABELS[$txn->trigger] ?? ucwords(str_replace('_', ' ', $txn->trigger)),
+                'label' => Ledger::label((string)$txn->trigger),
                 'detail' => '',
                 'detailUser' => null,
                 'detailThread' => null,
                 'amount' => $amount,
                 'logDate' => (int)$txn->log_date,
             ];
-            if (($txn->note ?? '') === 'Historical backfill') {
-                $entry['label'] = 'Historical backfill';
-            } elseif ($txn->trigger === 'transfer') {
+            if (Ledger::isBackfillNote((string)($txn->note ?? ''))) {
+                $entry['label'] = Ledger::NOTE_BACKFILL;
+            } elseif ($txn->trigger === Ledger::TRIGGER_TRANSFER) {
                 $entry['label'] = $amount < 0 ? 'Transfer sent' : 'Transfer received';
                 $otherId = (int)$txn->content_id;
                 if (isset($users[$otherId]) && $users[$otherId]->canViewBasicProfile($profileError)) {
                     $entry['detailUser'] = $users[$otherId];
                 }
-            } elseif ($txn->trigger === 'thread'
-                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'thread')
+            } elseif ($txn->trigger === Ledger::TRIGGER_THREAD
+                || ($txn->trigger === Ledger::TRIGGER_REACTION && $txn->content_type === 'thread')
             ) {
                 $threadId = (int)$txn->content_id;
                 if (isset($threads[$threadId]) && $threads[$threadId]->canView()) {
                     $entry['detailThread'] = $threads[$threadId];
-                    if ($txn->trigger === 'reaction_received') {
+                    if ($txn->trigger === Ledger::TRIGGER_REACTION) {
                         $entry['detail'] = 'on';
                     }
                 }
-            } elseif ($txn->trigger === 'post'
-                || ($txn->trigger === 'reaction_received' && $txn->content_type === 'post')
+            } elseif ($txn->trigger === Ledger::TRIGGER_POST
+                || ($txn->trigger === Ledger::TRIGGER_REACTION && $txn->content_type === 'post')
             ) {
                 $postId = (int)$txn->content_id;
                 if (isset($posts[$postId]) && $posts[$postId]->canView()) {
                     $threadId = (int)$posts[$postId]->thread_id;
                     if (isset($postThreads[$threadId]) && $postThreads[$threadId]->canView()) {
                         $entry['detailThread'] = $postThreads[$threadId];
-                        $entry['detail'] = $txn->trigger === 'reaction_received' ? 'on your reply in' : 'in reply to';
+                        $entry['detail'] = $txn->trigger === Ledger::TRIGGER_REACTION ? 'on your reply in' : 'in reply to';
                     }
                 }
-            } elseif ($txn->trigger === 'charge') {
+            } elseif ($txn->trigger === Ledger::TRIGGER_CHARGE) {
                 $entry['label'] = $amount < 0 ? 'Premium content unlocked' : 'Premium content sold';
                 $postId = (int)$txn->content_id;
                 if (isset($posts[$postId]) && $posts[$postId]->canView()) {

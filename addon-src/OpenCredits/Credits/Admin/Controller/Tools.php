@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Admin\Controller;
 
+use OpenCredits\Credits\Service\Ledger;
 use XF\Admin\Controller\AbstractController;
 use XF\Mvc\ParameterBag;
 
@@ -120,7 +121,7 @@ class Tools extends AbstractController
             ->with('Currency')
             ->where('event_id', $eventIds)
             ->where('active', 1)
-            ->where('trigger', ['post', 'thread'])
+            ->where('trigger', [Ledger::TRIGGER_POST, Ledger::TRIGGER_THREAD])
             ->fetch();
 
         if (!count($events)) {
@@ -448,7 +449,7 @@ class Tools extends AbstractController
             . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = t.currency_id'
             . ' WHERE t.log_date <= ? AND t.`trigger` != ? AND t.note != ? AND t.note NOT LIKE ?'
             . ' GROUP BY c.currency_id, c.title ORDER BY c.currency_id',
-            [$cutoff, 'redeem', 'Historical backfill', 'reaction:%']
+            [$cutoff, ...Ledger::pruneGuardParams()]
         );
         $preview = [];
         foreach ($rows as $row) {
@@ -506,7 +507,7 @@ class Tools extends AbstractController
         $events = $this->finder('OpenCredits\Credits:CreditEvent')
             ->with('Currency')
             ->where('active', 1)
-            ->where('trigger', ['post', 'thread'])
+            ->where('trigger', [Ledger::TRIGGER_POST, Ledger::TRIGGER_THREAD])
             ->fetch();
         foreach ($events as $event) {
             $previewCurrency = $event->Currency;
@@ -520,7 +521,7 @@ class Tools extends AbstractController
             $users = count($this->backfillEligibleCounts($event));
             $preview[] = [
                 'event_id' => (int)$event->event_id,
-                'label' => \OpenCredits\Credits\Entity\CreditEvent::TRIGGER_LABELS[$event->trigger] ?? $event->trigger,
+                'label' => Ledger::label((string)$event->trigger),
                 'currency' => $previewCurrency->title,
                 'decimals' => (int)$previewCurrency->decimals,
                 'amount' => (float)$event->amount,
@@ -579,7 +580,7 @@ class Tools extends AbstractController
                     'content_type' => $event->trigger,
                     'content_id' => $onlyUserId > 0 ? $onlyUserId : 0,
                     'event_id' => (int)$event->event_id,
-                    'note' => 'Historical backfill',
+                    'note' => Ledger::NOTE_BACKFILL,
                     'log_date' => $now,
                 ]);
                 $rows++;
@@ -619,7 +620,7 @@ class Tools extends AbstractController
         [$sql, $params] = $this->backfillContentQuery($event, $onlyUserId, $startAfterUserId, $endUserId);
         return \OpenCredits\Credits\Service\AwardScope::countEligible(
             ['forum_ids' => $event->forum_ids, 'usergroup_ids' => $event->usergroup_ids],
-            $event->trigger === 'post',
+            $event->trigger === Ledger::TRIGGER_POST,
             $this->app->db()->fetchAll($sql, $params)
         );
     }
@@ -640,7 +641,7 @@ class Tools extends AbstractController
         int $startAfterUserId = 0,
         int $endUserId = 0
     ): array {
-        $isPost = $event->trigger === 'post';
+        $isPost = $event->trigger === Ledger::TRIGGER_POST;
         if ($isPost) {
             $from = 'xf_post AS p INNER JOIN xf_thread AS t ON t.thread_id = p.thread_id';
             $author = 'p';

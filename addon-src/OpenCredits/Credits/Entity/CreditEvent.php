@@ -2,22 +2,15 @@
 
 namespace OpenCredits\Credits\Entity;
 
+use OpenCredits\Credits\Service\Ledger;
 use XF\Mvc\Entity\Entity;
 use XF\Mvc\Entity\Structure;
 
 class CreditEvent extends Entity
 {
-    public const TRIGGER_LABELS = [
-        'thread' => 'New thread',
-        'post' => 'Reply',
-        'reaction_received' => 'Reaction received',
-        'register' => 'Registration',
-        'daily_login' => 'Daily visit',
-    ];
-
     public function getDisplayLabel(): string
     {
-        return self::TRIGGER_LABELS[$this->trigger] ?? ucwords(str_replace('_', ' ', (string)$this->trigger));
+        return Ledger::label((string)$this->trigger);
     }
 
     /**
@@ -64,7 +57,7 @@ class CreditEvent extends Entity
         $hint = \XF::phrase('ocadm_hint_each', [
             'amount' => number_format((float)$this->amount, $decimals),
         ])->render();
-        if ($this->trigger === 'daily_login') {
+        if ($this->trigger === Ledger::TRIGGER_DAILY_LOGIN) {
             $hint .= ' · ' . \XF::phrase('ocadm_hint_daily')->render() . ' (' . $this->getDayBoundaryLabel() . ')';
         } elseif ($this->max_per_day > 0) {
             $hint .= ' · ' . \XF::phrase('ocadm_hint_max_x', ['n' => $this->max_per_day])->render();

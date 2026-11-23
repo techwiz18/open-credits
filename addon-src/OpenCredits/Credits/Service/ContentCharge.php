@@ -181,13 +181,13 @@ class ContentCharge
             $note = 'Charge: ' . $type . ' #' . $contentId;
             $db->insert('xf_oc_transaction', [
                 'user_id' => $fromUserId, 'currency_id' => $currencyId,
-                'amount' => -$amount, 'trigger' => 'charge',
+                'amount' => -$amount, 'trigger' => Ledger::TRIGGER_CHARGE,
                 'content_type' => $type, 'content_id' => $contentId,
                 'note' => $note, 'log_date' => $now,
             ]);
             $db->insert('xf_oc_transaction', [
                 'user_id' => $toUserId, 'currency_id' => $currencyId,
-                'amount' => $amount, 'trigger' => 'charge',
+                'amount' => $amount, 'trigger' => Ledger::TRIGGER_CHARGE,
                 'content_type' => $type, 'content_id' => $contentId,
                 'note' => $note, 'log_date' => $now,
             ]);
