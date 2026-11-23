@@ -11,6 +11,7 @@ synced copy inside the `web` container (gitignored `src/.qatmp`):
 
 ```bash
 ./scripts/dev.sh test unit
+./scripts/dev.sh test unit --filter LedgerTest   # one file; extra args reach PHPUnit
 ```
 
 The wrapper re-syncs `qa/tests/` into `.qatmp` before every run (a stale copy
@@ -53,6 +54,7 @@ without it the framework is not loaded (public CI runs only the unit suite).
 ```bash
 ./scripts/dev.sh test seed    # once per dev forum: content-dependent tests
 ./scripts/dev.sh test integration
+./scripts/dev.sh test integration --filter InflationControl   # one file
 ./scripts/dev.sh test clean   # remove the seeded content again
 ```
 
@@ -63,6 +65,9 @@ them. The wrapper runs integration with `--display-skipped
 --fail-on-skipped`, so an unseeded forum fails with the seed hint instead of
 passing silently. The suite also runs in random order
 (`executionOrder="random"`) so static-cache leaks between tests surface.
+Integration-only pins (for example `DemurrageAdaptersTest`, which needs the XF
+boot to build a controller) are not covered by public CI; run
+`./scripts/dev.sh test all` before merging.
 
 Covered today:
 - `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,

@@ -104,3 +104,38 @@ php cmd.php xf-rebuild:users   # rebuildPermissionCombination() per user
   generator and upgrade, or Apache hits permission errors writing `_output`.
 * Never reference XFCP extension classes from services: the alias may not exist
   in CLI context. Keep shared state (caches) in the service itself.
+
+## 10. Testing: class-extension aliases break clean-up
+
+`Extension::addClassExtension()` stores the extension under the aliased name
+from `\XF::getClassForAlias()` (`…\Admin\Controller\Tools` →
+`…\ToolsController`, `…\Service\Transact` → `…\TransactService`), while
+`removeClassExtensions()` uses the raw name you pass. A raw clean-up silently
+misses, so the extension leaks into later tests; in random order the next
+`extendClass()` dies with `Cannot declare class …XFCP_<Spy>, because the name
+is already in use`.
+
+```php
+$ext = \XF::app()->extension();
+$ext->addClassExtension(Tools::class, ToolsAdapterSpy::class);    // aliased key
+$ext->removeClassExtensions(\XF::getClassForAlias(Tools::class)); // match it
+```
+
+Register in the one test that needs it and remove it in `tearDown`.
+
+## 11. Testing thin adapters and controllers without the service container
+
+Integration tests boot the real XF app, so inject a fake collaborator through a
+subclass seam rather than replacing a service:
+
+* Put a `protected` factory on the adapter (`runner()`, `demurrageRunner()`)
+  and subclass it to return a recording stub. Cron classes and CLI commands
+  instantiate directly (`Cli\Command` has no `$app`).
+* Controllers resolve their root class in the constructor. Either register the
+  spy with `addClassExtension` (see §10) and construct it directly, or go
+  through `\XF::app()->controller(...)`.
+* A POST action needs
+  `new \XF\Http\Request(\XF::app()->inputFilterer(), [], [], [], ['REQUEST_METHOD' => 'POST'])`;
+  call the action, then read `$reply->getParams()`.
+* Worked example: `qa/tests/Integration/DemurrageAdaptersTest.php` (#17).
+

@@ -87,6 +87,8 @@ See `qa/tests/README.md` for the test setup.
 * When a computation moves behind a delegate or shim, pin the old function's
   boundary and sentinel inputs (zero, negative, disabled-sentinel) in unit
   tests — the shim must preserve them exactly.
+* Review reads the committed diff: commit the finished change first, then run
+  the review. An amend after review needs a re-run.
 
 ## Granting the credit permissions (dev shortcut)
 
