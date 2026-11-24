@@ -26,6 +26,7 @@ container; edits apply on next page load (templates recompile automatically).
 
 | Command | Purpose |
 |---|---|
+| `./scripts/dev.sh help` | every command and test kind |
 | `./scripts/dev.sh up/down/logs` | lifecycle |
 | `./scripts/dev.sh fix-perms` | **run after any `xf-make:*`** — generators run as root; Apache needs writable `_output` |
 | `./scripts/dev.sh install-hooks` | install the tracked pre-commit hook (host checks + lint/unit/phpstan when the stack is up) |

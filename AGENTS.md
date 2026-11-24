@@ -12,9 +12,9 @@ lives in `.agents/skills/` (load it as described below).
   The XF tree unpacks at `src/src/XF/` (not `src/XF/`); see `docs/DEV.md`.
 - **`_output/`:** the development surface (templates, phrases, options, routes, etc.).
 - **`_data/`:** generated release artifacts (gitignored); never edit by hand.
-- **Tests:** run `./scripts/dev.sh test {lint|unit|integration|stan|check|all|seed|clean}`.
-  `check` (lint + unit + PHPStan) is the pre-commit target; `install-hooks`
-  wires the hook up. Usage and arg-forwarding details are in `qa/tests/README.md`.
+- **Tests:** `./scripts/dev.sh help` lists every command and test kind; test
+  details (including arg forwarding) are in `qa/tests/README.md`. `test check`
+  is the pre-commit target; `install-hooks` wires the hook up.
 - **Docs:** `docs/DEV.md`, `docs/ARCHITECTURE.md`, `docs/XF-DEV-GOTCHAS.md`, `docs/API.md`.
 - **`HANDOFF.md`:** local-only session notes (gitignored).
 

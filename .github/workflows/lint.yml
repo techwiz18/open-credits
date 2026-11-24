@@ -46,6 +46,13 @@ jobs:
       - name: Only Transact writes balances
         run: ./scripts/check-balance-writes.sh
 
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dev.sh arg handling smoke test
+        run: ./scripts/test-dev.sh
+
   secrets-scan:
     runs-on: ubuntu-latest
     steps:
