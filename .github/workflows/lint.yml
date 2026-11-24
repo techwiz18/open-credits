@@ -22,7 +22,11 @@ jobs:
             php -l "$f" || fail=1
           done < <(find addon-src qa -name '*.php' -not -path '*/vendor/*')
           exit $fail
-      - name: Artifact checks (_output JSON + addon version)
+  artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: _output JSON + addon version
         # Same script the pre-commit hook runs; see scripts/check-artifacts.py.
         run: python3 scripts/check-artifacts.py
 
