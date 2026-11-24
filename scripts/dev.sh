@@ -117,9 +117,51 @@ PHP
     docker compose exec web bash -c "find /var/www/html/src/addons/OpenCredits/Credits/_output -type d -exec chmod 0777 {} + -o -type f -exec chmod 0666 {} +"
     ;;
   install-hooks)
-    git config core.hooksPath .githooks
+    # Tracked hook in .githooks; never silently replace someone else's setup.
+    shift
+    force=0
+    for arg in "$@"; do
+      case "$arg" in
+        --force) force=1 ;;
+        *) echo "usage: dev.sh install-hooks [--force]" >&2; exit 2 ;;
+      esac
+    done
     chmod +x .githooks/pre-commit
-    echo "Git hooks installed from .githooks (core.hooksPath)."
+    current=$(git config --get core.hooksPath || true)
+    if [ "$current" = ".githooks" ]; then
+      echo "Git hooks already installed (core.hooksPath=.githooks)."
+    elif [ -z "$current" ] || [ "$current" = ".git/hooks" ]; then
+      git config opencredits.previousHooksPath __default__
+      git config core.hooksPath .githooks
+      echo "Git hooks installed from .githooks (previous: default .git/hooks)."
+    elif [ "$force" -eq 1 ]; then
+      git config opencredits.previousHooksPath "$current"
+      git config core.hooksPath .githooks
+      echo "Git hooks installed from .githooks (previous: $current)."
+    else
+      echo "core.hooksPath is already set to '$current'; left untouched." >&2
+      echo "Re-run with --force to replace it and record it for uninstall." >&2
+      exit 1
+    fi
+    ;;
+  uninstall-hooks)
+    current=$(git config --get core.hooksPath || true)
+    if [ "$current" != ".githooks" ]; then
+      echo "core.hooksPath is '${current:-unset}', not .githooks; nothing to uninstall."
+      exit 0
+    fi
+    previous=$(git config --get opencredits.previousHooksPath || true)
+    case "$previous" in
+      ""|__default__)
+        git config --unset core.hooksPath || true
+        echo "Removed core.hooksPath; git uses the default .git/hooks again."
+        ;;
+      *)
+        git config core.hooksPath "$previous"
+        echo "Restored core.hooksPath to '$previous'."
+        ;;
+    esac
+    git config --unset opencredits.previousHooksPath || true
     ;;
   test)
     shift                       # the "test" subcommand
@@ -185,7 +227,10 @@ usage: dev.sh <command> [args]
   enable-debug        add debug/development flags to src/src/config.php
   link-addon          show the mounted addon dir and rebuild the addon
   fix-perms           make _output writable after a generator/import
-  install-hooks       install the tracked pre-commit hook
+  install-hooks [--force]
+                      install the tracked pre-commit hook; --force replaces a
+                      different core.hooksPath (recorded for uninstall)
+  uninstall-hooks     restore the hooks path recorded at install
   test <kind> [args]  run the suite; kinds: $test_kinds
                       extra args reach PHPUnit/PHPStan for unit, integration
                       and stan; the other kinds reject them
