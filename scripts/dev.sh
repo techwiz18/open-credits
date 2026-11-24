@@ -9,8 +9,41 @@ ZIP=$(ls ../xenforo_*.zip 2>/dev/null | head -n 1 || true)
 # mounted in the container). Tests are re-synced every run so a stale copy can
 # never report a false green; dev dependencies are installed only when the
 # copy is first created.
-docker_qatmp() {
+# Takes one shell string (pipelines allowed) and runs it inside .qatmp.
+docker_qatmp_shell() {
   docker compose exec -T web bash -c "cd /var/www/html/.qatmp && $1"
+}
+
+# Runs a command inside .qatmp with every argument passed through intact:
+# printf %q re-quotes each one, so the inner `bash -c` parses back exactly the
+# same argv (a value with spaces stays one argument, a `$(...)` stays literal).
+qatmp() {
+  local line
+  printf -v line '%q ' "$@"
+  docker_qatmp_shell "${line:?qatmp: no command given}"
+}
+
+qa_unit() {
+  qatmp env OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit "$@"
+}
+
+qa_integration() {
+  qatmp env OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml \
+    --display-skipped --fail-on-skipped "$@"
+}
+
+qa_stan() {
+  qatmp env OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan \
+    analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit "$@"
+}
+
+# Single implementation of the non-integration CI steps, shared by `check`
+# (pre-commit) and `all` so the two targets cannot drift.
+qa_check_steps() {
+  qa_lint
+  addon_lint
+  qa_unit
+  qa_stan
 }
 
 sync_qatmp() {
@@ -18,7 +51,7 @@ sync_qatmp() {
   if [ ! -f src/.qatmp/vendor/autoload.php ]; then
     rm -rf src/.qatmp
     cp -r qa src/.qatmp
-    docker_qatmp "composer install --no-interaction --quiet"
+    docker_qatmp_shell "composer install --no-interaction --quiet"
   else
     rsync -a --delete qa/tests/ src/.qatmp/tests/
     cp qa/seed-dev-content.php qa/phpunit.xml qa/phpunit-integration.xml \
@@ -29,7 +62,7 @@ sync_qatmp() {
 # Lints the synced qa tree and the bind-mounted addon tree (the same files
 # public CI lints), so a syntax error fails before commit, not after push.
 qa_lint() {
-  docker_qatmp 'find . -path ./vendor -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null' \
+  docker_qatmp_shell 'find . -path ./vendor -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null' \
     && echo "qa lint OK"
 }
 
@@ -88,14 +121,21 @@ PHP
     echo "Git hooks installed from .githooks (core.hooksPath)."
     ;;
   test)
-    kind="${2:-unit}"
-    # Extra args (e.g. --filter Foo) go straight to PHPUnit. They used to be
-    # dropped silently, so a filtered run quietly ran the whole suite.
-    extra=""
-    if [ "$#" -gt 2 ]; then
-      shift 2
-      extra="$*"
-    fi
+    shift                       # the "test" subcommand
+    kind="${1:-unit}"
+    if [ "$#" -ge 1 ]; then shift; fi
+    # Only unit/integration/stan forward extra args to PHPUnit/PHPStan; the
+    # composite targets refuse them up front instead of paying for a resync
+    # and then silently running everything.
+    case "$kind" in
+      unit|integration|stan) ;;
+      lint|check|all|seed|clean)
+        if [ "$#" -gt 0 ]; then
+          echo "dev.sh test $kind takes no extra arguments (got: $*)" >&2
+          exit 2
+        fi
+        ;;
+    esac
     mkdir -p src
     # One copy is shared by every test command; serialize runs so a sync or a
     # first-run install cannot race another run's PHPUnit process.
@@ -108,31 +148,23 @@ PHP
         addon_lint
         ;;
       unit)
-        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit $extra"
+        qa_unit "$@"
         ;;
       integration)
-        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml --display-skipped --fail-on-skipped $extra"
+        qa_integration "$@"
         ;;
       stan)
-        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit $extra"
+        qa_stan "$@"
         ;;
       check)
-        # Pre-commit guard: everything CI checks except integration, which
-        # needs seeded content and would block commits on a bare forum.
-        qa_lint
-        addon_lint
-        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
-        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
+        qa_check_steps
         ;;
       seed|clean)
-        docker_qatmp "OC_XF_ROOT=/var/www/html php seed-dev-content.php $kind"
+        qatmp env OC_XF_ROOT=/var/www/html php seed-dev-content.php "$kind"
         ;;
       all)
-        qa_lint
-        addon_lint
-        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit"
-        docker_qatmp "OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml --display-skipped --fail-on-skipped"
-        docker_qatmp "OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit"
+        qa_check_steps
+        qa_integration
         ;;
       *)
         echo "usage: dev.sh test {lint|unit|integration|stan|check|all|seed|clean}" >&2

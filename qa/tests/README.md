@@ -14,6 +14,10 @@ synced copy inside the `web` container (gitignored `src/.qatmp`):
 ./scripts/dev.sh test unit --filter LedgerTest   # one file; extra args reach PHPUnit
 ```
 
+Args after `unit`/`integration`/`stan` are forwarded verbatim (quoted values
+with spaces stay one argument); `lint`, `check`, `all`, `seed` and `clean` take
+none and exit 2 if given any.
+
 The wrapper re-syncs `qa/tests/` into `.qatmp` before every run (a stale copy
 can no longer report a false green) and installs dev dependencies on the first
 run. Delete `src/.qatmp` if `qa/composer.json` changes.
