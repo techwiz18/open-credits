@@ -1,0 +1,12 @@
+# gitleaks config for the local pre-commit scan.
+#
+# The scan runs over the working tree, including ignored files. Skip the trees
+# that are never committed or shipped: the licensed XenForo runtime, the addon
+# release zips, and Composer's vendor directory. Everything tracked (and any
+# untracked project file) is still scanned.
+[allowlist]
+paths = [
+  '''^src/''',
+  '''^qa/vendor/''',
+  '''^addon-src/OpenCredits/Credits/_releases/''',
+]

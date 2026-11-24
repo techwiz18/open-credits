@@ -13,8 +13,9 @@ lives in `.agents/skills/` (load it as described below).
 - **`_output/`:** the development surface (templates, phrases, options, routes, etc.).
 - **`_data/`:** generated release artifacts (gitignored); never edit by hand.
 - **Tests:** `./scripts/dev.sh help` lists every command and test kind; test
-  details (including arg forwarding) are in `qa/tests/README.md`. `test check`
-  is the pre-commit target; `install-hooks` wires the hook up.
+  details (including arg forwarding) are in `qa/tests/README.md`. The tracked
+  pre-commit hook runs `test check` plus the host checks; `install-hooks` wires
+  it up.
 - **Docs:** `docs/DEV.md`, `docs/ARCHITECTURE.md`, `docs/XF-DEV-GOTCHAS.md`, `docs/API.md`.
 - **`HANDOFF.md`:** local-only session notes (gitignored).
 

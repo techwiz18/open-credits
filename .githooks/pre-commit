@@ -13,6 +13,7 @@ cd "$(dirname "$0")/.."
 python3 scripts/check-artifacts.py
 
 if command -v gitleaks >/dev/null 2>&1; then
+    # `dir` needs gitleaks >= 8.19; older versions fail loudly under set -e.
     gitleaks dir . --no-banner --redact
 else
     echo "pre-commit: gitleaks not installed; skipped working-tree secret scan."

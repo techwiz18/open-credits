@@ -6,6 +6,7 @@ Usage: python3 scripts/check-artifacts.py [root]
 Exit: 0 valid, 1 on any invalid artifact.
 """
 
+import glob
 import json
 import sys
 from pathlib import Path
@@ -14,7 +15,9 @@ root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().paren
 
 bad = 0
 count = 0
-for path in sorted(root.glob('addon-src/**/_output/**/*.json')):
+# glob follows symlinked directories, so coverage matches the old CI check.
+for name in sorted(glob.glob(str(root / 'addon-src/**/_output/**/*.json'), recursive=True)):
+    path = Path(name)
     try:
         json.loads(path.read_text(encoding='utf-8'))
         count += 1
@@ -24,7 +27,8 @@ for path in sorted(root.glob('addon-src/**/_output/**/*.json')):
 
 try:
     addon = json.loads((root / 'addon-src/OpenCredits/Credits/addon.json').read_text(encoding='utf-8'))
-    assert addon['version_id'] and addon['version_string'], 'version_id/version_string missing or empty'
+    if not addon.get('version_id') or not addon.get('version_string'):
+        raise ValueError('version_id/version_string missing or empty')
     print(f"addon.json: {addon['version_string']} ({addon['version_id']})")
 except Exception as exc:
     print(f'addon.json: {exc}')

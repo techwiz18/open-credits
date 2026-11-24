@@ -37,8 +37,6 @@ class DemurrageAdaptersTest extends TestCase
 
     protected function tearDown(): void
     {
-        CronAdapterSpy::$runner = null;
-
         // Only remove what this test added: cron/CLI tests must not strip an
         // extension they did not register.
         if ($this->toolsExtensionAdded && class_exists('XF', false) && \XF::app()) {
@@ -127,6 +125,7 @@ class DemurrageAdaptersTest extends TestCase
         $this->assertSame(3, $params['result']['processed']);
 
         $output = $this->renderDemurrage($params);
+        // Parameterised phrase: assert its fixed wording around the placeholders.
         $this->assertStringContainsString(
             'Demurrage pass incomplete',
             $output,

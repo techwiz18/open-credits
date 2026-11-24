@@ -37,7 +37,10 @@ tracked `pre-commit` hook runs on every commit. It runs:
   Docker `web` container is running (skipped with a note otherwise).
 
 Required host tools: `bash`, `python3`, `git`. Optional: `docker compose` (the
-PHP checks) and `gitleaks` (the secret scan).
+PHP checks) and `gitleaks` ≥ 8.19 (the secret scan; older versions lack the
+`dir` subcommand and fail the hook loudly). `.gitleaks.toml` allowlists the
+unshipped runtime/build trees so the scan stays fast; tracked and untracked
+project files are still scanned.
 
 * Checks read the **working tree**, not the staged index: a partially staged
   file is checked as it sits on disk, not as it will be committed.

@@ -123,4 +123,18 @@ expect_hooks ""
 # Uninstalling when nothing was installed is a no-op.
 run uninstall-hooks >/dev/null 2>&1 || fail "uninstall without install was not a no-op"
 
+# The artifact checker is shared by CI and the hook: a broken _output JSON must
+# fail it, and the optional root keeps the fixture out of the real tree.
+art="$tmp/artifacts"
+mkdir -p "$art/addon-src/A/_output" "$art/addon-src/OpenCredits/Credits"
+printf '{"version_id": 941, "version_string": "0.13.1"}\n' > "$art/addon-src/OpenCredits/Credits/addon.json"
+printf '{"ok": true}\n' > "$art/addon-src/A/_output/good.json"
+python3 scripts/check-artifacts.py "$art" >/dev/null || fail "artifact check rejected a valid fixture"
+printf '{broken\n' > "$art/addon-src/A/_output/bad.json"
+set +e
+python3 scripts/check-artifacts.py "$art" >/dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -eq 1 ] || fail "artifact check accepted broken JSON (rc=$rc)"
+
 echo "dev.sh smoke test OK"
