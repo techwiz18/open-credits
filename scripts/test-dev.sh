@@ -76,4 +76,51 @@ set -e
 [ "$rc" -eq 1 ] || fail "test bogus exited $rc, want 1"
 grep -q 'usage: dev.sh test' <<<"$out" || fail "no usage for unknown kind: $out"
 
+# Hook install/uninstall state machine, in the throwaway repo so the real
+# core.hooksPath is never touched.
+git init -q "$repo"
+mkdir -p "$repo/.githooks"
+cp .githooks/pre-commit "$repo/.githooks/pre-commit"
+
+hooks_path() { git -C "$repo" config --get core.hooksPath || true; }
+prev_path() { git -C "$repo" config --get opencredits.previousHooksPath || true; }
+expect_hooks() {
+  [ "$(hooks_path)" = "$1" ] || fail "core.hooksPath is '$(hooks_path)', want '$1'"
+}
+
+# A default install points core.hooksPath at .githooks and marks the default.
+run install-hooks >/dev/null 2>&1 || fail "install-hooks failed"
+expect_hooks .githooks
+[ "$(prev_path)" = __default__ ] || fail "install recorded prior '$(prev_path)', want __default__"
+
+# A pre-existing foreign path is left untouched without --force.
+git -C "$repo" config core.hooksPath .custom-hooks
+set +e
+out=$(run install-hooks 2>&1)
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail "install-hooks clobbered a foreign hooks path"
+expect_hooks .custom-hooks
+[ "$(prev_path)" = __default__ ] || fail "refused install rewrote the marker to '$(prev_path)'"
+grep -q -- --force <<<"$out" || fail "refusal did not mention --force: $out"
+
+# --force replaces it and records it; uninstall restores it.
+run install-hooks --force >/dev/null 2>&1 || fail "install-hooks --force failed"
+expect_hooks .githooks
+[ "$(prev_path)" = .custom-hooks ] || fail "--force recorded '$(prev_path)', want .custom-hooks"
+run uninstall-hooks >/dev/null 2>&1 || fail "uninstall-hooks failed"
+expect_hooks .custom-hooks
+[ -z "$(prev_path)" ] || fail "uninstall left marker '$(prev_path)'"
+
+# Default install followed by uninstall unsets core.hooksPath entirely.
+git -C "$repo" config --unset core.hooksPath
+run install-hooks >/dev/null 2>&1 || fail "second default install failed"
+expect_hooks .githooks
+run uninstall-hooks >/dev/null 2>&1 || fail "second uninstall-hooks failed"
+expect_hooks ""
+[ -z "$(prev_path)" ] || fail "uninstall left marker '$(prev_path)'"
+
+# Uninstalling when nothing was installed is a no-op.
+run uninstall-hooks >/dev/null 2>&1 || fail "uninstall without install was not a no-op"
+
 echo "dev.sh smoke test OK"

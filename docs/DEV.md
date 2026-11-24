@@ -22,6 +22,33 @@ cp /path/to/xenforo_2.3.x.zip ../xenforo_dev.zip   # parent dir, any xf 2.3 zip
 The addon source (`addon-src/OpenCredits/Credits/`) is bind-mounted live into the
 container; edits apply on next page load (templates recompile automatically).
 
+## Git hooks
+
+`./scripts/dev.sh install-hooks` points `core.hooksPath` at `.githooks/` so the
+tracked `pre-commit` hook runs on every commit. It runs:
+
+* `scripts/check-balance-writes.sh` — the ledger guardrail (also in CI).
+* `scripts/test-dev.sh` — dev.sh argument smoke test (also in CI).
+* `scripts/check-artifacts.py` — every `_output` JSON parses and `addon.json`
+  has a version (the exact script public CI runs).
+* `gitleaks dir .` — secret scan of the working tree when `gitleaks` is
+  installed; prints a one-line skip note when it is not.
+* `./scripts/dev.sh test check` — PHP lint, unit tests, PHPStan, only when the
+  Docker `web` container is running (skipped with a note otherwise).
+
+Required host tools: `bash`, `python3`, `git`. Optional: `docker compose` (the
+PHP checks) and `gitleaks` (the secret scan).
+
+* Checks read the **working tree**, not the staged index: a partially staged
+  file is checked as it sits on disk, not as it will be committed.
+* `git commit --no-verify` bypasses the hook for one commit — useful for WIP or
+  while the stack is down; run `./scripts/dev.sh test check` before pushing.
+* `install-hooks` leaves a different `core.hooksPath` untouched and exits
+  non-zero. `install-hooks --force` replaces it and records the old value in
+  `opencredits.previousHooksPath` (sentinel `__default__` when it was unset).
+* `./scripts/dev.sh uninstall-hooks` restores the recorded path, or unsets
+  `core.hooksPath` (back to `.git/hooks`) when the old value was the default.
+
 ## Useful commands
 
 | Command | Purpose |
@@ -29,7 +56,8 @@ container; edits apply on next page load (templates recompile automatically).
 | `./scripts/dev.sh help` | every command and test kind |
 | `./scripts/dev.sh up/down/logs` | lifecycle |
 | `./scripts/dev.sh fix-perms` | **run after any `xf-make:*`** — generators run as root; Apache needs writable `_output` |
-| `./scripts/dev.sh install-hooks` | install the tracked pre-commit hook (host checks + lint/unit/phpstan when the stack is up) |
+| `./scripts/dev.sh install-hooks [--force]` | install the tracked pre-commit hook (see [Git hooks](#git-hooks)) |
+| `./scripts/dev.sh uninstall-hooks` | restore the hooks path recorded at install |
 | `./scripts/dev.sh test check` | CI parity without integration: lint, unit, PHPStan |
 | `docker compose exec web php /var/www/html/cmd.php xf-addon:upgrade OpenCredits/Credits` | import new `_output` (bump version first) |
 | `docker compose exec web php /var/www/html/cmd.php oc-credits:rebuild` | rebuild balances from ledger |
