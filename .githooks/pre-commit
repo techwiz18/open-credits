@@ -7,6 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ./scripts/check-balance-writes.sh
+./scripts/test-dev.sh
 
 python3 - <<'PY'
 import glob, json, sys

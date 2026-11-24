@@ -75,7 +75,8 @@ passing silently. The suite also runs in random order
 (`executionOrder="random"`) so static-cache leaks between tests surface.
 Integration-only pins (for example `DemurrageAdaptersTest`, which needs the XF
 boot to build a controller) are not covered by public CI; run
-`./scripts/dev.sh test all` before merging.
+`./scripts/dev.sh test all` before merging (it includes `check`, so there is no
+need to run both).
 
 Covered today:
 - `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,

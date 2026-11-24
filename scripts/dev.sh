@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 cmd="${1:-help}"
+test_kinds="lint|unit|integration|stan|check|all|seed|clean"
 ZIP=$(ls ../xenforo_*.zip 2>/dev/null | head -n 1 || true)
 
 # Tests run from a synced copy under the mounted src/ tree (qa/ itself is not
@@ -167,7 +168,7 @@ PHP
         qa_integration
         ;;
       *)
-        echo "usage: dev.sh test {lint|unit|integration|stan|check|all|seed|clean}" >&2
+        echo "usage: dev.sh test {$test_kinds}" >&2
         exit 1
         ;;
     esac
@@ -176,6 +177,18 @@ PHP
     docker compose logs -f "${2:-web}"
     ;;
   *)
-    echo "usage: dev.sh {up|down|unpack|enable-debug|link-addon|fix-perms|install-hooks|test|logs}"
+    cat <<EOF
+usage: dev.sh <command> [args]
+
+  up / down / logs    start, stop, or follow the stack (logs: web by default)
+  unpack              unzip ../xenforo_*.zip into src/ (first setup)
+  enable-debug        add debug/development flags to src/src/config.php
+  link-addon          show the mounted addon dir and rebuild the addon
+  fix-perms           make _output writable after a generator/import
+  install-hooks       install the tracked pre-commit hook
+  test <kind> [args]  run the suite; kinds: $test_kinds
+                      extra args reach PHPUnit/PHPStan for unit, integration
+                      and stan; the other kinds reject them
+EOF
     ;;
 esac
