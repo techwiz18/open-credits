@@ -22,8 +22,14 @@ use Symfony\Component\Console\Output\BufferedOutput;
  */
 class DemurrageAdaptersTest extends TestCase
 {
+    /** Whether this test registered the Tools class extension. */
+    protected bool $toolsExtensionAdded = false;
+
     protected function setUp(): void
     {
+        // No static runner may leak in from another test, whatever the order.
+        CronAdapterSpy::$runner = null;
+
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -31,10 +37,14 @@ class DemurrageAdaptersTest extends TestCase
 
     protected function tearDown(): void
     {
-        // The spy is registered as a class extension only for these tests.
-        if (class_exists('XF', false) && \XF::app()) {
+        CronAdapterSpy::$runner = null;
+
+        // Only remove what this test added: cron/CLI tests must not strip an
+        // extension they did not register.
+        if ($this->toolsExtensionAdded && class_exists('XF', false) && \XF::app()) {
             \XF::app()->extension()->removeClassExtensions(\XF::getClassForAlias(Tools::class));
         }
+        $this->toolsExtensionAdded = false;
     }
 
     public function testCronPinsBudgetAndIntervalFlag(): void
@@ -66,6 +76,18 @@ class DemurrageAdaptersTest extends TestCase
         );
         $this->assertTrue($params['ran'], 'A busy first step is reported as ran.');
         $this->assertTrue($params['busy'], 'The busy flag drives the busy message.');
+
+        $output = $this->renderDemurrage($params);
+        $this->assertStringContainsString(
+            $this->renderedPhrase('ocadm_demurrage_busy'),
+            $output,
+            'Busy renders the busy message.'
+        );
+        $this->assertStringNotContainsString(
+            $this->renderedPhrase('ocadm_demurrage_run'),
+            $output,
+            'Busy does not show the run form.'
+        );
     }
 
     public function testAdminIntervalSkipStillShowsTheForm(): void
@@ -78,6 +100,18 @@ class DemurrageAdaptersTest extends TestCase
         $this->assertFalse($params['ran'], 'An interval skip is not a run.');
         $this->assertFalse($params['busy'], 'An interval skip is not busy.');
         $this->assertTrue($params['result']['done']);
+
+        $output = $this->renderDemurrage($params);
+        $this->assertStringContainsString(
+            $this->renderedPhrase('ocadm_demurrage_run'),
+            $output,
+            'An interval skip still renders the run form.'
+        );
+        $this->assertStringNotContainsString(
+            $this->renderedPhrase('ocadm_demurrage_busy'),
+            $output,
+            'An interval skip is not rendered as busy.'
+        );
     }
 
     public function testAdminIncompletePassIsReportedAsRanAndNotBusy(): void
@@ -91,6 +125,19 @@ class DemurrageAdaptersTest extends TestCase
         $this->assertFalse($params['busy']);
         $this->assertFalse($params['result']['done'], 'The template reports the incomplete pass.');
         $this->assertSame(3, $params['result']['processed']);
+
+        $output = $this->renderDemurrage($params);
+        $this->assertStringContainsString(
+            'Demurrage pass incomplete',
+            $output,
+            'The incomplete pass renders the incomplete guidance.'
+        );
+        $this->assertStringContainsString('Re-run to resume.', $output);
+        $this->assertStringNotContainsString(
+            $this->renderedPhrase('ocadm_demurrage_busy'),
+            $output,
+            'An incomplete pass is not rendered as busy.'
+        );
     }
 
     public function testCliRunsTheFullPassWithNoBudget(): void
@@ -167,9 +214,55 @@ class DemurrageAdaptersTest extends TestCase
 
         // The controller constructor resolves its root class through the
         // extension map, so register the spy before constructing it.
-        \XF::app()->extension()->addClassExtension(Tools::class, ToolsAdapterSpy::class);
+        if (!$this->toolsExtensionAdded) {
+            \XF::app()->extension()->addClassExtension(Tools::class, ToolsAdapterSpy::class);
+            $this->toolsExtensionAdded = true;
+        }
 
         return new ToolsAdapterSpy(\XF::app(), $request, $runner);
+    }
+
+    /**
+     * Renders the tracked admin template source directly. Compiling the
+     * `_output` source (rather than the DB-compiled copy) means a stale
+     * compiled template cannot hide a template regression.
+     *
+     * @param array<string, mixed> $params
+     */
+    protected function renderDemurrage(array $params): string
+    {
+        $addonRoot = getenv('OC_ADDON_SRC') ?: __DIR__ . '/../../../addon-src/OpenCredits/Credits';
+        $template = $addonRoot . '/_output/templates/admin/oc_tools_demurrage.html';
+        if (!is_file($template)) {
+            // Container runs from a synced copy: the bind-mounted addon dir
+            // still holds the tracked source.
+            $template = \XF::getAddOnDirectory() . '/OpenCredits/Credits/_output/templates/admin/oc_tools_demurrage.html';
+        }
+
+        $source = file_get_contents($template);
+        if ($source === false) {
+            $this->fail('Could not read the tracked demurrage template source.');
+        }
+
+        $compiled = \XF::app()->templateCompiler()->compile($source, \XF::app()->language());
+        /** @var array{code: callable} $data */
+        $data = eval($compiled);
+
+        return $data['code'](\XF::app()->templater(), $params);
+    }
+
+    /** Renders a phrase, failing if it is missing (XF would render its name). */
+    protected function renderedPhrase(string $name): string
+    {
+        $phrase = (string)\XF::phrase($name);
+
+        $this->assertNotSame(
+            $name,
+            $phrase,
+            "The $name phrase is missing, so the template branch is not really rendered."
+        );
+
+        return $phrase;
     }
 
     /** @return array<string, mixed> */

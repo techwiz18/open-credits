@@ -121,8 +121,10 @@ Covered today:
 - `DemurrageAdaptersTest` — #17 pins the three thin adapters (needs the XF
   boot; no DB writes): the cron budget
   (10s) and interval flag, the admin 25s budget plus `ran = ran || busy`
-  verdict mapping (busy reports busy, an interval skip still shows the form),
-  and the CLI full-run/no-budget path with busy vs incomplete wording.
+  verdict mapping — busy, interval-skip and incomplete outcomes are rendered
+  through the tracked `oc_tools_demurrage` source and asserted on their visible
+  phrase output (busy message, run form, resume guidance) — and the CLI
+  full-run/no-budget path with busy vs incomplete wording.
 - `AwardEligibilityTest` — banned, rejected, and disabled members earn nothing
   from any trigger, while valid and awaiting-approval members earn normally;
   ineligible members also leave no daily-claim marker behind.
