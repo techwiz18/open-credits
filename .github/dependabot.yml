@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # Actions are pinned to tags except gitleaks, which is pinned to a commit so
+  # a major release cannot change its required inputs without review.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
