@@ -12,9 +12,10 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `addon.json` | Add-on meta. Current: 0.13.1 / 941. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
-| `Service/Transact.php` | **Only place that writes balances.** Row lock + txn + log; supplies balance/event callables to module classes |
+| `Service/Transact.php` | Façade for every money path (earn, transfer, redeem, charge, prune, rebuild); supplies the `LedgerWrite` module and keeps the public API integrators call |
+| `Service/LedgerWrite.php` | **The one author of balance changes and ledger rows.** `commit(movement)` owns user-row lock order, currency precision, the overdraw policy, `xf_oc_balance`, the `oc_credits` mirror, and the `xf_oc_transaction` row shape; callers own the transaction and the post-commit effects |
 | `Service/Ledger.php` | Ledger vocabulary: the one trigger-label map (`label()`, award-only `eventTriggers()`), trigger constants, and stored markers (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) shared by history, alerts, and the prune guard |
-| `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; burns and orphan purges go through callables supplied by `Transact` |
+| `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; burns and orphan purges go through the `LedgerWrite` module supplied by `Transact` |
 | `Service/ContentCharge.php` | `[charge]` premium-content decision: parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
 | `BbCode/Charge.php` | `[charge=X]` renderer: view gates, locked box, author stats |
@@ -33,7 +34,7 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
   main stat + `xf_user.oc_credits` mirror); `visible` currencies list in
   postbit/menu; the profile tab lists all active ones.
 * `xf_oc_balance(user_id, currency_id, balance)` — cached per-currency balances
-  maintained by `Transact` on every write; missing row means 0. Keyed
+  maintained by `LedgerWrite` on every write; missing row means 0. Keyed
   `(currency_id, balance)` (`currency_balance`) so the leaderboard widget is a
   range scan, not a filesort.
 * `xf_oc_event(event_id, currency_id, trigger, amount, forum_ids, usergroup_ids, max_per_day, active)`
@@ -235,11 +236,12 @@ change fires the `oc_credits_adjust` code event with
 
 ## Conventions for new work
 
-* Never write balances outside `Service/Transact.php`. `DemurrageRunner`
-  mutates balances only through the `burn` / `purgeOrphan` callables that
-  `Transact::demurrageRunner()` supplies.
+* Never write balances or insert ledger rows outside `Service/LedgerWrite.php`
+  (callers reach it through `Transact::ledgerWrite()`; `Transact` still holds
+  its legacy `applyBalanceDelta` until the last caller moves). `DemurrageRunner`
+  mutates balances only through the module.
 * Domain logic that is not an XF service is a plain class under `Service/`
-  (`AwardScope`, `InflationClamp`, `DemurrageRunner`, `ContentCharge`), constructed directly or
+  (`AwardScope`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `ContentCharge`), constructed directly or
   through a `Transact` factory. You do not need `\XF::app()->service()` for it.
 * Per-request caches belong to the presentation layer (renderer/controller).
   Service reads stay DB-fresh so moderation and cleanup see deletions

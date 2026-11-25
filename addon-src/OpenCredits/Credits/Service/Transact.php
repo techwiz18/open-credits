@@ -802,6 +802,17 @@ class Transact extends AbstractService
     }
 
     /**
+     * The ledger write module. Callers keep their own transaction, side
+     * tables, cache clearing and post-commit event.
+     */
+    public function ledgerWrite(): LedgerWrite
+    {
+        return new LedgerWrite($this->db(), function (): int {
+            return $this->primaryCurrencyId();
+        });
+    }
+
+    /**
      * Demurrage runner for the whole pass. The cron job, admin Tools action,
      * and CLI command all go through this module; the legacy wrappers below
      * keep existing callers and the characterization tests on their entry
@@ -818,22 +829,7 @@ class Transact extends AbstractService
                 return $this->inflationSettings();
             },
             $currencyId,
-            function (int $userId, float $amount, int $now) use ($db, $currencyId): void {
-                $this->applyBalanceDelta($userId, $currencyId, -$amount);
-                $db->insert('xf_oc_transaction', [
-                    'user_id' => $userId,
-                    'currency_id' => $currencyId,
-                    'amount' => -$amount,
-                    'trigger' => Ledger::TRIGGER_DEMURRAGE,
-                    'content_type' => '',
-                    'content_id' => 0,
-                    'note' => 'Demurrage',
-                    'log_date' => $now,
-                ]);
-            },
-            function (int $userId) use ($db, $currencyId): void {
-                $db->delete('xf_oc_balance', 'user_id = ? AND currency_id = ?', [$userId, $currencyId]);
-            },
+            $this->ledgerWrite(),
             function (int $userId, float $amount) use ($currencyId): void {
                 self::clearBalanceCache($userId);
                 $this->fireAdjustEvent([$userId, $currencyId, -$amount, Ledger::TRIGGER_DEMURRAGE, 0]);

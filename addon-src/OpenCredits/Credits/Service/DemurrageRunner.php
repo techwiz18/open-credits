@@ -24,11 +24,8 @@ class DemurrageRunner
 
     protected int $currencyId;
 
-    /** @var callable(int, float, int): void Applies one burn (balance + ledger). */
-    protected $burn;
-
-    /** @var callable(int): void Drops a deleted member's cached balance row. */
-    protected $purgeOrphan;
+    /** @var LedgerWrite Burns and orphan purges. */
+    protected $ledgerWrite;
 
     /** @var callable(int, float): void Post-commit cache clear and event. */
     protected $afterBurn;
@@ -36,23 +33,19 @@ class DemurrageRunner
     /**
      * @param mixed $db
      * @param callable(): array{enabled: bool, rate: float, days: int} $settings
-     * @param callable(int, float, int): void $burn
-     * @param callable(int): void $purgeOrphan
      * @param callable(int, float): void $afterBurn
      */
     public function __construct(
         $db,
         callable $settings,
         int $currencyId,
-        callable $burn,
-        callable $purgeOrphan,
+        LedgerWrite $ledgerWrite,
         callable $afterBurn
     ) {
         $this->db = $db;
         $this->settings = $settings;
         $this->currencyId = $currencyId;
-        $this->burn = $burn;
-        $this->purgeOrphan = $purgeOrphan;
+        $this->ledgerWrite = $ledgerWrite;
         $this->afterBurn = $afterBurn;
     }
 
@@ -391,13 +384,27 @@ class DemurrageRunner
                     );
                     $burn = Transact::calculateDemurrage($balance, $rate, $decimals);
                     if ($burn > 0) {
-                        ($this->burn)($userId, $burn, $now);
+                        $verdict = $this->ledgerWrite->commit([
+                            'currency_id' => $this->currencyId,
+                            'trigger' => Ledger::TRIGGER_DEMURRAGE,
+                            'overdraft' => 'never',
+                            'note' => 'Demurrage',
+                            'log_date' => $now,
+                            'legs' => [
+                                ['user_id' => $userId, 'amount' => -$burn],
+                            ],
+                        ]);
+                        // A currency deactivated mid-pass fails closed here;
+                        // report nothing burned instead of counting it.
+                        if ($verdict !== 'ok') {
+                            $burn = 0.0;
+                        }
                     }
                 } else {
                     // Orphan balance (member deleted): drop the cached row.
                     // The ledger stays as financial history; the rebuild no
                     // longer resurrects it (it only rebuilds live members).
-                    ($this->purgeOrphan)($userId);
+                    $this->ledgerWrite->purgeBalance($userId, $currencyId);
                 }
                 $db->commit();
             } catch (\Throwable $e) {
