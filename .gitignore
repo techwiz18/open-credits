@@ -9,6 +9,8 @@ db_data/
 .env
 # Session handoff notes (may contain dev-only credentials) — never commit
 HANDOFF.md
+# Local agent scratch state (PR comment seen lists, etc.)
+.scratch/
 # OS
 .DS_Store
 Thumbs.db
