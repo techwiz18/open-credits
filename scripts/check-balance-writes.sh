@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Guardrail: balances are written only by Service/Transact.php (and one-time
-# Setup migrations). See docs/ARCHITECTURE.md "Conventions for new work".
+# Guardrail: balances are written only by Service/LedgerWrite.php (legacy
+# callers still go through Service/Transact.php, plus one-time Setup
+# migrations). See docs/ARCHITECTURE.md "Conventions for new work".
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

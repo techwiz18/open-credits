@@ -11,3 +11,7 @@ _Avoid_: award limits, eligibility check
 **Award limits**:
 Per-award gates applied after eligibility passes (daily caps, reaction dedupe keys, faucet and balance-cap clamps).
 _Avoid_: award eligibility, throttling
+
+**Movement**:
+One intent to change balances: a currency, a trigger, and one or more legs, each a member and a signed amount. Applied whole or not at all.
+_Avoid_: transaction, entry, delta
