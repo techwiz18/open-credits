@@ -43,6 +43,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: dev.sh arg handling smoke test
         run: ./scripts/test-dev.sh
+      - name: PR comments smoke test
+        run: ./scripts/test-pr-comments.sh
 
   secrets-scan:
     runs-on: ubuntu-latest

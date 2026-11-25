@@ -95,3 +95,7 @@ Triage uses the five default labels (`needs-triage`, `needs-info`, `ready-for-ag
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### PR review comments
+
+Bot review comments are triaged with a fixed rubric instead of read ad hoc. See `docs/agents/pr-comments.md`.
