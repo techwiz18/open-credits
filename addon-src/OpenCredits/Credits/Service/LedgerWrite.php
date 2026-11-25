@@ -37,6 +37,12 @@ class LedgerWrite
     /**
      * Applies one balance change. Must run inside the caller's transaction.
      *
+     * Movement fields: currency_id, trigger, legs (user_id, amount and an
+     * optional per-leg content_id), content_type, content_id, note, event_id,
+     * log_date, overdraft ('currency' | 'never'), and decimals (pins
+     * quantization to a caller's snapshot; omitted means the currency's
+     * current precision).
+     *
      * Returns 'ok' when written, or 'zero' (nothing to move), 'no_user' (a
      * leg's member is missing), 'currency_inactive' (unknown or inactive
      * currency) or 'insufficient' (the movement would breach the floor).
@@ -85,10 +91,15 @@ class LedgerWrite
         if (!$currency || !(int)$currency['active']) {
             return 'currency_inactive';
         }
-        $decimals = (int)$currency['decimals'];
+        // Callers that snapshot precision (a resumable demurrage pass) pin it
+        // here so the row and the caller's own total cannot disagree. The
+        // column holds 2 decimals, so a wider override is not honoured.
+        $decimals = isset($movement['decimals'])
+            ? max(0, min(2, (int)$movement['decimals']))
+            : (int)$currency['decimals'];
 
         $rows = [];
-        $negative = [];
+        $net = [];
         foreach ($legs as $leg) {
             // Quantize to the currency's smallest unit so the ledger never
             // holds sub-decimal values that display misleadingly (e.g. 0.50
@@ -103,8 +114,15 @@ class LedgerWrite
                 'amount' => $amount,
                 'content_id' => $leg['content_id'] ?? null,
             ];
-            if ($amount < 0) {
-                $negative[$userId] = ($negative[$userId] ?? 0.0) + $amount;
+            // The floor applies to the member's net delta, not to each leg:
+            // a movement may debit and credit the same member.
+            $net[$userId] = ($net[$userId] ?? 0.0) + $amount;
+        }
+
+        $belowFloor = [];
+        foreach ($net as $userId => $delta) {
+            if ($delta < 0) {
+                $belowFloor[$userId] = $delta;
             }
         }
 
@@ -112,8 +130,8 @@ class LedgerWrite
         // allow_negative (positive deltas are always legal, so a member with
         // a legacy negative balance can still earn their way out).
         $policy = ($movement['overdraft'] ?? 'never') === 'currency' ? 'currency' : 'never';
-        if ($negative && ($policy === 'never' || !(int)$currency['allow_negative'])) {
-            $negativeIds = array_keys($negative);
+        if ($belowFloor && ($policy === 'never' || !(int)$currency['allow_negative'])) {
+            $negativeIds = array_keys($belowFloor);
             $placeholders = implode(',', array_fill(0, count($negativeIds), '?'));
             $balances = [];
             foreach ($db->fetchAll(
@@ -123,7 +141,7 @@ class LedgerWrite
             ) as $row) {
                 $balances[(int)$row['user_id']] = (float)$row['balance'];
             }
-            foreach ($negative as $userId => $delta) {
+            foreach ($belowFloor as $userId => $delta) {
                 if (($balances[$userId] ?? 0.0) + $delta < 0) {
                     return 'insufficient';
                 }

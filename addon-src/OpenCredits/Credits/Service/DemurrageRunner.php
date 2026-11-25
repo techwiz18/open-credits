@@ -390,6 +390,9 @@ class DemurrageRunner
                             'overdraft' => 'never',
                             'note' => 'Demurrage',
                             'log_date' => $now,
+                            // The burn was computed at the pass's snapshot
+                            // precision; quantize it at the same one.
+                            'decimals' => $decimals,
                             'legs' => [
                                 ['user_id' => $userId, 'amount' => -$burn],
                             ],
