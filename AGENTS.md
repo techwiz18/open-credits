@@ -7,15 +7,22 @@ lives in `.agents/skills/` (load it as described below).
 
 ## Project shape
 
+Paths below and in issues are relative to the add-on root
+`addon-src/OpenCredits/Credits/` unless they start with `docs/`, `qa/`,
+`scripts/`, or `src/`.
+
 - **Add-on source:** `addon-src/OpenCredits/Credits/` (bind-mounted into the dev forum).
 - **Runtime `src/`:** licensed XenForo 2.3.10, gitignored — never commit it.
   The XF tree unpacks at `src/src/XF/` (not `src/XF/`); see `docs/DEV.md`.
-- **`_output/`:** the development surface (templates, phrases, options, routes, etc.).
+- **`_output/`:** the add-on's development surface (templates, phrases, options,
+  routes, etc.).
 - **`_data/`:** generated release artifacts (gitignored); never edit by hand.
 - **Tests:** `./scripts/dev.sh help` lists every command and test kind; test
   details (including arg forwarding) are in `qa/tests/README.md`. The tracked
   pre-commit hook runs `test check` plus the host checks; `install-hooks` wires
-  it up.
+  it up. Integration needs the licensed dev forum, so neither CI nor the hook
+  runs it: run `./scripts/dev.sh test all` (it seeds itself) before pushing
+  changes to services or adapters.
 - **Docs:** `docs/DEV.md`, `docs/ARCHITECTURE.md`, `docs/XF-DEV-GOTCHAS.md`, `docs/API.md`.
 - **`HANDOFF.md`:** local-only session notes (gitignored).
 

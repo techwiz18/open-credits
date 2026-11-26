@@ -249,6 +249,9 @@ change fires the `oc_credits_adjust` code event with
   (callers reach it through `Transact::ledgerWrite()`; `Transact` still holds
   its legacy `applyBalanceDelta` until the last caller moves). `DemurrageRunner`
   mutates balances only through the module.
+* Test stubs derive canned service results from the owner's factory (a stub
+  subclass may call the protected `result()`), never hand-copy the keys, so a
+  new result field flows through one definition.
 * Domain logic that is not an XF service is a plain class under `Service/`
   (`AwardScope`, `AccountStanding`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `ContentCharge`), constructed directly or
   through a `Transact` factory. You do not need `\XF::app()->service()` for it.
