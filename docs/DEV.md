@@ -15,7 +15,7 @@ A XenForo 2.3.x full zip is required for the runtime but is **never committed**
 cp /path/to/xenforo_2.3.x.zip ../xenforo_dev.zip   # parent dir, any xf 2.3 zip
 ./scripts/dev.sh up        # build + start web/db/phpmyadmin
 ./scripts/dev.sh unpack    # unzips ../xenforo_*.zip into src/
-# open http://localhost:8080/install — DB host: db, name: xf_dev, user: xf, pass: opencredits
+# open the forum root `docker compose ps` reports, then /install — DB host: db, name: xf_dev, user: xf, pass: opencredits
 ./scripts/dev.sh enable-debug
 ```
 
@@ -62,14 +62,17 @@ project files are still scanned.
 | `./scripts/dev.sh install-hooks [--force]` | install the tracked pre-commit hook (see [Git hooks](#git-hooks)) |
 | `./scripts/dev.sh uninstall-hooks` | restore the hooks path recorded at install |
 | `./scripts/dev.sh test check` | CI parity without integration: lint, unit, PHPStan |
+| `./scripts/dev.sh test all` | seeds the forum fixtures, then lint, unit, PHPStan, integration (skips count as failures) |
 | `docker compose exec web php /var/www/html/cmd.php xf-addon:upgrade OpenCredits/Credits` | import new `_output` (bump version first) |
 | `docker compose exec web php /var/www/html/cmd.php oc-credits:rebuild` | rebuild balances from ledger |
 | `docker compose exec web php /var/www/html/cmd.php oc-credits:demurrage --preview` | preview the next demurrage pass |
 | `docker compose exec -T web php /var/www/html/cmd.php <cmd>` | non-interactive (pipe `y` for confirms) |
 
-* Forum: http://localhost:8080 · phpMyAdmin: http://localhost:8081 (root/rootpass)
-* Port clash (something else on 8080)? Copy `.env.example` to `.env` and set
-  `WEB_PORT=8082` — the compose file honors it, defaulting to 8080.
+* Forum and phpMyAdmin: the ports `docker compose ps` reports for `web` and
+  `pma` (defaults 8080/8081; a checkout `.env` may set `WEB_PORT=8082` — a
+  *different* project often owns 8080). phpMyAdmin logs in as root/rootpass.
+* Port clash? Copy `.env.example` to `.env` and set `WEB_PORT=8082` — the
+  compose file honors it, defaulting to 8080.
 * Parallel agent session? Isolate the whole stack — project name, all ports,
   and (consequently) a separate DB volume needing its own forum install:
   `COMPOSE_PROJECT_NAME=open-credits-b WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 docker compose up -d`.
@@ -86,11 +89,7 @@ below runs on the dev stack before any release:
 
 ```bash
 docker compose exec -T web php /var/www/html/cmd.php xf-addon:validate-json OpenCredits/Credits
-./scripts/dev.sh test seed        # content-dependent integration tests
-./scripts/dev.sh test unit
-./scripts/dev.sh test integration
-./scripts/dev.sh test stan
-./scripts/dev.sh test lint
+./scripts/dev.sh test all         # seeds fixtures, then lint, unit, PHPStan, integration
 docker compose exec -T web php /var/www/html/cmd.php xf-addon:build-release OpenCredits/Credits
 # release notes (docs/adr/0003-what-1-0-promises.md):
 #   Breaking (forum owners) - data meaning changes, manual admin action
@@ -126,6 +125,10 @@ See `qa/tests/README.md` for the test setup.
 * When a computation moves behind a delegate or shim, pin the old function's
   boundary and sentinel inputs (zero, negative, disabled-sentinel) in unit
   tests — the shim must preserve them exactly.
+* When two paths return the same value (preload vs lazy lookup, cached vs
+  live), assert them against each other in an integration test, including the
+  case where one path has no row at all: that is where the shapes diverge, and
+  it is invisible on a forum that happens to have data.
 * Review reads the committed diff: commit the finished change first, then run
   the review. An amend after review needs a re-run.
 
@@ -146,12 +149,28 @@ docker compose exec -T web php /var/www/html/cmd.php xf-rebuild:users
   pushed to origin for backup as you go.
 * Merge to `main` only after the feature is fully tested on dev;
   cut releases from `main` afterwards.
+* A commit that changes member- or admin-visible behaviour carries a
+  `Behavior:` trailer, one sentence: who notices what. Release notes are then
+  assembled with `git log v<last>..HEAD --grep='^Behavior:'` instead of from
+  memory, which is how a shipped fix gets re-announced as news.
 
 ## Release
+
+`main` is protected: work lands through a pull request (two required checks
+plus a review, and auto-merge is off). The merge may be a rebase, so the commit
+that lands is *not* the one tested locally — fetch, reset `main` to
+`origin/main`, and build and tag that tree:
 
 ```bash
 docker compose exec -T web php /var/www/html/cmd.php xf-addon:build-release OpenCredits/Credits
 # → addon-src/OpenCredits/Credits/_releases/OpenCredits-Credits-x.y.z.zip (gitignored)
+git tag -a vx.y.z -m "OpenCredits x.y.z" && git push origin vx.y.z
+gh release create vx.y.z --notes-file <notes> \
+  "addon-src/OpenCredits/Credits/_releases/OpenCredits-Credits-x.y.z.zip#OpenCredits-Credits-x.y.z.zip"
 ```
+
+The version badge in README is a shields.io URL and needs no edit; the
+hardcoded copies live in `docs/ARCHITECTURE.md` and the resource-page
+changelog.
 
 See `ARCHITECTURE.md` for the code map and `XF-DEV-GOTCHAS.md` before touching `_output/`.
