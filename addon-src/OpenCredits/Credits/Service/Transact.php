@@ -225,8 +225,10 @@ class Transact extends AbstractService
             if (!$user) {
                 return false;
             }
-            return empty($user->is_banned)
-                && !in_array($user->get('user_state'), ['rejected', 'disabled'], true);
+            return AccountStanding::canEarn(
+                (string)$user->get('user_state'),
+                !empty($user->is_banned)
+            );
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits eligibility check failed: ');
             return false;
@@ -510,10 +512,27 @@ class Transact extends AbstractService
         try {
             $first = min($fromUserId, $toUserId);
             $second = max($fromUserId, $toUserId);
-            $locked = $db->fetchAll('SELECT user_id FROM xf_user WHERE user_id IN (?, ?) FOR UPDATE', [$first, $second]);
+            $locked = $db->fetchAll(
+                'SELECT user_id, user_state, is_banned FROM xf_user'
+                . ' WHERE user_id IN (?, ?) ORDER BY user_id FOR UPDATE',
+                [$first, $second]
+            );
             if (count($locked) !== 2) {
                 $db->rollBack();
                 return false;
+            }
+            // Account standing is enforced here, not only in the controller,
+            // so integrators calling the service cannot bypass it. The state
+            // comes from the locked row, so a concurrent ban cannot slip in
+            // between the check and the write.
+            foreach ($locked AS $row) {
+                $allowed = (int)$row['user_id'] === $fromUserId
+                    ? AccountStanding::canSend((string)$row['user_state'], !empty($row['is_banned']))
+                    : AccountStanding::canReceive((string)$row['user_state'], !empty($row['is_banned']));
+                if (!$allowed) {
+                    $db->rollBack();
+                    return false;
+                }
             }
             // Quantize to the currency's smallest unit (see adjust()).
             $currency = $db->fetchRow(
@@ -607,7 +626,8 @@ class Transact extends AbstractService
      * for the same content, even if its price changes. Never overdraws.
      *
      * Returns 'ok', 'already_paid', 'self', 'no_funds', 'invalid' or
-     * 'invalid_author' (reader or author is not a valid, non-banned user).
+     * 'invalid_author' (the payer may not unlock, or the author may not
+     * receive credits).
      */
     public function chargeForContent(
         int $fromUserId,
@@ -664,9 +684,10 @@ class Transact extends AbstractService
      * code row, so limited-use caps stay exact under concurrency.
      *
      * Returns 'ok' or a failure code: 'not_found', 'inactive', 'expired',
-     * 'exhausted', 'already_redeemed', 'invalid_amount', 'capped'. On 'ok',
-     * $granted receives ['amount', 'currency_id'] for the result view.
-     * 'capped' leaves the code unused so it can be redeemed after spending.
+     * 'exhausted', 'already_redeemed', 'ineligible', 'invalid_amount',
+     * 'capped'. On 'ok', $granted receives ['amount', 'currency_id'] for the
+     * result view. 'capped' leaves the code unused so it can be redeemed
+     * after spending.
      */
     public function redeem(int $userId, string $code, ?array &$granted = null): string
     {
@@ -712,10 +733,19 @@ class Transact extends AbstractService
                 return 'exhausted';
             }
 
-            $userExists = $db->fetchOne('SELECT user_id FROM xf_user WHERE user_id = ? FOR UPDATE', $userId);
-            if (!$userExists) {
+            $userRow = $db->fetchRow(
+                'SELECT user_id, user_state, is_banned FROM xf_user WHERE user_id = ? FOR UPDATE',
+                $userId
+            );
+            if (!$userRow) {
                 $db->rollBack();
                 return 'invalid_amount';
+            }
+            // Redeeming is earning: the same verdict as awards, enforced at
+            // the locked row so an integrator cannot skip the controller.
+            if (!AccountStanding::canEarn((string)$userRow['user_state'], !empty($userRow['is_banned']))) {
+                $db->rollBack();
+                return 'ineligible';
             }
             $currencyId = (int)$row['currency_id'];
             $currency = $db->fetchRow(

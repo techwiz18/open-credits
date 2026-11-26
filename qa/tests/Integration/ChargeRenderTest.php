@@ -232,6 +232,7 @@ class ChargeRenderTest extends TestCase
         return [
             [true, 'valid'],
             [false, 'email_confirm'],
+            [false, 'moderated'],
         ];
     }
 

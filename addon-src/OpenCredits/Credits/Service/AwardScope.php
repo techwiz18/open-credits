@@ -60,8 +60,10 @@ class AwardScope
                 $groups,
                 (string)($row['content_state'] ?? '') === 'visible',
                 $isPost && (int)($row['position'] ?? 0) === 0,
-                empty($row['is_banned'])
-                    && !in_array($row['user_state'] ?? '', ['rejected', 'disabled'], true)
+                AccountStanding::canEarn(
+                    (string)($row['user_state'] ?? ''),
+                    !empty($row['is_banned'])
+                )
             )) {
                 continue;
             }
