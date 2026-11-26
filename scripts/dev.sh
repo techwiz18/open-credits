@@ -33,6 +33,18 @@ qa_integration() {
     --display-skipped --fail-on-skipped "$@"
 }
 
+# Skips count as failures, but PHPUnit prints them as "OK, but some tests were
+# skipped!", which reads like a pass; name the usual cause and the fix.
+integration_failed() {
+  echo "integration failed. Skips count as failures: the seeded fixtures are" >&2
+  echo "missing or stale. Run './scripts/dev.sh test seed' and retry." >&2
+  exit 1
+}
+
+seed_fixtures() {
+  qatmp env OC_XF_ROOT=/var/www/html php seed-dev-content.php "$1"
+}
+
 qa_stan() {
   qatmp env OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan \
     analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit "$@"
@@ -194,7 +206,7 @@ PHP
         qa_unit "$@"
         ;;
       integration)
-        qa_integration "$@"
+        qa_integration "$@" || integration_failed
         ;;
       stan)
         qa_stan "$@"
@@ -203,11 +215,14 @@ PHP
         qa_check_steps
         ;;
       seed|clean)
-        qatmp env OC_XF_ROOT=/var/www/html php seed-dev-content.php "$kind"
+        seed_fixtures "$kind"
         ;;
       all)
         qa_check_steps
-        qa_integration
+        # The content-dependent tests need their fixtures, and the run leaves
+        # them consumed; seeding here keeps `test all` green twice in a row.
+        seed_fixtures seed
+        qa_integration || integration_failed
         ;;
       *)
         echo "usage: dev.sh test {$test_kinds}" >&2
