@@ -12,7 +12,7 @@
 					<div class="block-row block-row--separated">
 						{{ phrase('ocadm_demurrage_incomplete', {
 							'accounts': $result.accounts|number,
-							'amount': $result.burned|number($preview.currency.decimals),
+							'amount': $result.burned|number($preview.decimals),
 							'currency': $preview.currency.title
 						}) }}
 					</div>
@@ -20,7 +20,7 @@
 					<div class="block-row block-row--separated">
 						{{ phrase('ocadm_demurrage_done', {
 							'accounts': $result.accounts|number,
-							'amount': $result.burned|number($preview.currency.decimals),
+							'amount': $result.burned|number($preview.decimals),
 							'currency': $preview.currency.title
 						}) }}
 					<xf:else />
@@ -40,7 +40,7 @@
 				<a href="{{ link('oc-tools') }}" class="button">{{ phrase('ocadm_back_to_tools') }}</a>
 			</div>
 		<xf:else />
-			<xf:if is="!$preview.enabled or $preview.rate <= 0 or !$preview.currency">
+			<xf:if is="!$preview.active">
 				<div class="block-body">
 					<div class="block-row block-row--separated">
 						{{ phrase('ocadm_demurrage_disabled') }}
@@ -79,7 +79,7 @@
 							<xf:if is="$preview.accounts > 0">
 								{{ phrase('ocadm_demurrage_preview', {
 									'accounts': $preview.accounts|number,
-									'amount': $preview.total|number($preview.currency.decimals),
+									'amount': $preview.total|number($preview.decimals),
 									'currency': $preview.currency.title
 								}) }}
 							<xf:else />

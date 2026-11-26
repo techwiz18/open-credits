@@ -1002,16 +1002,12 @@ class Transact extends AbstractService
     }
 
     /**
-     * Demurrage burn for a balance: rate percent, currency-rounded, floored
-     * at zero. Pure for unit tests.
+     * Demurrage burn for a balance. Kept for integrators; the runner owns
+     * the math so previews and passes cannot drift.
      */
     public static function calculateDemurrage(float $balance, float $rate, int $decimals): float
     {
-        if ($balance <= 0 || $rate <= 0) {
-            return 0.0;
-        }
-        $burn = round($balance * min(100.0, $rate) / 100, max(0, $decimals));
-        return max(0.0, min($burn, $balance));
+        return DemurrageRunner::burn($balance, $rate, $decimals);
     }
 
     protected function passesDailyLimit(int $userId, string $trigger, int $maxPerDay, int $currencyId): bool
