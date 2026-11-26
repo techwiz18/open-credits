@@ -168,16 +168,18 @@ The target is a complete, admin-tunable credits economy: members earn, spend,
 and move credits; admins can steer the economy; other add-ons can integrate
 through the transaction service.
 
-**Near term: hardening** — no new surface area:
+**Shipped: hardening** — the near-term items are done:
 
-* Remove the per-post balance lookup on the postbit.
-* Rate-limit credit write endpoints.
-* Move large balance rebuilds and history pruning to resumable background jobs.
+* The postbit reads balances from one preloaded query instead of per-post.
+* Credit write endpoints go through XenForo's flood check.
+* History pruning batches and resumes by member instead of doing one long
+  request (rebuilds still run in one pass).
+* A currency precision drop is refused while any balance would round.
 
 **Shipped: inflation control** ([#8](../../issues/8)) — the last core economy
 epic: an on/off toggle plus a balance cap, a daily faucet limit, and
 demurrage/decay so admins can keep the money supply in check. This is the
-complete core scope; the roadmap below is hardening plus the 1.0 pass.
+complete core scope; what remains is the 1.0 pass.
 
 **Extension points, not core** — interest/tax/paychecks ([#6](../../issues/6))
 and payments/shop ([#7](../../issues/7)) are deliberately not bundled. They fit
