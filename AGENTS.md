@@ -39,8 +39,12 @@ PHPStan) inside the `web` container. Inside it the addon is
 
 - Start each issue from `origin/main` after `git fetch`: `git switch -c
   dev/<issue>-<slug> origin/main`. Never stack a new branch on another feature
-  tip; if the session starts detached or ahead, rebase your commit onto
-  `origin/main` before pushing.
+  tip. If the session starts detached or already has commits, create the branch
+  from `origin/main` and cherry-pick only this issue's commits
+  (`git switch -c dev/<issue>-<slug> origin/main && git cherry-pick <sha>...`);
+  a rebase would replay the inherited branch too.
+- One branch and PR per issue. If `dev/<issue>-<slug>` already exists on the
+  remote, continue on that branch instead of creating a second one.
 - Features on `dev/*`; merge to `main` only after full testing; cut releases
   from `main`. `main` is always release-ready.
 - An implemented issue is finished when it is committed, pushed, and opened as
