@@ -231,7 +231,11 @@ class ContentCharge
         $isStaff = $userId > 0
             && (!empty($visitor->is_staff) || !empty($visitor->is_admin) || !empty($visitor->is_moderator));
         $isBypass = $userId > 0 && $visitor->hasPermission('general', 'ocChargeFree');
-        $hasPaid = $userId > 0 && $this->hasPaid(
+        // A denied visitor never sees the block and resolve() ignores paid
+        // state for them, so skip the lookup that cannot change the verdict
+        // (and would otherwise throw before the denial).
+        $canSee = $canView || $isAuthor || $isStaff || $isBypass;
+        $hasPaid = $canSee && $userId > 0 && $this->hasPaid(
             $userId,
             (string)$content->getEntityContentType(),
             (int)$content->getEntityId(),
