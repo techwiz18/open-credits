@@ -72,7 +72,11 @@ class DemurrageRunner
      * `busy` step aborts immediately so overlapping admin/CLI/cron runs
      * cannot start a second pass over the same balances.
      *
-     * @return array<string, mixed> verdict/progress for the caller
+     * @return array{
+     *     verdict: string, ran: bool, busy: bool, done: bool,
+     *     processed: int, burned: float, accounts: int,
+     *     lastRun: int, nextRun: int, decimals: int
+     * } verdict/progress for the caller
      */
     public function run(int $batchSize = 500, bool $ignoreInterval = true, ?int $timeBudget = null): array
     {
@@ -124,7 +128,12 @@ class DemurrageRunner
      * Snapshot for the admin Tools page: current rate, last/next run, and
      * what a pass would burn right now.
      *
-     * @return array<string, mixed>
+     * @return array{
+     *     enabled: bool, active: bool, rate: float, days: int,
+     *     currency: array<string, mixed>|null, decimals: int,
+     *     lastRun: int, nextRun: int, inProgress: bool,
+     *     accounts: int, total: float
+     * }
      */
     public function preview(): array
     {
@@ -206,7 +215,11 @@ class DemurrageRunner
     /**
      * One resumable demurrage batch.
      *
-     * @return array<string, mixed>
+     * @return array{
+     *     ran: bool, done: bool, busy: bool,
+     *     processed: int, burned: float, accounts: int,
+     *     lastRun: int, nextRun: int, decimals: int
+     * }
      */
     protected function step(int $batchSize, bool $ignoreInterval): array
     {
@@ -496,7 +509,11 @@ class DemurrageRunner
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{
+     *     verdict: string, ran: bool, busy: bool, done: bool,
+     *     processed: int, burned: float, accounts: int,
+     *     lastRun: int, nextRun: int, decimals: int
+     * }
      */
     protected function result(
         string $verdict,
