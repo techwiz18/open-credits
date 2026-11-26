@@ -12,7 +12,9 @@ namespace OpenCredits\Credits\Service;
  * must match the token, so a concurrent runner that loses the race gets
  * `busy` instead of double-burning. The rate and decimals are snapshotted at
  * pass start so a resumable pass burns every member at the same rate even if
- * the admin changes settings mid-pass.
+ * the admin changes settings mid-pass. The burn math and the "can a pass run
+ * at all" verdict live here too, so preview, the pass, and every adapter
+ * agree by construction.
  */
 class DemurrageRunner
 {
@@ -89,7 +91,8 @@ class DemurrageRunner
                     $burned + $step['burned'],
                     $accounts + $step['accounts'],
                     $step['lastRun'],
-                    $step['nextRun']
+                    $step['nextRun'],
+                    $step['decimals']
                 );
             }
             if (!$step['ran']) {
@@ -100,7 +103,8 @@ class DemurrageRunner
                     $burned,
                     $accounts,
                     $step['lastRun'],
-                    $step['nextRun']
+                    $step['nextRun'],
+                    $step['decimals']
                 );
             }
             $ran = true;
@@ -108,10 +112,10 @@ class DemurrageRunner
             $burned += $step['burned'];
             $accounts += $step['accounts'];
             if ($step['done']) {
-                return $this->result('done', true, $processed, $burned, $accounts, $step['lastRun'], $step['nextRun']);
+                return $this->result('done', true, $processed, $burned, $accounts, $step['lastRun'], $step['nextRun'], $step['decimals']);
             }
             if ($timeBudget !== null && (microtime(true) - $start) >= $timeBudget) {
-                return $this->result('resume', true, $processed, $burned, $accounts, $step['lastRun'], $step['nextRun']);
+                return $this->result('resume', true, $processed, $burned, $accounts, $step['lastRun'], $step['nextRun'], $step['decimals']);
             }
         } while (true);
     }
@@ -136,40 +140,67 @@ class DemurrageRunner
         );
         $lastRun = $state ? (int)$state['last_run'] : 0;
         $inProgress = $state && (int)$state['cursor_user_id'] > 0;
+        // One verdict for "a pass can run at all"; adapters read it instead
+        // of re-testing settings and currency themselves.
+        $active = $settings['enabled'] && $settings['rate'] > 0 && $currency && (int)$currency['active'];
         $result = [
             'enabled' => $settings['enabled'],
+            'active' => $active,
             'rate' => $settings['rate'],
             'days' => $settings['days'],
             'currency' => $currency ?: null,
+            'decimals' => $currency ? (int)$currency['decimals'] : 0,
             'lastRun' => $lastRun,
             'nextRun' => $lastRun > 0 ? $lastRun + $settings['days'] * 86400 : 0,
             'inProgress' => $inProgress,
             'accounts' => 0,
             'total' => 0.0,
         ];
-        if (!$settings['enabled'] || $settings['rate'] <= 0 || !$currency || !(int)$currency['active']) {
+        if (!$active) {
             return $result;
         }
         $decimals = (int)$currency['decimals'];
         // Only real members count: orphan balance rows (member deleted) are
         // skipped by the burn and must not inflate the preview. An in-flight
         // pass already burned up to the cursor, so those are excluded too.
-        $params = [$settings['rate'], $decimals, $settings['rate'], $decimals, $this->currencyId];
-        $cursorClause = '';
-        if ($inProgress) {
-            $cursorClause = ' AND b.user_id > ?';
-            $params[] = (int)$state['cursor_user_id'];
-        }
-        $row = $db->fetchRow(
-            'SELECT SUM(CASE WHEN ROUND(b.balance * ? / 100, ?) > 0 THEN 1 ELSE 0 END) AS accounts,'
-            . ' COALESCE(SUM(LEAST(b.balance, ROUND(b.balance * ? / 100, ?))), 0) AS total'
-            . ' FROM xf_oc_balance AS b INNER JOIN xf_user AS u ON u.user_id = b.user_id'
-            . ' WHERE b.currency_id = ? AND b.balance > 0' . $cursorClause,
-            $params
-        );
-        $result['accounts'] = (int)($row['accounts'] ?? 0);
-        $result['total'] = (float)($row['total'] ?? 0);
+        // Sum the same burn() the pass uses instead of a second SQL formula,
+        // so the estimate cannot drift; keyset batches keep memory flat.
+        // shortcut: this reads every balance row, upgrade to a SQL aggregate
+        // pinned to burn() by a differential test if huge boards bog down.
+        $after = $inProgress ? (int)$state['cursor_user_id'] : 0;
+        $batch = 1000;
+        do {
+            $rows = $db->fetchAll(
+                'SELECT b.user_id, b.balance FROM xf_oc_balance AS b'
+                . ' INNER JOIN xf_user AS u ON u.user_id = b.user_id'
+                . ' WHERE b.currency_id = ? AND b.user_id > ? AND b.balance > 0'
+                . ' ORDER BY b.user_id LIMIT ' . $batch,
+                [$this->currencyId, $after]
+            );
+            foreach ($rows as $row) {
+                $burn = self::burn((float)$row['balance'], $settings['rate'], $decimals);
+                if ($burn > 0) {
+                    $result['accounts']++;
+                    $result['total'] += $burn;
+                }
+                $after = (int)$row['user_id'];
+            }
+        } while (count($rows) === $batch);
         return $result;
+    }
+
+    /**
+     * Burn for one balance: rate percent, rounded to the currency, floored
+     * at zero and capped at the balance. Preview and the pass both call it,
+     * so a previewed amount is the amount burned. Pure for unit tests.
+     */
+    public static function burn(float $balance, float $rate, int $decimals): float
+    {
+        if ($balance <= 0 || $rate <= 0) {
+            return 0.0;
+        }
+        $burn = round($balance * min(100.0, $rate) / 100, max(0, $decimals));
+        return max(0.0, min($burn, $balance));
     }
 
     /**
@@ -185,6 +216,7 @@ class DemurrageRunner
         $result = [
             'ran' => false, 'done' => true, 'busy' => false, 'processed' => 0,
             'burned' => 0.0, 'accounts' => 0, 'lastRun' => 0, 'nextRun' => 0,
+            'decimals' => 0,
         ];
         if (!$settings['enabled']) {
             return $result;
@@ -331,6 +363,7 @@ class DemurrageRunner
             $rate = (float)$settings['rate'];
             $decimals = (int)$currency['decimals'];
         }
+        $result['decimals'] = $decimals;
         $rows = $db->fetchAll(
             'SELECT user_id FROM xf_oc_balance WHERE currency_id = ? AND user_id > ? AND balance > 0'
             . ' ORDER BY user_id LIMIT ' . (int)$batchSize,
@@ -382,7 +415,7 @@ class DemurrageRunner
                         'SELECT COALESCE(balance, 0) FROM xf_oc_balance WHERE user_id = ? AND currency_id = ? FOR UPDATE',
                         [$userId, $currencyId]
                     );
-                    $burn = Transact::calculateDemurrage($balance, $rate, $decimals);
+                    $burn = self::burn($balance, $rate, $decimals);
                     if ($burn > 0) {
                         $verdict = $this->ledgerWrite->commit([
                             'currency_id' => $this->currencyId,
@@ -472,7 +505,8 @@ class DemurrageRunner
         float $burned,
         int $accounts,
         int $lastRun,
-        int $nextRun
+        int $nextRun,
+        int $decimals
     ): array {
         return [
             'verdict' => $verdict,
@@ -484,6 +518,7 @@ class DemurrageRunner
             'accounts' => $accounts,
             'lastRun' => $lastRun,
             'nextRun' => $nextRun,
+            'decimals' => $decimals,
         ];
     }
 }

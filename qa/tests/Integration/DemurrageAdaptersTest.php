@@ -112,6 +112,35 @@ class DemurrageAdaptersTest extends TestCase
         );
     }
 
+    public function testAdaptersPrintTheRunnersActiveVerdict(): void
+    {
+        $runner = new AdapterRunnerStub();
+        // Settings look runnable; only the runner's verdict says otherwise.
+        $runner->preview = [
+            'enabled' => true,
+            'active' => false,
+            'rate' => 10.0,
+            'days' => 7,
+            'currency' => ['title' => 'Credits', 'decimals' => 2],
+            'decimals' => 2,
+            'lastRun' => 0,
+            'nextRun' => 0,
+            'inProgress' => false,
+            'accounts' => 0,
+            'total' => 0.0,
+        ];
+
+        $params = $this->adminController($runner)->actionDemurrage()->getParams();
+        $output = $this->renderDemurrage($params);
+        $this->assertStringContainsString($this->renderedPhrase('ocadm_demurrage_disabled'), $output);
+        $this->assertStringNotContainsString($this->renderedPhrase('ocadm_demurrage_run'), $output);
+
+        $cli = new BufferedOutput();
+        $exit = (new CliAdapterSpy($runner))->run(new ArrayInput(['--preview' => true]), $cli);
+        $this->assertSame(Command::SUCCESS, $exit);
+        $this->assertStringContainsString('Inflation control is disabled', $cli->fetch());
+    }
+
     public function testAdminIncompletePassIsReportedAsRanAndNotBusy(): void
     {
         $runner = new AdapterRunnerStub();
@@ -282,6 +311,7 @@ class DemurrageAdaptersTest extends TestCase
             'accounts' => $accounts,
             'lastRun' => 0,
             'nextRun' => 0,
+            'decimals' => 2,
         ];
     }
 }
@@ -305,7 +335,11 @@ class AdapterRunnerStub extends DemurrageRunner
         'accounts' => 0,
         'lastRun' => 0,
         'nextRun' => 0,
+        'decimals' => 2,
     ];
+
+    /** @var array<string, mixed>|null Overrides preview() for verdict tests. */
+    public ?array $preview = null;
 
     public function __construct()
     {
@@ -320,11 +354,13 @@ class AdapterRunnerStub extends DemurrageRunner
 
     public function preview(): array
     {
-        return [
+        return $this->preview ?? [
             'enabled' => true,
+            'active' => true,
             'rate' => 10.0,
             'days' => 7,
             'currency' => ['title' => 'Credits', 'decimals' => 2],
+            'decimals' => 2,
             'lastRun' => 0,
             'nextRun' => 0,
             'inProgress' => false,

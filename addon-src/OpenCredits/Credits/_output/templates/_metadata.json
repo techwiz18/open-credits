@@ -40,9 +40,9 @@
         "hash": "af183ef7b883021db26a24d4b9c1f69d"
     },
     "admin/oc_tools_demurrage.html": {
-        "version_id": 940,
-        "version_string": "0.13.0-dev",
-        "hash": "ca3b2e88f0013f667b715f82c2c8c135"
+        "version_id": 942,
+        "version_string": "0.14.0",
+        "hash": "69817e35557fbf040c920ab83c6dd2e2"
     },
     "admin/oc_tools_index.html": {
         "version_id": 926,

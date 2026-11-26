@@ -35,16 +35,15 @@ class Demurrage extends AbstractCommand
 
 		if ($input->getOption('preview')) {
 			$preview = $runner->preview();
-			if (!$preview['enabled'] || $preview['rate'] <= 0 || !$preview['currency']) {
+			if (!$preview['active']) {
 				$io->warning('Inflation control is disabled, the demurrage rate is 0, or the primary currency is unavailable.');
 				return Command::SUCCESS;
 			}
-			$decimals = (int)($preview['currency']['decimals'] ?? 2);
 			$io->table(['Rate', 'Period', 'Accounts', 'Total burn'], [[
 				$preview['rate'] . '%',
 				$preview['days'] . ' day(s)',
 				(string)$preview['accounts'],
-				number_format((float)$preview['total'], $decimals),
+				number_format((float)$preview['total'], $preview['decimals']),
 			]]);
 			return Command::SUCCESS;
 		}
@@ -60,8 +59,7 @@ class Demurrage extends AbstractCommand
 			return Command::SUCCESS;
 		}
 
-		$preview = $runner->preview();
-		$decimals = (int)($preview['currency']['decimals'] ?? 2);
+		$decimals = (int)$result['decimals'];
 		if ($result['verdict'] === 'resume') {
 			$io->warning(sprintf(
 				'Demurrage pass incomplete: processed %d account(s), burned %s. Re-run to resume.',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Entity\Code;
+use OpenCredits\Credits\Service\DemurrageRunner;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\TestCase;
 
@@ -381,6 +382,25 @@ class InflationControlTest extends TestCase
             (float)$this->db->fetchOne('SELECT oc_credits FROM xf_user WHERE user_id = ?', [$this->memberId]),
             0.0001,
             'The legacy mirror follows the primary-currency deltas through demurrage.'
+        );
+    }
+
+    public function testPreviewMatchesBurnForRoundingEdges(): void
+    {
+        \XF::app()->options()->ocInflationDemurrageRate = 10;
+
+        // A sub-unit burn rounds to zero and must be skipped, not counted.
+        $this->transact->adjust($this->memberId, $this->currencyId, 0.04, 'admin_adjust');
+        $this->transact->adjust($this->otherId, $this->currencyId, 4.99, 'admin_adjust');
+
+        $preview = $this->transact->demurragePreview();
+        $this->assertSame(1, $preview['accounts']);
+        $this->assertEqualsWithDelta(0.5, $preview['total'], 0.0001);
+        $this->assertEqualsWithDelta(
+            DemurrageRunner::burn(0.04, 10.0, 2) + DemurrageRunner::burn(4.99, 10.0, 2),
+            $preview['total'],
+            0.0001,
+            'Preview sums the same burn() the pass uses.'
         );
     }
 

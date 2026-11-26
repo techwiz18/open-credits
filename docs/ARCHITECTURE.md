@@ -16,7 +16,7 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `Service/LedgerWrite.php` | **The one author of balance changes and ledger rows.** `commit(movement)` owns user-row lock order, currency precision, the overdraw policy, `xf_oc_balance`, the `oc_credits` mirror, and the `xf_oc_transaction` row shape; callers own the transaction and the post-commit effects |
 | `Service/Ledger.php` | Ledger vocabulary: the one trigger-label map (`label()`, award-only `eventTriggers()`), trigger constants, and stored markers (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) shared by history, alerts, and the prune guard |
 | `Service/AccountStanding.php` | **The one account-standing rule**: four verdicts (earn, receive, send, unlock) over one state table, pure so every money path reads the same decision |
-| `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; burns and orphan purges go through the `LedgerWrite` module supplied by `Transact` |
+| `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; owns the burn math (`burn()`) and the "pass can run" verdict, so preview and the pass share one formula; burns and orphan purges go through the `LedgerWrite` module supplied by `Transact` |
 | `Service/ContentCharge.php` | `[charge]` premium-content decision: parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
 | `BbCode/Charge.php` | `[charge=X]` renderer: view gates, locked box, author stats |

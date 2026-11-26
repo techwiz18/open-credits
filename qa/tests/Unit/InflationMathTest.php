@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Unit;
 
+use OpenCredits\Credits\Service\DemurrageRunner;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\TestCase;
 
@@ -88,29 +89,38 @@ class InflationMathTest extends TestCase
 
     public function testDemurrageIsRateOfBalance(): void
     {
-        $this->assertSame(10.0, Transact::calculateDemurrage(100.0, 10.0, 2));
-        $this->assertSame(0.5, Transact::calculateDemurrage(5.0, 10.0, 2));
+        $this->assertSame(10.0, DemurrageRunner::burn(100.0, 10.0, 2));
+        $this->assertSame(0.5, DemurrageRunner::burn(5.0, 10.0, 2));
     }
 
     public function testDemurrageIsFlooredAtZero(): void
     {
-        $this->assertSame(0.0, Transact::calculateDemurrage(0.0, 10.0, 2));
-        $this->assertSame(0.0, Transact::calculateDemurrage(-5.0, 10.0, 2));
+        $this->assertSame(0.0, DemurrageRunner::burn(0.0, 10.0, 2));
+        $this->assertSame(0.0, DemurrageRunner::burn(-5.0, 10.0, 2));
     }
 
     public function testDemurrageNeverExceedsBalance(): void
     {
-        $this->assertSame(10.0, Transact::calculateDemurrage(10.0, 100.0, 2));
-        $this->assertSame(10.0, Transact::calculateDemurrage(10.0, 150.0, 2));
+        $this->assertSame(10.0, DemurrageRunner::burn(10.0, 100.0, 2));
+        $this->assertSame(10.0, DemurrageRunner::burn(10.0, 150.0, 2));
     }
 
     public function testDemurrageRoundingToZeroSkips(): void
     {
-        $this->assertSame(0.0, Transact::calculateDemurrage(4.0, 10.0, 0));
+        $this->assertSame(0.0, DemurrageRunner::burn(4.0, 10.0, 0));
     }
 
     public function testZeroRateDoesNothing(): void
     {
-        $this->assertSame(0.0, Transact::calculateDemurrage(100.0, 0.0, 2));
+        $this->assertSame(0.0, DemurrageRunner::burn(100.0, 0.0, 2));
+    }
+
+    public function testTransactDemurrageShimDelegatesToTheRunner(): void
+    {
+        $this->assertSame(1.25, Transact::calculateDemurrage(12.5, 10.0, 2));
+        $this->assertSame(
+            DemurrageRunner::burn(12.5, 10.0, 2),
+            Transact::calculateDemurrage(12.5, 10.0, 2)
+        );
     }
 }
