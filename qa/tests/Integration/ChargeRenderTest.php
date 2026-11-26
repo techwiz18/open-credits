@@ -267,6 +267,38 @@ class ChargeRenderTest extends TestCase
         $this->assertStringContainsString('RENDER_SECRET', $authorHtml);
     }
 
+    public function testUnlockPostUsesTheRenderVerdictForExemptions(): void
+    {
+        // The renderer shows these members the body with ocView removed, so
+        // the POST must not answer with a permission error.
+        foreach (['adminId', 'authorId'] as $property) {
+            $userId = $this->{$property};
+            $reply = $this->withPermission($userId, 'ocView', false, function () use ($userId) {
+                return $this->unlockReply($userId);
+            });
+            $this->assertInstanceOf(
+                \XF\Mvc\Reply\Redirect::class,
+                $reply,
+                "{$property} without ocView should not be refused"
+            );
+        }
+
+        $bypass = $this->withPermission($this->memberId, 'ocView', false, function () {
+            return $this->withPermission($this->memberId, 'ocChargeFree', true, function () {
+                return $this->unlockReply($this->memberId);
+            });
+        });
+        $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $bypass);
+
+        if ($this->member2Id > 0) {
+            $denied = $this->withPermission($this->member2Id, 'ocView', false, function () {
+                return $this->unlockReply($this->member2Id);
+            });
+            $this->assertInstanceOf(\XF\Mvc\Reply\Error::class, $denied);
+            $this->assertSame(403, $denied->getResponseCode());
+        }
+    }
+
     #[DataProvider('blockedPayerStates')]
     public function testBlockedMemberCannotUnlock(bool $banned, string $state): void
     {
@@ -276,15 +308,7 @@ class ChargeRenderTest extends TestCase
         $user->user_state = $state;
         \XF::setVisitor($user);
 
-        $request = new \XF\Http\Request(
-            \XF::app()->inputFilterer(),
-            ['content_type' => 'post', 'content_id' => $this->postId, 'amount' => 5],
-            [],
-            [],
-            ['REQUEST_METHOD' => 'POST']
-        );
-        $controller = \XF::app()->controller(\OpenCredits\Credits\Pub\Controller\Credits::class, $request);
-        $reply = $controller->actionUnlock(new \XF\Mvc\ParameterBag([]));
+        $reply = $this->unlockReply($this->memberId);
 
         $this->assertInstanceOf(\XF\Mvc\Reply\Error::class, $reply);
         $this->assertSame(403, $reply->getResponseCode());
@@ -353,6 +377,24 @@ class ChargeRenderTest extends TestCase
         } finally {
             $cache->setGlobalPerms($combinationId, $original);
         }
+    }
+
+    /**
+     * Runs the unlock POST as $userId and returns the reply.
+     */
+    protected function unlockReply(int $userId): \XF\Mvc\Reply\AbstractReply
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $userId));
+
+        $request = new \XF\Http\Request(
+            \XF::app()->inputFilterer(),
+            ['content_type' => 'post', 'content_id' => $this->postId, 'amount' => 5],
+            [],
+            [],
+            ['REQUEST_METHOD' => 'POST']
+        );
+        $controller = \XF::app()->controller(\OpenCredits\Credits\Pub\Controller\Credits::class, $request);
+        return $controller->actionUnlock(new \XF\Mvc\ParameterBag([]));
     }
 
     protected function seedCharge(int $userId, float $amount): void
