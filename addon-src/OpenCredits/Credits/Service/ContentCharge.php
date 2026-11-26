@@ -106,7 +106,8 @@ class ContentCharge
      * for the same content, even if its price changes. Never overdraws.
      *
      * Returns 'ok', 'already_paid', 'self', 'no_funds', 'invalid' or
-     * 'invalid_author' (reader or author is not a valid, non-banned user).
+     * 'invalid_author' (the payer may not unlock, or the author may not
+     * receive credits).
      */
     public function purchase(
         int $fromUserId,
@@ -138,7 +139,13 @@ class ContentCharge
                 return 'invalid_author';
             }
             foreach ($locked AS $row) {
-                if ((string)$row['user_state'] !== 'valid' || !empty($row['is_banned'])) {
+                // The payer must be allowed to spend, the author to receive;
+                // both verdicts read the locked row so a concurrent ban or
+                // state change cannot race the write.
+                $allowed = (int)$row['user_id'] === $fromUserId
+                    ? AccountStanding::canUnlock((string)$row['user_state'], !empty($row['is_banned']))
+                    : AccountStanding::canReceive((string)$row['user_state'], !empty($row['is_banned']));
+                if (!$allowed) {
                     $db->rollBack();
                     return 'invalid_author';
                 }

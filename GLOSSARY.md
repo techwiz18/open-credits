@@ -4,6 +4,10 @@ Earning and spending community credits inside a XenForo forum.
 
 ## Language
 
+**Account standing**:
+Whether a member's account stage permits earning, receiving, sending or unlocking credits. Unconfirmed and awaiting-approval accounts earn and receive but cannot send or unlock; banned, rejected and disabled accounts may do none of these.
+_Avoid_: eligibility, user state check, account status
+
 **Award eligibility**:
 Whether a member and a piece of content qualify for an award at all (account standing, forum and usergroup scope, visible state, first-post rule).
 _Avoid_: award limits, eligibility check

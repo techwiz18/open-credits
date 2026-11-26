@@ -15,12 +15,13 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `Service/Transact.php` | Façade for every money path (earn, transfer, redeem, charge, prune, rebuild); supplies the `LedgerWrite` module and keeps the public API integrators call |
 | `Service/LedgerWrite.php` | **The one author of balance changes and ledger rows.** `commit(movement)` owns user-row lock order, currency precision, the overdraw policy, `xf_oc_balance`, the `oc_credits` mirror, and the `xf_oc_transaction` row shape; callers own the transaction and the post-commit effects |
 | `Service/Ledger.php` | Ledger vocabulary: the one trigger-label map (`label()`, award-only `eventTriggers()`), trigger constants, and stored markers (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) shared by history, alerts, and the prune guard |
+| `Service/AccountStanding.php` | **The one account-standing rule**: four verdicts (earn, receive, send, unlock) over one state table, pure so every money path reads the same decision |
 | `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; burns and orphan purges go through the `LedgerWrite` module supplied by `Transact` |
 | `Service/ContentCharge.php` | `[charge]` premium-content decision: parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
 | `BbCode/Charge.php` | `[charge=X]` renderer: view gates, locked box, author stats |
 | `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect |
-| `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated) |
+| `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated); lists strict `valid` accounts only — a display choice, not account standing |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
 | `Cli/Command/Demurrage.php` | `oc-credits:demurrage` CLI (`--preview` or run now; calls the runner) |
 | `Cron/DailyLogin.php` | Stub (daily_login is awarded via `visitor_setup`, not cron) |
@@ -113,15 +114,23 @@ change fires the `oc_credits_adjust` code event with
 
 * `ocView` gates history, member pane, profile displays, and postbit; `visible`
   currencies only. Revoking hides the addon completely.
+* Account standing (`Service/AccountStanding`, ADR 0002) decides who may act:
+  banned, rejected and disabled accounts earn nothing; unconfirmed and
+  awaiting-approval accounts earn and receive but cannot send or unlock;
+  `email_bounce` counts as an active account, so it may do all four. The
+  services (`Transact::transfer()`, `Transact::redeem()`,
+  `ContentCharge::purchase()`) enforce the verdict on the row they lock, and
+  the controllers refuse early for the message. The top-holders widget keeps
+  its strict `valid` filter as a display choice, not standing.
 * Transfers always floor at zero; `adjust()` enforces each currency's
   `allow_negative` and refuses unknown users/currencies and inactive
   currencies. Positive deltas are always allowed so a legacy negative balance
   can recover; negative deltas still floor. Transfer with an unresolvable
-  `currency_id` errors instead of falling back. Transfer and unlock
-  controllers refuse banned members and non-valid account states (email
-  confirmation, rejected, disabled); the transfer form/save needs `ocView` +
-  `ocTransfer`.
-* Awards skip inactive currencies; registration skips banned/rejected/disabled.
+  `currency_id` errors instead of falling back; the transfer form/save needs
+  `ocView` + `ocTransfer` and offers the form only when the sender may send.
+* Awards skip inactive currencies; registration and the daily visit follow
+  account standing, so an unapproved account's bonus is waiting when it
+  activates.
 * Daily boundaries default to UTC midnights (`Transact::dayStart()`),
   ignoring forum/user time zones — consistent for all members and ungameable
   by traveling; configurable to board time or a fixed offset via options.
@@ -241,7 +250,7 @@ change fires the `oc_credits_adjust` code event with
   its legacy `applyBalanceDelta` until the last caller moves). `DemurrageRunner`
   mutates balances only through the module.
 * Domain logic that is not an XF service is a plain class under `Service/`
-  (`AwardScope`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `ContentCharge`), constructed directly or
+  (`AwardScope`, `AccountStanding`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `ContentCharge`), constructed directly or
   through a `Transact` factory. You do not need `\XF::app()->service()` for it.
 * Per-request caches belong to the presentation layer (renderer/controller).
   Service reads stay DB-fresh so moderation and cleanup see deletions

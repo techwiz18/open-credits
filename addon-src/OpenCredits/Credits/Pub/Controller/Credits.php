@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Pub\Controller;
 
+use OpenCredits\Credits\Service\AccountStanding;
 use OpenCredits\Credits\Service\ContentCharge;
 use OpenCredits\Credits\Service\Ledger;
 use XF\Mvc\ParameterBag;
@@ -42,7 +43,10 @@ class Credits extends AbstractController
             }
         }
 
-        $canSend = $visitor->hasPermission('general', 'ocTransfer');
+        // Standing, not just permission: the send form only renders when the
+        // transfer endpoint would accept it.
+        $canSend = $visitor->hasPermission('general', 'ocTransfer')
+            && AccountStanding::canSend((string)$visitor->user_state, !empty($visitor->is_banned));
         $page = $this->filter('page', 'uint');
 
         $perPageOptions = [10, 20, 50];
@@ -265,10 +269,13 @@ class Credits extends AbstractController
 
         // Per-member card: balances + a send form locked to this member.
         $currency = $this->assertViewableCurrency(0);
-        $canSend = $visitor->hasPermission('general', 'ocTransfer');
+        $canSend = $visitor->hasPermission('general', 'ocTransfer')
+            && AccountStanding::canSend((string)$visitor->user_state, !empty($visitor->is_banned));
         $lockedTo = $isSelf ? '' : $user->username;
-        $targetReceivable = !$user->is_banned
-            && !in_array($user->user_state, ['rejected', 'disabled'], true);
+        $targetReceivable = AccountStanding::canReceive(
+            (string)$user->user_state,
+            !empty($user->is_banned)
+        );
 
         $senderBalance = 0.0;
         foreach ($visitor->oc_all_balances as $row) {
@@ -339,7 +346,7 @@ class Credits extends AbstractController
         $ocInTab = (bool)$this->filter('oc_in_tab', 'bool');
 
         $visitor = \XF::visitor();
-        if (!$visitor->user_id || $visitor->is_banned || !$visitor->hasPermission('general', 'ocView')
+        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')
             || !$visitor->hasPermission('general', 'ocTransfer')
         ) {
             return $this->noPermission();
@@ -363,10 +370,10 @@ class Credits extends AbstractController
         if ((int)$target->user_id === (int)$visitor->user_id) {
             return $this->error('You cannot transfer credits to yourself.');
         }
-        if ($target->is_banned || in_array($target->user_state, ['rejected', 'disabled'], true)) {
+        if (!AccountStanding::canReceive((string)$target->user_state, !empty($target->is_banned))) {
             return $this->error('Credits cannot be transferred to that account.');
         }
-        if ($visitor->is_banned || in_array($visitor->user_state, ['rejected', 'disabled'], true)) {
+        if (!AccountStanding::canSend((string)$visitor->user_state, !empty($visitor->is_banned))) {
             return $this->error('Credits cannot be transferred from that account.');
         }
 
@@ -406,9 +413,7 @@ class Credits extends AbstractController
         if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
             return $this->noPermission();
         }
-        if ($visitor->is_banned
-            || in_array($visitor->user_state, ['rejected', 'disabled', 'email_confirm', 'email_confirm_edit'], true)
-        ) {
+        if (!AccountStanding::canUnlock((string)$visitor->user_state, !empty($visitor->is_banned))) {
             return $this->noPermission();
         }
 
@@ -504,9 +509,7 @@ class Credits extends AbstractController
         if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
             return $this->noPermission();
         }
-        if ($visitor->is_banned
-            || in_array($visitor->user_state, ['rejected', 'disabled', 'email_confirm', 'email_confirm_edit'], true)
-        ) {
+        if (!AccountStanding::canEarn((string)$visitor->user_state, !empty($visitor->is_banned))) {
             return $this->noPermission();
         }
 
@@ -533,6 +536,7 @@ class Credits extends AbstractController
                 'expired' => 'That code has expired.',
                 'exhausted' => 'That code has already been fully redeemed.',
                 'already_redeemed' => 'You have already redeemed that code.',
+                'ineligible' => 'This account cannot redeem codes right now.',
                 'invalid_amount' => 'That code cannot be redeemed right now.',
                 'capped' => 'That code would put you over the balance cap. Spend some credits and try again.',
             ];

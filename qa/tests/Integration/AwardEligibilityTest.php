@@ -145,10 +145,11 @@ class AwardEligibilityTest extends TestCase
         );
     }
 
-    public function testAwaitingApprovalStillEarns(): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('approvalPendingStates')]
+    public function testAwaitingApprovalStillEarns(string $state): void
     {
         $user = \XF::em()->find('XF:User', $this->userId);
-        $user->set('user_state', 'email_confirm');
+        $user->set('user_state', $state);
         $user->save();
 
         $this->assertTrue($this->transact->awardByTrigger('octest_elig', $this->userId));
@@ -157,6 +158,14 @@ class AwardEligibilityTest extends TestCase
             $this->transact->getBalance($this->userId, $this->currencyId),
             0.0001
         );
+    }
+
+    public static function approvalPendingStates(): array
+    {
+        return [
+            'email confirm' => ['email_confirm'],
+            'awaiting approval' => ['moderated'],
+        ];
     }
 
     public function testIneligibleUsersLeaveNoClaimMarker(): void

@@ -2,6 +2,7 @@
 
 namespace OpenCredits\Credits;
 
+use OpenCredits\Credits\Service\AccountStanding;
 use OpenCredits\Credits\Service\Ledger;
 use XF\Mvc\Entity\Entity;
 use XF\Mvc\Entity\Manager as EntityManager;
@@ -90,7 +91,10 @@ class Listener
         // Award only real accounts: never seed banned/rejected/disabled users.
         // Unapproved states (moderated, email_confirm) still earn so the bonus
         // is waiting when the account activates.
-        if (in_array($entity->get('user_state'), ['banned', 'rejected', 'disabled'], true)) {
+        if (!AccountStanding::canEarn(
+            (string)$entity->get('user_state'),
+            !empty($entity->get('is_banned'))
+        )) {
             return;
         }
         self::applyTrigger(Ledger::TRIGGER_REGISTER, (int)$entity->user_id, (int)$entity->user_id, 'user');
@@ -152,7 +156,9 @@ class Listener
 
     public static function visitorSetup(\XF\Entity\User &$user = null)
     {
-        if (!$user || $user->user_id <= 0 || $user->get('user_state') !== 'valid') {
+        if (!$user || $user->user_id <= 0
+            || !AccountStanding::canEarn((string)$user->get('user_state'), !empty($user->is_banned))
+        ) {
             return;
         }
         // Registration day is covered by the register bonus, not the daily one.
