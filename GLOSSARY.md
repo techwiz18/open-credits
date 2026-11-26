@@ -19,3 +19,19 @@ _Avoid_: award eligibility, throttling
 **Movement**:
 One intent to change balances: a currency, a trigger, and one or more legs, each a member and a signed amount. Applied whole or not at all.
 _Avoid_: transaction, entry, delta
+
+**Release-ready**:
+A tree state that has passed every gate a release tag requires, so tagging it needs no further code changes.
+_Avoid_: stable, green, shippable
+
+**1.0**:
+The first release that carries the stability promise: the stable surface may be relied on for the whole 1.x line, and removing any part of it requires a major release.
+_Avoid_: stable release, production-ready, v1
+
+**Stable surface**:
+The documented integrator API, the `oc_credits_adjust` contract, criteria rule ids, and the option, permission, phrase-key, route, `[charge]`, widget and template-name identities, plus the schema's guarantee that upgrades preserve data.
+_Avoid_: public API, contract
+
+**Breaking change**:
+A change that stops a documented call working, changes the meaning of persisted data, removes or renames a stable-surface identity, or changes money outcomes with no admin opt-in. A fix that restores documented behaviour is not breaking.
+_Avoid_: backwards-incompatible change
