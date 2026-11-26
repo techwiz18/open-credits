@@ -187,11 +187,12 @@ better as separate add-ons on the transaction service and the
 `oc_credits_adjust` event; see
 [Integrating other add-ons](#integrating-other-add-ons).
 
-**1.0 cycle** — the compatibility and i18n pass:
-
-* Adopt XenForo's encoded version IDs with a tested upgrade path.
-* Finish phrase coverage and adopt phrase-boundary markers for clean
-  translations.
+**1.0 — the stability promise** — 1.0 adds no features. It commits to not
+breaking the documented API, event, options, permissions, routes or data within
+the whole 1.x line. The one pre-1.0 compatibility change is adopting XenForo's
+encoded version IDs with a tested upgrade path; phrase coverage and
+phrase-boundary markers follow in 1.x. See
+[the 1.0 ADR](docs/adr/0003-what-1-0-promises.md).
 
 **Out of scope** — content protection. `[charge]` is a display gate: the post
 body remains in the raw message, snippets, quotes, and API. Use a real
