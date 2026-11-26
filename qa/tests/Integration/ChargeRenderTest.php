@@ -24,6 +24,9 @@ class ChargeRenderTest extends TestCase
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
 
+    /** @var Transact */
+    protected $transact;
+
     protected int $postId = 0;
     protected int $authorId = 0;
     protected int $memberId = 0;
@@ -43,7 +46,8 @@ class ChargeRenderTest extends TestCase
             \XF::$time = time();
         }
         $this->db = \XF::db();
-        $this->currencyId = \XF::app()->service('OpenCredits\Credits:Transact')->primaryCurrencyId();
+        $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
+        $this->currencyId = $this->transact->primaryCurrencyId();
 
         $rows = $this->db->fetchAll('SELECT currency_id, is_primary, active, visible FROM xf_oc_currency');
         foreach ($rows AS $row) {
@@ -120,17 +124,21 @@ class ChargeRenderTest extends TestCase
         Transact::clearPrimaryCache();
         \XF::em()->clearEntityCache();
         \XF::setVisitor(null);
-        Charge::clearPaidCache();
+        Charge::clearRenderCaches();
     }
 
     public function testGuestSeesLockedBoxWithoutBody(): void
     {
-        $html = $this->render(null);
-        $this->assertStringNotContainsString('RENDER_SECRET', $html);
-        $this->assertTrue(
-            strpos($html, 'Log in') !== false || strpos($html, 'credits/unlock') !== false,
-            'Guest should see a login/unlock prompt'
-        );
+        $this->assertGuestLockedBox($this->render(null));
+    }
+
+    public function testGuestWithBypassPermissionStillSeesLockedBox(): void
+    {
+        \XF::setVisitor(null);
+        $html = $this->withPermission(null, 'ocChargeFree', true, function (): string {
+            return $this->render(null);
+        });
+        $this->assertGuestLockedBox($html);
     }
 
     public function testNonPaidMemberSeesLockedBoxWithoutBody(): void
@@ -147,6 +155,43 @@ class ChargeRenderTest extends TestCase
         $this->assertStringContainsString('RENDER_SECRET', $html);
     }
 
+    public function testPurchaseThroughServiceIsVisibleToTheNextRender(): void
+    {
+        $txnBefore = (int)$this->db->fetchOne(
+            'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
+        );
+        try {
+            // Render while locked first: a cached paid answer would already be
+            // false for this member.
+            $before = $this->render($this->memberId);
+            $this->assertStringNotContainsString('RENDER_SECRET', $before);
+
+            $this->transact->adjust(
+                $this->memberId,
+                $this->currencyId,
+                100.00,
+                'octest_render_seed',
+                0,
+                'test'
+            );
+            $result = $this->transact->chargeForContent(
+                $this->memberId,
+                $this->authorId,
+                $this->currencyId,
+                5.00,
+                'post',
+                $this->postId
+            );
+            $this->assertSame('ok', $result);
+
+            $after = $this->render($this->memberId);
+            $this->assertStringContainsString('RENDER_SECRET', $after);
+        } finally {
+            $this->db->delete('xf_oc_transaction', 'transaction_id > ?', [$txnBefore]);
+            $this->transact->rebuildAllBalancesFully();
+        }
+    }
+
     public function testAuthorSeesBodyAndStats(): void
     {
         $this->seedCharge($this->memberId, 5.00);
@@ -159,6 +204,24 @@ class ChargeRenderTest extends TestCase
     {
         $html = $this->render($this->adminId);
         $this->assertStringContainsString('RENDER_SECRET', $html);
+    }
+
+    public function testBypassHolderSeesBodyWithoutPaying(): void
+    {
+        $html = $this->withPermission($this->memberId, 'ocChargeFree', true, function (): string {
+            return $this->render($this->memberId);
+        });
+        $this->assertStringContainsString('RENDER_SECRET', $html);
+    }
+
+    public function testMemberWithoutViewPermissionSeesNothing(): void
+    {
+        $html = $this->withPermission($this->memberId, 'ocView', false, function (): string {
+            return $this->render($this->memberId);
+        });
+        $this->assertStringNotContainsString('RENDER_SECRET', $html);
+        $this->assertStringNotContainsString('Premium content', $html);
+        $this->assertStringNotContainsString('temporarily unavailable', $html);
     }
 
     public function testInactiveCurrencyFailsClosedButPaidKeepAccess(): void
@@ -248,10 +311,18 @@ class ChargeRenderTest extends TestCase
         $this->assertStringContainsString('50.00', $html);
     }
 
+    protected function assertGuestLockedBox(string $html): void
+    {
+        $this->assertStringNotContainsString('RENDER_SECRET', $html);
+        $this->assertTrue(
+            strpos($html, 'Log in') !== false || strpos($html, 'credits/unlock') !== false,
+            'Guest should see a login/unlock prompt'
+        );
+    }
+
     protected function render(?int $userId, string $message = self::MESSAGE): string
     {
         \XF::setVisitor($userId ? \XF::em()->find('XF:User', $userId) : null);
-        Charge::clearPaidCache();
 
         $post = \XF::em()->find('XF:Post', $this->postId);
         $originalMessage = $post->message;
@@ -260,6 +331,27 @@ class ChargeRenderTest extends TestCase
             return (string)\XF::app()->bbCode()->render($message, 'html', 'post:post', $post);
         } finally {
             $post->message = $originalMessage;
+        }
+    }
+
+    /**
+     * Override one global permission for a member (or the guest when $userId
+     * is null), then restore the shared permission combination so random
+     * order stays clean.
+     */
+    protected function withPermission(?int $userId, string $permission, bool $value, callable $run)
+    {
+        $user = $userId ? \XF::em()->find('XF:User', $userId) : \XF::visitor();
+        $combinationId = (int)$user->permission_combination_id;
+        $cache = \XF::permissionCache();
+        $original = $cache->getGlobalPerms($combinationId) ?: [];
+        $modified = $original;
+        $modified['general'][$permission] = $value;
+        $cache->setGlobalPerms($combinationId, $modified);
+        try {
+            return $run();
+        } finally {
+            $cache->setGlobalPerms($combinationId, $original);
         }
     }
 

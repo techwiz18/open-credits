@@ -485,7 +485,6 @@ class Credits extends AbstractController
             return $this->error('This content cannot be unlocked right now.');
         }
 
-        \OpenCredits\Credits\BbCode\Charge::clearPaidCache();
         return $this->redirect($content->getContentUrl());
     }
 
