@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\BbCode;
 
+use OpenCredits\Credits\Service\ChargeAccess;
 use OpenCredits\Credits\Service\ContentCharge;
 use XF\BbCode\Renderer\Html;
-use XF\Mvc\Entity\Entity;
 
 /**
  * [charge=AMOUNT]…[/charge] shows its contents to members who have paid, the
@@ -20,9 +20,6 @@ use XF\Mvc\Entity\Entity;
  */
 class Charge
 {
-    /** @var array<string, bool> */
-    protected static $paid = [];
-
     /** @var array<string, int> */
     protected static $unlockCounts = [];
 
@@ -51,110 +48,108 @@ class Charge
         return ContentCharge::priceForMessage($message, $decimals);
     }
 
+    /**
+     * Drop the price and unlock-count caches. Neither is member-scoped, and
+     * paid state is never cached, so a purchase needs no clear.
+     */
+    public static function clearRenderCaches(): void
+    {
+        self::$maxAmounts = [];
+        self::$unlockCounts = [];
+    }
+
     public static function render(array $children, $option, array $tag, array $options, Html $renderer)
     {
         $visitor = \XF::visitor();
-        $canViewAddOn = !$visitor->user_id || $visitor->hasPermission('general', 'ocView');
-
         $entity = $options['entity'] ?? null;
         // Only forum posts carry the content identity this feature charges for.
         if (!$entity instanceof \XF\Entity\Post) {
-            return $canViewAddOn ? self::renderChildren($children, $options, $renderer) : '';
+            return (!$visitor->user_id || $visitor->hasPermission('general', 'ocView'))
+                ? self::renderChildren($children, $options, $renderer)
+                : '';
         }
-
-        $authorId = self::authorId($options, $entity);
-        if ($authorId <= 0) {
-            return $canViewAddOn ? self::renderChildren($children, $options, $renderer) : '';
-        }
-
-        $isAuthor = $visitor->user_id && (int)$visitor->user_id === $authorId;
-        $isExempt = $isAuthor
-            || $visitor->is_staff
-            || $visitor->is_admin
-            || $visitor->is_moderator
-            || $visitor->hasPermission('general', 'ocChargeFree');
-
-        // Exempt users see the post even if they lack ocView; everyone else
-        // without the permission gets no premium UI (and no body leak).
-        if (!$canViewAddOn && !$isExempt) {
-            return '';
-        }
-
-        $contentType = (string)$entity->getEntityContentType();
-        $contentId = (int)$entity->getEntityId();
 
         try {
-            // Existing buyers keep access even if the primary currency is
-            // deactivated or the block's price later becomes invalid.
-            if ($visitor->user_id
-                && self::hasPaid((int)$visitor->user_id, $contentType, $contentId, 0)) {
-                return self::renderChildren($children, $options, $renderer);
+            $verdict = self::charge()->access($entity, $visitor);
+            if ($verdict === ChargeAccess::DENIED) {
+                return '';
             }
 
-            $currency = self::primaryCurrency();
-            if (!$currency) {
-                return $isExempt
-                    ? self::renderChildren($children, $options, $renderer)
-                    : self::unavailable('oc_charge_unavailable');
+            $allowed = ChargeAccess::allows($verdict);
+            $currency = null;
+            $amount = null;
+            if (!$allowed || ChargeAccess::isAuthor($verdict)) {
+                $currency = self::primaryCurrency();
+                if ($currency) {
+                    $amount = self::priceFor($entity, (string)$option, (int)$currency->decimals);
+                }
             }
 
-            $currencyId = (int)$currency->currency_id;
-            $decimals = (int)$currency->decimals;
+            if (!$allowed) {
+                if (!$currency) {
+                    return self::unavailable('oc_charge_unavailable');
+                }
+                if ($amount === null) {
+                    return self::unavailable('oc_charge_invalid_price');
+                }
+                return self::lockedBox($entity, $visitor, $currency, $amount);
+            }
 
-            $maxKey = $contentType . ':' . $contentId . ':' . $decimals;
-            if (!array_key_exists($maxKey, self::$maxAmounts)) {
-                self::$maxAmounts[$maxKey] = ContentCharge::priceForMessage(
-                    (string)$entity->message,
-                    $decimals
+            $html = self::renderChildren($children, $options, $renderer);
+            if (ChargeAccess::isAuthor($verdict) && $currency && $amount !== null) {
+                $html .= self::authorStats(
+                    (string)$entity->getEntityContentType(),
+                    (int)$entity->getEntityId(),
+                    (int)$currency->currency_id,
+                    $amount,
+                    $currency
                 );
             }
-            $amount = self::$maxAmounts[$maxKey];
-
-            // Previews/quotes can render a message different from the stored
-            // post; fall back to the block's own price when the entity message
-            // has no valid charge blocks.
-            if ($amount === null) {
-                $amount = ContentCharge::priceOf([(string)$option], $decimals);
-            }
-
-            if ($amount === null || $amount <= 0) {
-                return $isExempt
-                    ? self::renderChildren($children, $options, $renderer)
-                    : self::unavailable('oc_charge_invalid_price');
-            }
-
-            if ($isExempt) {
-                $html = self::renderChildren($children, $options, $renderer);
-                if ($isAuthor) {
-                    $html .= self::authorStats($contentType, $contentId, $currencyId, $amount, $currency);
-                }
-                return $html;
-            }
-
-            $balance = $visitor->user_id ? self::transact()->getBalance((int)$visitor->user_id, $currencyId) : 0.0;
-
-            return \XF::app()->templater()->renderTemplate('public:oc_charge_locked', [
-                'price' => $currency->format($amount),
-                'currency' => $currency,
-                'contentType' => $contentType,
-                'contentId' => $contentId,
-                'currencyId' => $currencyId,
-                'isGuest' => !$visitor->user_id,
-                'canAfford' => $balance >= $amount,
-                'balance' => $balance,
-                'balanceFormatted' => $currency->format($balance),
-            ]);
+            return $html;
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits charge render failed: ');
             return self::unavailable('oc_charge_unavailable');
         }
     }
 
-    public static function clearPaidCache(): void
+    protected static function lockedBox(\XF\Entity\Post $entity, $visitor, $currency, float $amount): string
     {
-        self::$paid = [];
-        self::$unlockCounts = [];
-        self::$maxAmounts = [];
+        $currencyId = (int)$currency->currency_id;
+        $balance = $visitor->user_id ? self::transact()->getBalance((int)$visitor->user_id, $currencyId) : 0.0;
+
+        return \XF::app()->templater()->renderTemplate('public:oc_charge_locked', [
+            'price' => $currency->format($amount),
+            'currency' => $currency,
+            'contentType' => (string)$entity->getEntityContentType(),
+            'contentId' => (int)$entity->getEntityId(),
+            'currencyId' => $currencyId,
+            'isGuest' => !$visitor->user_id,
+            'canAfford' => $balance >= $amount,
+            'balance' => $balance,
+            'balanceFormatted' => $currency->format($balance),
+        ]);
+    }
+
+    /**
+     * The stored post's highest valid price, cached per message at the
+     * currency's precision. Previews and quotes render a message different
+     * from the stored post, so they fall back to the block's own option.
+     */
+    protected static function priceFor(\XF\Entity\Post $entity, string $option, int $decimals): ?float
+    {
+        $key = $entity->getEntityContentType() . ':' . $entity->getEntityId() . ':' . $decimals
+            . ':' . md5((string)$entity->message);
+        if (!array_key_exists($key, self::$maxAmounts)) {
+            self::$maxAmounts[$key] = ContentCharge::priceForMessage(
+                (string)$entity->message,
+                $decimals
+            );
+        }
+        $amount = self::$maxAmounts[$key];
+        if ($amount === null) {
+            $amount = ContentCharge::priceOf([$option], $decimals);
+        }
+        return $amount;
     }
 
     protected static function renderChildren(array $children, array $options, Html $renderer): string
@@ -201,24 +196,6 @@ class Charge
             'count' => $count,
             'total' => $currency->format($count * $amount),
         ]);
-    }
-
-    protected static function authorId(array $options, Entity $entity): int
-    {
-        $user = $options['user'] ?? null;
-        if ($user instanceof \XF\Entity\User) {
-            return (int)$user->user_id;
-        }
-        return (int)($entity->user_id ?? 0);
-    }
-
-    protected static function hasPaid(int $userId, string $contentType, int $contentId, int $currencyId): bool
-    {
-        $key = $userId . ':' . $contentType . ':' . $contentId . ':' . $currencyId;
-        if (!isset(self::$paid[$key])) {
-            self::$paid[$key] = self::charge()->hasPaid($userId, $contentType, $contentId, $currencyId);
-        }
-        return self::$paid[$key];
     }
 
     protected static function primaryCurrency()
