@@ -85,15 +85,33 @@ set -e
 grep -q 'usage: dev.sh test' <<<"$out" || fail "no usage for unknown kind: $out"
 
 # `up` records an isolated compose project in .env for later shells and hooks.
-COMPOSE_PROJECT_NAME=open-credits-test run up >/dev/null 2>&1 || fail "up failed"
+COMPOSE_PROJECT_NAME=open-credits-test WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 \
+  run up >/dev/null 2>&1 || fail "up failed"
 grep -qx 'COMPOSE_PROJECT_NAME=open-credits-test' "$repo/.env" \
   || fail "up did not record the compose project in .env"
+grep -qx 'WEB_PORT=8083' "$repo/.env" || fail "up did not record WEB_PORT"
+grep -qx 'DB_PORT=33061' "$repo/.env" || fail "up did not record DB_PORT"
+grep -qx 'PMA_PORT=8084' "$repo/.env" || fail "up did not record PMA_PORT"
+
+# A later plain `up` keeps the isolated ports instead of reverting to defaults.
+run up >/dev/null 2>&1 || fail "plain up failed"
+grep -qx 'WEB_PORT=8083' "$repo/.env" || fail "plain up lost the isolated port"
+
+# A caller-supplied value cannot inject the .env rewrite.
+marker="$tmp/pwned"
+set +e
+COMPOSE_PROJECT_NAME="x/;e touch $marker;#" run up >/dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -eq 2 ] || fail "unsafe project name exited $rc, want 2"
+[ ! -e "$marker" ] || fail "project name executed a command"
 
 # Hook install/uninstall state machine, in the throwaway repo so the real
 # core.hooksPath is never touched.
 git init -q "$repo"
 mkdir -p "$repo/.githooks"
-cp .githooks/pre-commit "$repo/.githooks/pre-commit"
+cp .githooks/pre-commit .githooks/pre-push "$repo/.githooks/"
+chmod -x "$repo/.githooks/pre-commit" "$repo/.githooks/pre-push"
 
 hooks_path() { git -C "$repo" config --get core.hooksPath || true; }
 prev_path() { git -C "$repo" config --get opencredits.previousHooksPath || true; }
@@ -104,6 +122,8 @@ expect_hooks() {
 # A default install points core.hooksPath at .githooks and marks the default.
 run install-hooks >/dev/null 2>&1 || fail "install-hooks failed"
 expect_hooks .githooks
+[ -x "$repo/.githooks/pre-commit" ] || fail "install-hooks left pre-commit non-executable"
+[ -x "$repo/.githooks/pre-push" ] || fail "install-hooks left pre-push non-executable"
 [ "$(prev_path)" = __default__ ] || fail "install recorded prior '$(prev_path)', want __default__"
 
 # A pre-existing foreign path is left untouched without --force.

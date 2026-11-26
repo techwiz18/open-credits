@@ -41,9 +41,9 @@ tracked hooks run on every commit and push.
   Docker `web` container is running for the active compose project; the skip
   note names the project.
 
-`pre-push` refuses a branch whose oldest commit starts on another feature tip
-instead of `origin/main`, so a stacked PR cannot be pushed by accident. Rebase
-onto `origin/main` first.
+`pre-push` checks the refs actually being pushed and refuses a branch that
+starts below `origin/main` or contains another unmerged feature tip, so a
+stacked PR cannot be pushed by accident. Rebase onto `origin/main` first.
 
 Required host tools: `bash`, `python3`, `git`. Optional: `docker compose` (the
 PHP checks) and `gitleaks` ≥ 8.19 (the secret scan; older versions lack the
@@ -68,7 +68,7 @@ project files are still scanned.
 | `./scripts/dev.sh help` | every command and test kind |
 | `./scripts/dev.sh up/down/logs` | lifecycle |
 | `./scripts/dev.sh fix-perms` | **run after any `xf-make:*`** — generators run as root; Apache needs writable `_output` |
-| `./scripts/dev.sh install-hooks [--force]` | install the tracked pre-commit hook (see [Git hooks](#git-hooks)) |
+| `./scripts/dev.sh install-hooks [--force]` | install the tracked hooks (see [Git hooks](#git-hooks)) |
 | `./scripts/dev.sh uninstall-hooks` | restore the hooks path recorded at install |
 | `./scripts/dev.sh test check` | CI parity without integration: lint, unit, PHPStan |
 | `./scripts/dev.sh test all` | seeds the forum fixtures, then lint, unit, PHPStan, integration (skips count as failures) |
@@ -84,11 +84,12 @@ project files are still scanned.
   compose file honors it, defaulting to 8080.
 * Parallel agent session? Isolate the whole stack — project name, all ports,
   and (consequently) a separate DB volume needing its own forum install:
-  `COMPOSE_PROJECT_NAME=open-credits-b WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 docker compose up -d`.
-  `./scripts/dev.sh up` records that project name in `.env`, so later shells
-  and the pre-commit hook check the same stack. Record it in `HANDOFF.md` open
-  threads so sessions don't chase each other's containers. Claim the stack
-  there before seeding or running integration tests, and release it when done.
+  `COMPOSE_PROJECT_NAME=open-credits-b WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 ./scripts/dev.sh up`.
+  `dev.sh up` records the project name and any port overrides in `.env`, so
+  later shells and the pre-commit hook check the same stack. Record it in
+  `HANDOFF.md` open threads so sessions don't chase each other's containers.
+  Claim the stack there before seeding or running integration tests, and
+  release it when done.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
 
 ## Release checklist (local — needs the licensed XF runtime, so not in CI)
