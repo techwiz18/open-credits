@@ -56,6 +56,13 @@ To upgrade later: upload the newer zip and click [B]Upgrade[/B] on the add-on.
 
 [B]Changelog[/B]
 
+[B]0.14.0[/B]
+[LIST]
+[*] [B]Account standing[/B] — one rule for who may earn, send, receive, and unlock. Accounts awaiting email confirmation or approval keep earning and receiving but can no longer send credits or unlock premium content; banned, rejected, and disabled accounts can do none of the four. Moderated members now get an explicit refusal instead of a generic error.
+[*] [B]Precision guard[/B] — lowering a currency's decimals is refused while any member balance would be rounded by the change, which previously let the next write round balances while the ledger kept its cents.
+[*] [B]Hardening[/B] — postbit balances load in one query instead of per post, credit writes go through XenForo's flood check, and history pruning batches and resumes by member. Demurrage now burns at the precision its pass started with, and the `[charge]` price is parsed once so the rendered price and the charge cannot diverge.
+[/LIST]
+
 [B]0.13.1[/B]
 [LIST]
 [*] [B]Inflation hardening[/B] — the daily faucet is now tracked in its own ledger, so duplicating, disabling, or deleting an event mid-day can no longer move anyone's allowance; redeem codes count against it too. Demurrage passes are resumable and race-safe (a second runner gets "busy" instead of double-burning).
