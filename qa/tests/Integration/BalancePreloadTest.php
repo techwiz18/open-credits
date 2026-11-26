@@ -45,6 +45,20 @@ class BalancePreloadTest extends TestCase
         Transact::clearBalanceCache();
     }
 
+    public function testPreloadMatchesLazyForMemberWithNoLedgerRows(): void
+    {
+        // A missing member cannot have balance rows, so this pins the
+        // no-activity shape without depending on the dev forum's data.
+        $ghost = 999999999;
+        Transact::clearBalanceCache();
+        $expected = $this->transact->balancesFor($ghost, true);
+        Transact::clearBalanceCache();
+
+        $this->transact->preloadBalances([$ghost], true);
+
+        $this->assertSame($expected, $this->transact->balancesFor($ghost, true));
+    }
+
     protected function tearDown(): void
     {
         Transact::clearBalanceCache();
