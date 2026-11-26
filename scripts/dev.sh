@@ -88,6 +88,14 @@ addon_lint() {
 case "$cmd" in
   up)
     cp -n .env.example .env || true
+    # Keep the hook and later shells on the same compose project.
+    if [ -n "${COMPOSE_PROJECT_NAME:-}" ]; then
+      if grep -q '^COMPOSE_PROJECT_NAME=' .env; then
+        sed -i "s/^COMPOSE_PROJECT_NAME=.*/COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME/" .env
+      else
+        printf 'COMPOSE_PROJECT_NAME=%s\n' "$COMPOSE_PROJECT_NAME" >> .env
+      fi
+    fi
     docker compose up -d --build
     docker compose ps
     ;;

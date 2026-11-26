@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 
 ./scripts/check-balance-writes.sh
 ./scripts/test-dev.sh
+./scripts/test-pre-push.sh
 
 python3 scripts/check-artifacts.py
 
@@ -19,8 +20,10 @@ else
     echo "pre-commit: gitleaks not installed; skipped working-tree secret scan."
 fi
 
+project=$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env 2>/dev/null | tail -n1)
+project="${COMPOSE_PROJECT_NAME:-${project:-default}}"
 if docker compose ps web --format '{{.State}}' 2>/dev/null | grep -qx running; then
     ./scripts/dev.sh test check
 else
-    echo "pre-commit: web container not running; skipped php lint/unit/phpstan."
+    echo "pre-commit: web container not running in compose project '$project'; skipped php lint/unit/phpstan."
 fi

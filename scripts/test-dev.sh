@@ -5,6 +5,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Git exports GIT_DIR/GIT_WORK_TREE into hooks; the throwaway repo below must
+# resolve its own config, not the checkout that invoked the hook.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 tmp=$(mktemp -d)
@@ -17,6 +21,7 @@ cp scripts/dev.sh "$repo/scripts/dev.sh"
 cp qa/phpunit.xml qa/phpunit-integration.xml qa/phpstan.neon \
   qa/composer.json qa/composer.lock qa/seed-dev-content.php "$repo/qa/"
 touch "$repo/src/.qatmp/vendor/autoload.php"
+printf 'WEB_PORT=8080\n' > "$repo/.env.example"
 
 # A pre-existing sync copy keeps dev.sh on its rsync branch.
 cat > "$repo/src/.qatmp/vendor/bin/phpunit" <<'EOF'
@@ -30,6 +35,9 @@ chmod +x "$repo/src/.qatmp/vendor/bin/phpunit"
 # locally, pointing the container path at the throwaway copy.
 cat > "$tmp/bin/docker" <<'EOF'
 #!/usr/bin/env bash
+if [ "${1:-}" = "compose" ] && { [ "${2:-}" = "up" ] || [ "${2:-}" = "ps" ]; }; then
+    exit 0
+fi
 payload="${!#}"
 default=/var/www/html/.qatmp
 exec bash -c "${payload//$default/$STUB_QATMP}"
@@ -75,6 +83,11 @@ rc=$?
 set -e
 [ "$rc" -eq 1 ] || fail "test bogus exited $rc, want 1"
 grep -q 'usage: dev.sh test' <<<"$out" || fail "no usage for unknown kind: $out"
+
+# `up` records an isolated compose project in .env for later shells and hooks.
+COMPOSE_PROJECT_NAME=open-credits-test run up >/dev/null 2>&1 || fail "up failed"
+grep -qx 'COMPOSE_PROJECT_NAME=open-credits-test' "$repo/.env" \
+  || fail "up did not record the compose project in .env"
 
 # Hook install/uninstall state machine, in the throwaway repo so the real
 # core.hooksPath is never touched.

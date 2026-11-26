@@ -25,16 +25,25 @@ container; edits apply on next page load (templates recompile automatically).
 ## Git hooks
 
 `./scripts/dev.sh install-hooks` points `core.hooksPath` at `.githooks/` so the
-tracked `pre-commit` hook runs on every commit. It runs:
+tracked hooks run on every commit and push.
+
+`pre-commit` runs:
 
 * `scripts/check-balance-writes.sh` — the ledger guardrail (also in CI).
-* `scripts/test-dev.sh` — dev.sh argument smoke test (also in CI).
+* `scripts/test-dev.sh` — dev.sh argument smoke test (also in CI, including
+  under the `GIT_DIR` a hook inherits).
+* `scripts/test-pre-push.sh` — branch-base guard smoke test (also in CI).
 * `scripts/check-artifacts.py` — every `_output` JSON parses and `addon.json`
   has a version (the exact script public CI runs).
 * `gitleaks dir .` — secret scan of the working tree when `gitleaks` is
   installed; prints a one-line skip note when it is not.
 * `./scripts/dev.sh test check` — PHP lint, unit tests, PHPStan, only when the
-  Docker `web` container is running (skipped with a note otherwise).
+  Docker `web` container is running for the active compose project; the skip
+  note names the project.
+
+`pre-push` refuses a branch whose oldest commit starts on another feature tip
+instead of `origin/main`, so a stacked PR cannot be pushed by accident. Rebase
+onto `origin/main` first.
 
 Required host tools: `bash`, `python3`, `git`. Optional: `docker compose` (the
 PHP checks) and `gitleaks` ≥ 8.19 (the secret scan; older versions lack the
@@ -76,9 +85,10 @@ project files are still scanned.
 * Parallel agent session? Isolate the whole stack — project name, all ports,
   and (consequently) a separate DB volume needing its own forum install:
   `COMPOSE_PROJECT_NAME=open-credits-b WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 docker compose up -d`.
-  Record it in `HANDOFF.md` open threads so sessions don't chase each other's
-  containers. Claim the stack there before seeding or running integration
-  tests, and release it when done.
+  `./scripts/dev.sh up` records that project name in `.env`, so later shells
+  and the pre-commit hook check the same stack. Record it in `HANDOFF.md` open
+  threads so sessions don't chase each other's containers. Claim the stack
+  there before seeding or running integration tests, and release it when done.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
 
 ## Release checklist (local — needs the licensed XF runtime, so not in CI)

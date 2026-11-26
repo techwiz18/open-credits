@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Pre-push guardrail: a feature branch must start on origin/main, not on
+# another feature tip (a stacked PR that only looks like one branch).
+# Install with `./scripts/dev.sh install-hooks`; see docs/DEV.md "Git hooks".
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+    echo "pre-push: origin/main not found; skipped branch-base check."
+    exit 0
+fi
+
+current=$(git symbolic-ref --quiet --short HEAD || true)
+[ -n "$current" ] || exit 0
+
+oldest=$(git rev-list --reverse origin/main..HEAD | sed -n '1p')
+[ -n "$oldest" ] || exit 0
+
+parent=$(git rev-parse "$oldest^" 2>/dev/null || true)
+if [ -z "$parent" ] || ! git merge-base --is-ancestor "$parent" origin/main; then
+    echo "pre-push: branch starts at $parent, which is not on origin/main." >&2
+    echo "pre-push: rebase onto origin/main before pushing (see AGENTS.md)." >&2
+    exit 1
+fi
+
+upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+while IFS= read -r ref; do
+    case "$ref" in
+        "refs/heads/$current"|"refs/remotes/origin/$current"|"$upstream") ;;
+        refs/heads/main|refs/remotes/origin/main) ;;
+        *)
+            echo "pre-push: commit $oldest also belongs to $ref; this branch is stacked." >&2
+            echo "pre-push: rebase onto origin/main before pushing (see AGENTS.md)." >&2
+            exit 1
+            ;;
+    esac
+done < <(git for-each-ref --format='%(refname)' --contains "$oldest")
