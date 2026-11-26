@@ -56,25 +56,25 @@ To upgrade later: upload the newer zip and click [B]Upgrade[/B] on the add-on.
 
 [B]Changelog[/B]
 
-[B]0.14.0[/B]
+[B]0.14.0[/B] — [URL=https://github.com/techwiz18/open-credits/releases/tag/v0.14.0]full release notes[/URL]
 [LIST]
 [*] [B]Account standing[/B] — one rule for who may earn, send, receive, and unlock. Accounts awaiting email confirmation or approval keep earning and receiving but can no longer send credits or unlock premium content; banned, rejected, and disabled accounts can do none of the four. Moderated members now get an explicit refusal instead of a generic error.
 [*] [B]Precision guard[/B] — lowering a currency's decimals is refused while any member balance would be rounded by the change, which previously let the next write round balances while the ledger kept its cents.
 [*] [B]Hardening[/B] — postbit balances load in one query instead of per post, credit writes go through XenForo's flood check, and history pruning batches and resumes by member. Demurrage now burns at the precision its pass started with, and the `[charge]` price is parsed once so the rendered price and the charge cannot diverge.
 [/LIST]
 
-[B]0.13.1[/B]
+[B]0.13.1[/B] — [URL=https://github.com/techwiz18/open-credits/releases/tag/v0.13.1]full release notes[/URL]
 [LIST]
 [*] [B]Inflation hardening[/B] — the daily faucet is now tracked in its own ledger, so duplicating, disabling, or deleting an event mid-day can no longer move anyone's allowance; redeem codes count against it too. Demurrage passes are resumable and race-safe (a second runner gets "busy" instead of double-burning).
 [*] [B]Earning-event guardrails[/B] — saving an exact-duplicate active event (same trigger, currency, and scope) is refused, while scoped per-forum/per-group variants still work and deactivating always saves. Backfills and all earning paths skip banned, rejected, and disabled members.
 [/LIST]
 
-[B]0.13.0[/B]
+[B]0.13.0[/B] — [URL=https://github.com/techwiz18/open-credits/releases/tag/v0.13.0]full release notes[/URL]
 [LIST]
 [*] [B]Inflation control[/B] — an optional primary-currency money-supply toolkit: a balance cap, a daily faucet cap, and demurrage/decay. Caps apply to member earnings and redemptions; transfers and charges are unaffected, and admin adjustments remain trusted. Demurrage runs from a resumable cron (checked every 15 minutes, applied once per period), with a preview and "run now" in AdminCP → Credits → Tools.
 [/LIST]
 
-[B]0.12.0[/B]
+[B]0.12.0[/B] — [URL=https://github.com/techwiz18/open-credits/releases/tag/v0.12.0]full release notes[/URL]
 [LIST]
 [*] [B]Premium posts[/B] — a new [ICODE][charge=10]…[/charge][/ICODE] BBCode shows a locked box in place of the content until the reader pays credits; the author is credited and sees how many members unlocked it (and what it earned). One purchase unlocks the post, so the post's price is the highest charge block it contains. Authors, staff, and a bypass permission see it free. This is a credits-gated display, not content protection.
 [*] [B]Wallet[/B] — the [ICODE]/credits[/ICODE] page now holds the balance, redeem, transfer, and paged history (10/page by default, with 10/20/50 per-page links).
