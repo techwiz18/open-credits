@@ -226,14 +226,16 @@ change fires the `oc_credits_adjust` code event with
   `widget_def_options_oc_top_holders` (admin options: count, currency, guests).
 * `[charge=X]…[/charge]` (`BbCode/Charge.php`) shows a locked box in place of
   the post content until the reader pays X of the primary currency; authors,
-  staff/admins/moderators, and `ocChargeFree` holders bypass. This is a
+  staff/admins/moderators, and signed-in members holding `ocChargeFree` bypass
+  (guests stay locked even if the guest group is granted it). This is a
   **credits-gated display, not content protection**: the body remains in the
   post message and can appear in raw post output, snippets, quotes, and the
   API. The unlock form posts to `/credits/unlock`, which loads the post,
   checks `canView()` and the visitor's account state (banned/email-confirm are
-  refused), derives the price from the post's parsed `[charge]` blocks (the
-  **highest** valid block, since one purchase unlocks the post; the client
-  cannot set it), calls `ContentCharge::purchase()`, and redirects back.
+  refused), resolves the same verdict as rendering (`denied` → 403, any allowed
+  verdict → redirect), derives the price from the post's parsed `[charge]`
+  blocks (the **highest** valid block, since one purchase unlocks the post; the
+  client cannot set it), calls `ContentCharge::purchase()`, and redirects back.
   Render, unlock, and the ledger read the same `ContentCharge::priceForMessage()`
   decision. One purchase per (post, member) unlocks every block in that post.
   The author also sees a per-block "Members unlocked: N · total earned"
