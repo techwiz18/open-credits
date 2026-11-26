@@ -173,8 +173,6 @@ through the transaction service.
 * Remove the per-post balance lookup on the postbit.
 * Rate-limit credit write endpoints.
 * Move large balance rebuilds and history pruning to resumable background jobs.
-* Reject currency-precision changes that would silently round existing
-  balances.
 
 **Shipped: inflation control** ([#8](../../issues/8)) — the last core economy
 epic: an on/off toggle plus a balance cap, a daily faucet limit, and

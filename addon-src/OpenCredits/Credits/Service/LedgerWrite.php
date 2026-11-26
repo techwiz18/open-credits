@@ -172,6 +172,21 @@ class LedgerWrite
     }
 
     /**
+     * How many stored balances a lower precision would round. The balance
+     * column keeps two decimals whatever the currency says, so the test is
+     * the value's own round-trip at the new precision: a non-zero count
+     * means the next write and a ledger rebuild would disagree with what is
+     * stored today.
+     */
+    public function countUnrepresentableBalances(int $currencyId, int $decimals): int
+    {
+        return (int)$this->db->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_balance WHERE currency_id = ? AND ROUND(balance, ?) <> balance',
+            [$currencyId, max(0, $decimals)]
+        );
+    }
+
+    /**
      * One xf_oc_transaction row. Pure so the column set, the per-leg
      * content_id override and the column-width truncation are unit-testable
      * without a database.

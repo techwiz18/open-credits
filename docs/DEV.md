@@ -92,8 +92,11 @@ docker compose exec -T web php /var/www/html/cmd.php xf-addon:validate-json Open
 ./scripts/dev.sh test stan
 ./scripts/dev.sh test lint
 docker compose exec -T web php /var/www/html/cmd.php xf-addon:build-release OpenCredits/Credits
-# release notes: Breaking (forum owners) / Breaking (integrators) /
-# Behavior changes / Fixes — see docs/adr/0003-what-1-0-promises.md
+# release notes (docs/adr/0003-what-1-0-promises.md):
+#   Breaking (forum owners) - data meaning changes, manual admin action
+#   Breaking (integrators)  - API, event, criteria, or stable-surface ids
+#   Behavior changes        - fixes that restore documented behaviour
+#   Fixes                   - everything else
 # fresh-install smoke on a scratch copy, then upgrade smoke 0.9.x → current
 # (for pre-release 0.12 dev installs, also verify the 937 charge-key migration)
 # also confirm the Top credit holders widget renders when placed and a balance exists
