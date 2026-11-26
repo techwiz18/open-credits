@@ -63,6 +63,15 @@ function seed(): void
     \XF::setVisitor($user);
 
     $thread = \XF::finder('XF:Thread')->where('title', SEED_THREAD_TITLE)->fetchOne();
+    if ($thread) {
+        // A previous run parked purchases on these posts. Clear them so the
+        // charge tests get charge-free posts again without a full clean.
+        \XF::db()->query(
+            "DELETE c FROM xf_oc_charge AS c INNER JOIN xf_post AS p ON p.post_id = c.content_id"
+            . " WHERE c.content_type = 'post' AND p.thread_id = ?",
+            $thread->thread_id
+        );
+    }
     if (!$thread) {
         $forum = \XF::finder('XF:Forum')->order('node_id')->fetchOne();
         if (!$forum) {
@@ -79,13 +88,17 @@ function seed(): void
         $creator->save();
         $thread = $creator->getThread();
 
-        $replier = \XF::app()->service(\XF\Service\Thread\ReplierService::class, $thread);
-        $replier->setMessage('Seed reply for backfill verification.');
-        if (!$replier->validate($errors)) {
-            fwrite(STDERR, 'post: ' . json_encode($errors) . "\n");
-            exit(1);
+        // Three replies: each charge test parks its purchase on a different
+        // post, and the tests run in random order.
+        for ($i = 1; $i <= 3; $i++) {
+            $replier = \XF::app()->service(\XF\Service\Thread\ReplierService::class, $thread);
+            $replier->setMessage("Seed reply {$i} for backfill verification.");
+            if (!$replier->validate($errors)) {
+                fwrite(STDERR, 'post: ' . json_encode($errors) . "\n");
+                exit(1);
+            }
+            $replier->save();
         }
-        $replier->save();
     }
 
     echo 'seeded users=' . implode(',', array_map(

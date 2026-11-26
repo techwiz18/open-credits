@@ -91,7 +91,10 @@ class Transact extends AbstractService
                     'suffix' => (string)$currency['suffix'],
                     'decimals' => (int)$currency['decimals'],
                     'is_primary' => (int)$currency['is_primary'],
-                    'balance' => $balances[$id][$cid] ?? 0.0,
+                    // Same shape the lazy query's COALESCE(..., 0) returns:
+                    // the balance column is decimal(10,2), so a missing row
+                    // is the string '0.00', not a float.
+                    'balance' => $balances[$id][$cid] ?? '0.00',
                 ];
             }
             self::$balanceCache[$id . ':' . $key] = $rows;
