@@ -71,6 +71,21 @@ class Currency extends AbstractController
         ]);
         $input['decimals'] = max(0, min(2, $input['decimals']));
 
+        $decimals = (int)$input['decimals'];
+        if (!$currency->isInsert() && $decimals < (int)$currency->decimals) {
+            $rounded = $this->service('OpenCredits\Credits:Transact')
+                ->ledgerWrite()
+                ->countUnrepresentableBalances((int)$currency->currency_id, $decimals);
+            if ($rounded) {
+                return $this->error(sprintf(
+                    'Lowering the precision would round %d member balance(s) that have more than %d decimal place(s).'
+                    . ' Round them with an adjust first, or keep the current precision.',
+                    $rounded,
+                    $decimals
+                ));
+            }
+        }
+
         if ($input['is_primary'] && (!$input['active'] || !$input['visible'])) {
             return $this->error('The primary currency must be active and visible.');
         }
