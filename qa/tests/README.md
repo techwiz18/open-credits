@@ -60,23 +60,25 @@ DB-backed service tests run against the licensed dev forum. The bootstrap
 without it the framework is not loaded (public CI runs only the unit suite).
 
 ```bash
-./scripts/dev.sh test seed    # once per dev forum: content-dependent tests
+./scripts/dev.sh test all     # seeds, then lint + unit + PHPStan + integration
+./scripts/dev.sh test seed    # only for a bare `test integration`: content-dependent tests
 ./scripts/dev.sh test integration
 ./scripts/dev.sh test integration --filter InflationControl   # one file
 ./scripts/dev.sh test clean   # remove the seeded content again
 ```
 
 Content-dependent tests (backfill, charge render/unlock, negative-balance)
-skip on a bare forum; `test seed` creates three plain members, a
-thread/reply, and an inactive 0-decimal currency, and `test clean` removes
-them. The wrapper runs integration with `--display-skipped
+skip on a bare forum; `test seed` creates three plain members, a thread with
+three replies, and an inactive 0-decimal currency, and `test clean` removes
+them again. Re-seeding also clears the charge rows earlier runs parked on those
+posts, so it is safe to seed over a used forum. The wrapper runs integration with `--display-skipped
 --fail-on-skipped`, so an unseeded forum fails with the seed hint instead of
 passing silently. The suite also runs in random order
 (`executionOrder="random"`) so static-cache leaks between tests surface.
 Integration-only pins (for example `DemurrageAdaptersTest`, which needs the XF
 boot to build a controller) are not covered by public CI; run
-`./scripts/dev.sh test all` before merging (it includes `check`, so there is no
-need to run both).
+`./scripts/dev.sh test all` before merging — it seeds the fixtures, then runs
+`check`, so there is no need to run both, and it can be run twice in a row.
 
 Covered today:
 - `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,
