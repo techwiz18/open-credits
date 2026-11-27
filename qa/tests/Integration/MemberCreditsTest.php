@@ -119,13 +119,17 @@ class MemberCreditsTest extends TestCase
     public function testWalletViewOwnsBalanceAndAmountStep(): void
     {
         \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+        $view = $this->walletView();
+        // The suite runs against seeded members that may already hold credits,
+        // so assert the delta instead of an absolute balance.
+        $before = $view->balanceFor($this->memberId, $this->currencyId);
+
         $svc = \XF::app()->service('OpenCredits\Credits:Transact');
         $svc->adjust($this->memberId, $this->currencyId, 10.00, self::SEED_TRIGGER, 0, 'test');
 
-        $view = $this->walletView();
         $decimals = (int)\XF::em()->find('OpenCredits\Credits:Currency', $this->currencyId)->decimals;
 
-        $this->assertSame(10.0, $view->balanceFor($this->memberId, $this->currencyId));
+        $this->assertSame($before + 10.0, $view->balanceFor($this->memberId, $this->currencyId));
         $this->assertSame(0.0, $view->balanceFor($this->memberId, 999999));
         $this->assertSame(WalletView::amountStep($decimals), $view->step($decimals));
     }
@@ -203,9 +207,14 @@ class MemberCreditsTest extends TestCase
         $options = \XF::app()->options();
         $originalRedeem = $options->ocShowWalletRedeem;
         $originalTransfer = $options->ocShowTransfer;
+        $originalTab = $options->ocShowProfileTab;
+        $originalMode = $options->ocProfileTabMode;
+        // Pin the dev-forum defaults the render path depends on: the tab must
+        // be enabled and self must get the wallet, whatever the currency count.
+        $options->ocShowProfileTab = true;
+        $options->ocProfileTabMode = 'wallet';
         $options->ocShowWalletRedeem = true;
         $options->ocShowTransfer = true;
-        $others = $this->useSingleCurrency();
 
         try {
             $reply = $this->callMember($this->memberId);
@@ -225,7 +234,8 @@ class MemberCreditsTest extends TestCase
         } finally {
             $options->ocShowWalletRedeem = $originalRedeem;
             $options->ocShowTransfer = $originalTransfer;
-            $this->restoreCurrencies($others);
+            $options->ocShowProfileTab = $originalTab;
+            $options->ocProfileTabMode = $originalMode;
         }
     }
 
@@ -562,7 +572,16 @@ class MemberCreditsTest extends TestCase
         /** @var array{code: callable} $data */
         $data = eval($compiled);
 
-        return $data['code'](\XF::app()->templater(), $params);
+        // The compiled standalone source has no current template context, so
+        // nested renderers (pagenav) would emit a nameless template. Give the
+        // templater the same type:name it would have during a real render.
+        $templater = \XF::app()->templater();
+        $postRender = $templater->setupRenderTemplateElement('public', $title);
+        try {
+            return $data['code']($templater, $params);
+        } finally {
+            $postRender();
+        }
     }
 
     protected function callIndex(int $page, int $currencyId = 0, ?int $perPage = null): \XF\Mvc\Reply\AbstractReply
