@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
-use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
-use PHPUnit\Framework\TestCase;
 
 /**
  * The request cache stays fresh after a write: no caller clears it, and the
  * next read in the same request sees both write paths (the ledger module and
  * the legacy adjust) and the event rows the write invalidated.
  */
-class RequestCacheTest extends TestCase
+class RequestCacheTest extends IntegrationTestCase
 {
     protected const TRIGGER = 'octest_request_cache';
 
@@ -28,6 +26,7 @@ class RequestCacheTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -54,13 +53,11 @@ class RequestCacheTest extends TestCase
 
         $this->cleanup();
         $this->setBalance(10.0);
-        RequestCache::reset();
     }
 
     protected function tearDown(): void
     {
         $this->cleanup();
-        RequestCache::reset();
         $this->transact->rebuildAllBalancesFully();
     }
 

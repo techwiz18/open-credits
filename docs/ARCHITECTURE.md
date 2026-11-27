@@ -14,7 +14,7 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | Façade for every money path (earn, transfer, redeem, charge, prune, rebuild); supplies the `LedgerWrite` and `HistoryPrune` modules and keeps the public API integrators call |
 | `Service/LedgerWrite.php` | **The one author of balance changes and ledger rows.** `commit(movement)` owns user-row lock order, currency precision, the overdraw policy, `xf_oc_balance`, the `oc_credits` mirror, and the `xf_oc_transaction` row shape; callers own the transaction and the post-commit event, and every commit drops the request cache |
-| `Service/RequestCache.php` | **The one request-scoped memo**: balance rows, active event rows, the primary currency id, the charge price/unlock-count state and the per-request `ContentCharge` instance. Writes call `invalidate()` once; tests call `reset()` |
+| `Service/RequestCache.php` | **The one request-scoped memo**: balance rows, active event rows, the primary currency id, the charge price/unlock-count state and the per-request `ContentCharge` instance. Writes call `invalidate()`; tests call `reset()` |
 | `Service/Ledger.php` | Ledger vocabulary: the one trigger-label map (`label()`, award-only `eventTriggers()`), trigger constants, and stored markers (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) shared by history, alerts, and the prune guard |
 | `Service/AccountStanding.php` | **The one account-standing rule**: four verdicts (earn, receive, send, unlock) over one state table, pure so every money path reads the same decision |
 | `Service/WalletView.php` | **The one wallet view**: viewable currencies, selection order (requested → primary → lowest id), the viewer's balance, show flags, pager/switch/form URLs, amount step, and wallet-vs-member-tab mode. The controller, `XF/Entity/User` getters, the widget and both wallet templates read it |
@@ -282,15 +282,19 @@ change fires the `oc_credits_adjust` code event with
 * Presentation decisions for the wallet live in `Service/WalletView`, not in
   the controller, entity getters, widget or templates. Add a view rule there so
   the wallet, profile pane and leaderboard cannot drift.
-* Per-request caches live in one object, `Service/RequestCache` (reached through
-  `RequestCache::instance()`): balance rows, event rows, the primary currency
-  id, the charge price/unlock-count state and the one `ContentCharge` instance.
-  Production writes call `invalidate()` once, from `LedgerWrite::commit()` and
-  the legacy writers' post-commit path, so a new write path cannot serve a
-  stale read. Tests call `RequestCache::reset()` between cases; there is no
-  per-section clear method left to call. `ContentCharge` keeps its
-  prior-purchase memo as an instance property inside the cache, and a purchase
-  invalidates the cache so the next access check is DB-fresh.
+* Per-request caches live in one object, `Service/RequestCache`, reached two
+  ways: the instance injected into a class that owns writes (e.g. `LedgerWrite`)
+  and `RequestCache::instance()` via `Transact::requestCache()` for read paths.
+  It holds balance rows, event rows, the primary currency id, the charge
+  price/unlock-count state and the one `ContentCharge` instance. Production
+  writes call `invalidate()` from `LedgerWrite::commit()`/`purgeBalance()`, the
+  legacy adjust/transfer/redeem post-commit paths, the balance rebuild,
+  `HistoryPrune::run()`, the admin currency switch, and the charge purchase
+  post-commit, so a new write path cannot serve a stale read. `Listener::visitorSetup()`
+  calls `RequestCache::reset()` at the request boundary; tests call it between
+  cases. There is no per-section clear method left to call. `ContentCharge` keeps
+  its prior-purchase memo as an instance property inside the cache, and a
+  purchase invalidates the cache so the next access check is DB-fresh.
   `BbCode\Charge` reads its post price and unlock count through the same cache
   instead of keeping statics of its own.
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly

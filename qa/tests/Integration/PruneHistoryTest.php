@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Service\HistoryPrune;
-use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
-use PHPUnit\Framework\TestCase;
 
 /**
  * DB-backed proof for the history-pruning invariant (#10B): pruning old
@@ -22,7 +20,7 @@ use PHPUnit\Framework\TestCase;
  * test, so no real member's ledger, snapshot, or balance is touched.
  * tearDown() removes the member, its rows, and rebuilds.
  */
-class PruneHistoryTest extends TestCase
+class PruneHistoryTest extends IntegrationTestCase
 {
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
@@ -40,6 +38,7 @@ class PruneHistoryTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -322,7 +321,6 @@ class PruneHistoryTest extends TestCase
         $this->db->delete('xf_oc_balance', 'user_id = ?', [$this->userId]);
         $this->db->delete('xf_oc_faucet', 'user_id = ?', [$this->userId]);
         $this->db->delete('xf_oc_daily_claim', 'user_id = ?', [$this->userId]);
-        RequestCache::reset();
     }
 
     private function removeThrowawayUser(): void
@@ -331,6 +329,5 @@ class PruneHistoryTest extends TestCase
         if ($existing) {
             $existing->delete();
         }
-        RequestCache::reset();
     }
 }

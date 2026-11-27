@@ -10,7 +10,8 @@ namespace OpenCredits\Credits\Service;
  * render state.
  *
  * Production writes drop it through invalidate(), so a new award or purchase
- * path cannot leave a stale read behind. Tests call reset() between cases.
+ * path cannot leave a stale read behind. The request boundary
+ * (Listener::visitorSetup), tests and long-running workers call reset().
  */
 final class RequestCache
 {
@@ -38,8 +39,8 @@ final class RequestCache
     }
 
     /**
-     * Drops the memo between requests. Writes use invalidate(); this is the
-     * test seam (and the long-running-worker seam).
+     * Drops the memo between requests. Writes use invalidate(); the request
+     * boundary (Listener::visitorSetup) and tests use this seam.
      */
     public static function reset(): void
     {

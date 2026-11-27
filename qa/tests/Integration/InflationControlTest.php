@@ -8,7 +8,6 @@ use OpenCredits\Credits\Entity\Code;
 use OpenCredits\Credits\Service\DemurrageRunner;
 use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
-use PHPUnit\Framework\TestCase;
 
 /**
  * #8 inflation control against the licensed dev forum.
@@ -17,7 +16,7 @@ use PHPUnit\Framework\TestCase;
  * real forum money supply is never capped, burned, or transferred. The
  * original primary is restored and the real mirrors rebuilt in tearDown().
  */
-class InflationControlTest extends TestCase
+class InflationControlTest extends IntegrationTestCase
 {
     protected const TRIGGER = 'octest_inflation';
     protected const TITLE = 'OC Inflation Test';
@@ -39,6 +38,7 @@ class InflationControlTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -103,8 +103,6 @@ class InflationControlTest extends TestCase
         $options->ocInflationDemurrageRate = 0;
         $options->ocInflationDemurrageDays = 7;
         $options->ocSendEarnAlerts = 0;
-
-        RequestCache::reset();
     }
 
     protected function tearDown(): void
@@ -121,7 +119,6 @@ class InflationControlTest extends TestCase
             $this->db->update('xf_oc_currency', ['is_primary' => 1], 'currency_id = ?', [$this->originalPrimary]);
         }
         $this->cleanup();
-        RequestCache::reset();
         \XF::setVisitor(null);
     }
 

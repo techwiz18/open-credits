@@ -7,7 +7,6 @@ namespace OpenCredits\Credits\Tests\Integration;
 use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Renderer checks for the [charge] soft gate: guest/member/paid/author/admin
@@ -17,7 +16,7 @@ use PHPUnit\Framework\TestCase;
  * xf_oc_charge rows, and restores currency flags in tearDown(). Dev-only;
  * skips without OC_XF_ROOT.
  */
-class ChargeRenderTest extends TestCase
+class ChargeRenderTest extends IntegrationTestCase
 {
     protected const MESSAGE = '[charge=5]RENDER_SECRET[/charge]';
 
@@ -39,6 +38,7 @@ class ChargeRenderTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -48,7 +48,6 @@ class ChargeRenderTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
-        RequestCache::reset();
 
         $rows = $this->db->fetchAll('SELECT currency_id, is_primary, active, visible FROM xf_oc_currency');
         foreach ($rows AS $row) {

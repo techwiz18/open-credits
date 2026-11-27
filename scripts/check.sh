@@ -104,7 +104,7 @@ step_unit() {
 }
 
 step_stan() {
-  run "cd $(printf '%q' "$qa") && ./vendor/bin/phpstan analyse --no-progress $(printf '%q' "$addon/Service") tests/Unit $(quote "$@")"
+  run "cd $(printf '%q' "$qa") && env OC_ADDON_SRC=$(printf '%q' "$addon") ./vendor/bin/phpstan analyse --no-progress $(printf '%q' "$addon/Service") tests/Unit $(quote "$@")"
 }
 
 step_artifacts() {

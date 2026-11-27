@@ -6,14 +6,13 @@ namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Balance preload for thread views: one bulk fill must produce exactly what
  * per-user lookups return, including zero-balance rows for users and
  * currencies with no ledger activity.
  */
-class BalancePreloadTest extends TestCase
+class BalancePreloadTest extends IntegrationTestCase
 {
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
@@ -25,6 +24,7 @@ class BalancePreloadTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -43,7 +43,6 @@ class BalancePreloadTest extends TestCase
         }
         $this->memberId = (int)$ids[0];
         $this->otherId = (int)$ids[1];
-        RequestCache::reset();
     }
 
     public function testPreloadMatchesLazyForMemberWithNoLedgerRows(): void
@@ -62,7 +61,6 @@ class BalancePreloadTest extends TestCase
 
     protected function tearDown(): void
     {
-        RequestCache::reset();
         \XF::setVisitor(null);
     }
 

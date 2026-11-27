@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
-use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Earning eligibility: banned, rejected, and disabled members earn nothing
@@ -16,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  *
  * Runs against the licensed dev forum with a throwaway member.
  */
-class AwardEligibilityTest extends TestCase
+class AwardEligibilityTest extends IntegrationTestCase
 {
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
@@ -30,6 +28,7 @@ class AwardEligibilityTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -72,7 +71,6 @@ class AwardEligibilityTest extends TestCase
         $this->db->query('DELETE FROM xf_oc_transaction WHERE user_id = ?', [$this->userId]);
         $this->db->query('DELETE FROM xf_oc_faucet WHERE user_id = ?', [$this->userId]);
         $this->db->query('DELETE FROM xf_oc_balance WHERE user_id = ?', [$this->userId]);
-        RequestCache::reset();
 
         $this->db->insert('xf_oc_event', [
             'currency_id' => $this->currencyId,
@@ -82,7 +80,6 @@ class AwardEligibilityTest extends TestCase
             'active' => 1,
             'send_alert' => 0,
         ]);
-        RequestCache::reset();
     }
 
     protected function tearDown(): void
@@ -102,7 +99,6 @@ class AwardEligibilityTest extends TestCase
             $options->{$key} = $value;
         }
         $this->removeThrowawayUser();
-        RequestCache::reset();
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('ineligibleStates')]
@@ -192,6 +188,5 @@ class AwardEligibilityTest extends TestCase
         if ($existing) {
             $existing->delete();
         }
-        RequestCache::reset();
     }
 }

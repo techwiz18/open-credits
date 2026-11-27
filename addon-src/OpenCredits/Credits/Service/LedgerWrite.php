@@ -14,9 +14,10 @@ namespace OpenCredits\Credits\Service;
  * Callers own the transaction, because their side tables (charge rows, code
  * counters, faucet tallies, resume markers) must commit with the money, and
  * because the post-commit event must not fire for a transaction that later
- * rolls back. The module drops the request cache itself: a clear is safe
- * before commit (a later read sees the connection's own rows, and a rollback
- * only costs a reload), so no caller has to remember it.
+ * rolls back. The module drops the request cache itself, so no caller has to
+ * remember it. That drop is pre-commit: it is safe for the normal path (a
+ * later read simply reloads), but a caller that reads after a failed commit
+ * and before its rollback could memoise uncommitted rows.
  */
 class LedgerWrite
 {
@@ -163,6 +164,10 @@ class LedgerWrite
 
         // One invalidation point for every movement, so a caller cannot
         // forget the cache when it adds a write path.
+        // shortcut: invalidation is pre-commit because LedgerWrite does not
+        // own the caller's transaction (ADR 0001); a caller that reads after
+        // a failed commit but before rollback could memoise uncommitted rows.
+        // Move to a post-commit hook if such a caller appears.
         $this->cache->invalidate();
         return 'ok';
     }
