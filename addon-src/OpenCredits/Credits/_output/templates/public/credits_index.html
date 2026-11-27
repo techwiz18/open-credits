@@ -14,11 +14,7 @@
 						{{ phrase('oc_switch_currency') }}:
 						<xf:foreach loop="$currencies" value="$c">
 							<xf:if is="$c.currency_id != $currency.currency_id">
-								<xf:if is="$inProfileTab">
-								<a href="{{ link('credits/member', '', {'user_id': $returnUserId, 'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
-							<xf:else />
-								<a href="{{ link('credits', '', {'currency_id': $c.currency_id}) }}" class="button button--small oc-credits-switch">{$c.title}</a>
-							</xf:if>
+								<a href="{$switchUrls.{$c.currency_id}}" class="button button--small oc-credits-switch">{$c.title}</a>
 							</xf:if>
 						</xf:foreach>
 					</div>
@@ -34,10 +30,9 @@
 	<div class="block-container">
 		<h3 class="block-header">{{ phrase('oc_redeem_a_code') }}</h3>
 		<xf:form action="{{ link('credits/redeem-save') }}" ajax="true">
-			<xf:if is="$inProfileTab">
-				<input type="hidden" name="oc_in_tab" value="1" />
-				<input type="hidden" name="oc_return_user_id" value="{$returnUserId}" />
-			</xf:if>
+			<xf:foreach loop="$formHidden" key="$name" value="$value">
+				<input type="hidden" name="{$name}" value="{$value}" />
+			</xf:foreach>
 			<div class="block-body">
 				<div class="block-row">
 					<div class="inputGroup">
@@ -62,10 +57,9 @@
 			</h3>
 			<xf:form action="{{ link('credits/transfer-save') }}" ajax="true">
 				<input type="hidden" name="currency_id" value="{$currency.currency_id}" />
-				<xf:if is="$inProfileTab">
-					<input type="hidden" name="oc_in_tab" value="1" />
-					<input type="hidden" name="oc_return_user_id" value="{$returnUserId}" />
-				</xf:if>
+				<xf:foreach loop="$formHidden" key="$name" value="$value">
+					<input type="hidden" name="{$name}" value="{$value}" />
+				</xf:foreach>
 				<div class="block-body">
 					<div class="block-row">
 						<div class="inputGroup">

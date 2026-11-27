@@ -17,12 +17,17 @@ Paths below and in issues are relative to the add-on root
 - **`_output/`:** the add-on's development surface (templates, phrases, options,
   routes, etc.).
 - **`_data/`:** generated release artifacts (gitignored); never edit by hand.
-- **Tests:** `./scripts/dev.sh help` lists every command and test kind; test
-  details (including arg forwarding) are in `qa/tests/README.md`. The tracked
-  pre-commit hook runs `test check` plus the host checks; `install-hooks` wires
-  it up. Integration needs the licensed dev forum, so neither CI nor the hook
-  runs it: run `./scripts/dev.sh test all` (it seeds itself) before pushing
-  changes to services or adapters.
+- **Tests:** `./scripts/dev.sh help` lists every command and test kind; every
+  check step (and its lint file set) is defined once in `scripts/check.sh`
+  (`./scripts/check.sh list`); test details (including arg forwarding) are in
+  `qa/tests/README.md`. The tracked pre-commit hook runs `test check` plus the
+  host checks; `install-hooks` wires it up. Integration needs the licensed dev
+  forum, so neither CI nor the hook runs it: run `./scripts/dev.sh test all`
+  (it seeds itself) before pushing changes to services or adapters.
+- **Worktrees:** copy `src/` from the primary checkout (never symlink it) and
+  reuse or claim the dev stack; see
+  `docs/DEV.md#worktrees-and-the-dev-stack`. Claim the stack in `HANDOFF.md`
+  before seeding or running integration.
 - **Docs:** `docs/DEV.md`, `docs/ARCHITECTURE.md`, `docs/XF-DEV-GOTCHAS.md`, `docs/API.md`.
 - **`HANDOFF.md`:** local-only session notes (gitignored).
 

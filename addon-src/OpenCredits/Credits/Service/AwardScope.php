@@ -6,8 +6,8 @@ use OpenCredits\Credits\Entity\CreditEvent;
 
 /**
  * Single award-eligibility verdict shared by the live award path
- * (Transact::awardByTrigger) and the historical backfill (Tools).
- * Pure: facts in, bool out — no entities, no DB.
+ * (Transact::awardByTrigger) and the historical backfill
+ * (BackfillRunner). Pure: facts in, bool out — no entities, no DB.
  * Award limits (daily caps, dedupe keys, faucet) live elsewhere.
  */
 class AwardScope
@@ -42,7 +42,7 @@ class AwardScope
     /**
      * Tallies eligible content rows per author. Pure: the backfill's verdict
      * path — every counted row passed eligible(), so the live path and the
-     * backfill cannot drift. $rows are raw backfillContentQuery rows.
+     * backfill cannot drift. $rows are raw candidate-query rows.
      *
      * @return array<int,int> author user_id => eligible row count
      */
@@ -73,6 +73,25 @@ class AwardScope
             }
         }
         return $counts;
+    }
+
+    /**
+     * Whether any of the given event rows scopes awards to forum nodes, so
+     * the caller knows it must resolve a node id. Read through scopeFor(),
+     * the same seam eligible() uses — there is no second reading of the
+     * column. A value that decodes to no positive ids means unscoped,
+     * exactly as eligibility treats it.
+     *
+     * @param array<int,array<string,mixed>> $eventRows
+     */
+    public static function needsNodeContext(array $eventRows): bool
+    {
+        foreach ($eventRows as $eventRow) {
+            if (self::scopeFor($eventRow)['forumIds']) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

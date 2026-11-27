@@ -281,6 +281,21 @@ class ContentCharge
         );
     }
 
+    /**
+     * Removes unlock rows whose post no longer exists (e.g. a thread
+     * hard-deleted in bulk, which skips the per-post delete listener).
+     * Ledger rows stay as financial history.
+     */
+    public function purgeOrphans(): int
+    {
+        $stmt = $this->db->query(
+            "DELETE c FROM xf_oc_charge AS c
+             LEFT JOIN xf_post AS p ON (c.content_type = 'post' AND p.post_id = c.content_id)
+             WHERE c.content_type = 'post' AND p.post_id IS NULL"
+        );
+        return (int)$stmt->rowsAffected();
+    }
+
     protected static function collectAmounts(array $tree, array &$out): void
     {
         foreach ($tree AS $node) {

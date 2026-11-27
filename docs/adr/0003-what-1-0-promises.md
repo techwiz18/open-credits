@@ -56,6 +56,15 @@ last writer moves, ADR 0001's allowlist comment stays truthful.
 1.0 is shippable when the blocking set is merged and the usual release gates are
 green — not when the 1.x backlog is empty.
 
+## Amendment (2026-11-27): #28 re-opened by #22
+
+The rejection premise above was too narrow. The controller also duplicated the
+cutoff, the deletable predicate and the resume-batch loop, and owned an orphan
+purge of its own, so the drift surface was larger than the preview count. #22
+therefore re-opened #28: `Service/HistoryPrune` is now the one module for
+preview, run and cutoff, and `Transact::pruneHistory()` is a compatibility
+delegate for integrators.
+
 ## Breaking changes and deprecation after 1.0
 
 Breaking changes happen only at a major release. A removal must be marked
