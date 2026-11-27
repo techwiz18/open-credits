@@ -6,6 +6,7 @@ namespace OpenCredits\Credits\Pub\Controller;
 
 use OpenCredits\Credits\Entity\Currency;
 use OpenCredits\Credits\Service\AccountStanding;
+use OpenCredits\Credits\Service\ChargeAccess;
 use OpenCredits\Credits\Service\ContentCharge;
 use OpenCredits\Credits\Service\Ledger;
 use OpenCredits\Credits\Service\WalletView;
@@ -344,7 +345,7 @@ class Credits extends AbstractController
         $this->assertPostOnly();
 
         $visitor = \XF::visitor();
-        if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
+        if (!$visitor->user_id) {
             return $this->noPermission();
         }
         if (!AccountStanding::canUnlock((string)$visitor->user_state, !empty($visitor->is_banned))) {
@@ -369,18 +370,19 @@ class Credits extends AbstractController
             return $this->error('This content cannot be unlocked.');
         }
 
-        // Authors, staff, and bypass-permission holders never pay, even via a
-        // crafted POST.
-        if ((int)$visitor->user_id === $authorId
-            || $visitor->is_staff
-            || $visitor->is_admin
-            || $visitor->is_moderator
-            || $visitor->hasPermission('general', 'ocChargeFree')) {
+        // Same verdict as rendering: authors, staff and ocChargeFree holders
+        // never pay (even without ocView); everyone else needs ocView.
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+        $charge = $svc->contentCharge();
+        $verdict = $charge->access($content, $visitor);
+        if ($verdict === ChargeAccess::DENIED) {
+            return $this->noPermission();
+        }
+        if (ChargeAccess::allows($verdict)) {
             return $this->redirect($content->getContentUrl());
         }
 
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
-        $svc = $this->service('OpenCredits\Credits:Transact');
         $currencyId = $svc->primaryCurrencyId();
         $currency = $this->em()->find('OpenCredits\Credits:Currency', $currencyId);
         if (!$currency || !$currency->active) {
@@ -391,7 +393,6 @@ class Credits extends AbstractController
         // One purchase unlocks the whole post, so the post's price is the
         // module's decision (highest valid block). Never trust the submitted
         // amount.
-        $charge = $svc->contentCharge();
         $amount = ContentCharge::priceForMessage((string)$content->message, $decimals);
         if ($amount === null) {
             return $this->error('This content cannot be unlocked right now.');
@@ -419,7 +420,6 @@ class Credits extends AbstractController
             return $this->error('This content cannot be unlocked right now.');
         }
 
-        \OpenCredits\Credits\BbCode\Charge::clearPaidCache();
         return $this->redirect($content->getContentUrl());
     }
 

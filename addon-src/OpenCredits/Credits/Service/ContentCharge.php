@@ -218,10 +218,37 @@ class ContentCharge
     }
 
     /**
+     * The one access verdict for this content and visitor, gathered from the
+     * entity, the visitor and the charge row. Render and the unlock POST both
+     * branch on it; ChargeAccess owns the priority.
+     */
+    public function access($content, $visitor): string
+    {
+        $userId = (int)($visitor->user_id ?? 0);
+        $authorId = (int)($content->user_id ?? 0);
+        $canView = $userId <= 0 || $visitor->hasPermission('general', 'ocView');
+        $isAuthor = $userId > 0 && $userId === $authorId;
+        $isStaff = $userId > 0
+            && (!empty($visitor->is_staff) || !empty($visitor->is_admin) || !empty($visitor->is_moderator));
+        $isBypass = $userId > 0 && $visitor->hasPermission('general', 'ocChargeFree');
+        // A denied visitor never sees the block and resolve() ignores paid
+        // state for them, so skip the lookup that cannot change the verdict
+        // (and would otherwise throw before the denial).
+        $canSee = $canView || $isAuthor || $isStaff || $isBypass;
+        $hasPaid = $canSee && $userId > 0 && $this->hasPaid(
+            $userId,
+            (string)$content->getEntityContentType(),
+            (int)$content->getEntityId(),
+            0
+        );
+
+        return ChargeAccess::resolve($canView, $authorId > 0, $isAuthor, $isStaff, $isBypass, $hasPaid);
+    }
+
+    /**
      * Whether the member has already unlocked this content item (any price).
      * Pass $currencyId = 0 to ignore the currency (used before resolving the
-     * primary currency so existing buyers keep access). Always reads the DB;
-     * the renderer layers its own per-request cache on top.
+     * primary currency so existing buyers keep access). Always reads the DB.
      */
     public function hasPaid(int $userId, string $contentType, int $contentId, int $currencyId = 0): bool
     {

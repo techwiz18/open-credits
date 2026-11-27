@@ -24,6 +24,9 @@ class ChargeRenderTest extends TestCase
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
 
+    /** @var Transact */
+    protected $transact;
+
     protected int $postId = 0;
     protected int $authorId = 0;
     protected int $memberId = 0;
@@ -43,7 +46,8 @@ class ChargeRenderTest extends TestCase
             \XF::$time = time();
         }
         $this->db = \XF::db();
-        $this->currencyId = \XF::app()->service('OpenCredits\Credits:Transact')->primaryCurrencyId();
+        $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
+        $this->currencyId = $this->transact->primaryCurrencyId();
 
         $rows = $this->db->fetchAll('SELECT currency_id, is_primary, active, visible FROM xf_oc_currency');
         foreach ($rows AS $row) {
@@ -120,17 +124,21 @@ class ChargeRenderTest extends TestCase
         Transact::clearPrimaryCache();
         \XF::em()->clearEntityCache();
         \XF::setVisitor(null);
-        Charge::clearPaidCache();
+        Charge::clearRenderCaches();
     }
 
     public function testGuestSeesLockedBoxWithoutBody(): void
     {
-        $html = $this->render(null);
-        $this->assertStringNotContainsString('RENDER_SECRET', $html);
-        $this->assertTrue(
-            strpos($html, 'Log in') !== false || strpos($html, 'credits/unlock') !== false,
-            'Guest should see a login/unlock prompt'
-        );
+        $this->assertGuestLockedBox($this->render(null));
+    }
+
+    public function testGuestWithBypassPermissionStillSeesLockedBox(): void
+    {
+        \XF::setVisitor(null);
+        $html = $this->withPermission(null, 'ocChargeFree', true, function (): string {
+            return $this->render(null);
+        });
+        $this->assertGuestLockedBox($html);
     }
 
     public function testNonPaidMemberSeesLockedBoxWithoutBody(): void
@@ -147,6 +155,43 @@ class ChargeRenderTest extends TestCase
         $this->assertStringContainsString('RENDER_SECRET', $html);
     }
 
+    public function testPurchaseThroughServiceIsVisibleToTheNextRender(): void
+    {
+        $txnBefore = (int)$this->db->fetchOne(
+            'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
+        );
+        try {
+            // Render while locked first: a cached paid answer would already be
+            // false for this member.
+            $before = $this->render($this->memberId);
+            $this->assertStringNotContainsString('RENDER_SECRET', $before);
+
+            $this->transact->adjust(
+                $this->memberId,
+                $this->currencyId,
+                100.00,
+                'octest_render_seed',
+                0,
+                'test'
+            );
+            $result = $this->transact->chargeForContent(
+                $this->memberId,
+                $this->authorId,
+                $this->currencyId,
+                5.00,
+                'post',
+                $this->postId
+            );
+            $this->assertSame('ok', $result);
+
+            $after = $this->render($this->memberId);
+            $this->assertStringContainsString('RENDER_SECRET', $after);
+        } finally {
+            $this->db->delete('xf_oc_transaction', 'transaction_id > ?', [$txnBefore]);
+            $this->transact->rebuildAllBalancesFully();
+        }
+    }
+
     public function testAuthorSeesBodyAndStats(): void
     {
         $this->seedCharge($this->memberId, 5.00);
@@ -159,6 +204,24 @@ class ChargeRenderTest extends TestCase
     {
         $html = $this->render($this->adminId);
         $this->assertStringContainsString('RENDER_SECRET', $html);
+    }
+
+    public function testBypassHolderSeesBodyWithoutPaying(): void
+    {
+        $html = $this->withPermission($this->memberId, 'ocChargeFree', true, function (): string {
+            return $this->render($this->memberId);
+        });
+        $this->assertStringContainsString('RENDER_SECRET', $html);
+    }
+
+    public function testMemberWithoutViewPermissionSeesNothing(): void
+    {
+        $html = $this->withPermission($this->memberId, 'ocView', false, function (): string {
+            return $this->render($this->memberId);
+        });
+        $this->assertStringNotContainsString('RENDER_SECRET', $html);
+        $this->assertStringNotContainsString('Premium content', $html);
+        $this->assertStringNotContainsString('temporarily unavailable', $html);
     }
 
     public function testInactiveCurrencyFailsClosedButPaidKeepAccess(): void
@@ -204,6 +267,38 @@ class ChargeRenderTest extends TestCase
         $this->assertStringContainsString('RENDER_SECRET', $authorHtml);
     }
 
+    public function testUnlockPostUsesTheRenderVerdictForExemptions(): void
+    {
+        // The renderer shows these members the body with ocView removed, so
+        // the POST must not answer with a permission error.
+        foreach (['adminId', 'authorId'] as $property) {
+            $userId = $this->{$property};
+            $reply = $this->withPermission($userId, 'ocView', false, function () use ($userId) {
+                return $this->unlockReply($userId);
+            });
+            $this->assertInstanceOf(
+                \XF\Mvc\Reply\Redirect::class,
+                $reply,
+                "{$property} without ocView should not be refused"
+            );
+        }
+
+        $bypass = $this->withPermission($this->memberId, 'ocView', false, function () {
+            return $this->withPermission($this->memberId, 'ocChargeFree', true, function () {
+                return $this->unlockReply($this->memberId);
+            });
+        });
+        $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $bypass);
+
+        if ($this->member2Id > 0) {
+            $denied = $this->withPermission($this->member2Id, 'ocView', false, function () {
+                return $this->unlockReply($this->member2Id);
+            });
+            $this->assertInstanceOf(\XF\Mvc\Reply\Error::class, $denied);
+            $this->assertSame(403, $denied->getResponseCode());
+        }
+    }
+
     #[DataProvider('blockedPayerStates')]
     public function testBlockedMemberCannotUnlock(bool $banned, string $state): void
     {
@@ -213,15 +308,7 @@ class ChargeRenderTest extends TestCase
         $user->user_state = $state;
         \XF::setVisitor($user);
 
-        $request = new \XF\Http\Request(
-            \XF::app()->inputFilterer(),
-            ['content_type' => 'post', 'content_id' => $this->postId, 'amount' => 5],
-            [],
-            [],
-            ['REQUEST_METHOD' => 'POST']
-        );
-        $controller = \XF::app()->controller(\OpenCredits\Credits\Pub\Controller\Credits::class, $request);
-        $reply = $controller->actionUnlock(new \XF\Mvc\ParameterBag([]));
+        $reply = $this->unlockReply($this->memberId);
 
         $this->assertInstanceOf(\XF\Mvc\Reply\Error::class, $reply);
         $this->assertSame(403, $reply->getResponseCode());
@@ -248,10 +335,18 @@ class ChargeRenderTest extends TestCase
         $this->assertStringContainsString('50.00', $html);
     }
 
+    protected function assertGuestLockedBox(string $html): void
+    {
+        $this->assertStringNotContainsString('RENDER_SECRET', $html);
+        $this->assertTrue(
+            strpos($html, 'Log in') !== false || strpos($html, 'credits/unlock') !== false,
+            'Guest should see a login/unlock prompt'
+        );
+    }
+
     protected function render(?int $userId, string $message = self::MESSAGE): string
     {
         \XF::setVisitor($userId ? \XF::em()->find('XF:User', $userId) : null);
-        Charge::clearPaidCache();
 
         $post = \XF::em()->find('XF:Post', $this->postId);
         $originalMessage = $post->message;
@@ -261,6 +356,45 @@ class ChargeRenderTest extends TestCase
         } finally {
             $post->message = $originalMessage;
         }
+    }
+
+    /**
+     * Override one global permission for a member (or the guest when $userId
+     * is null), then restore the shared permission combination so random
+     * order stays clean.
+     */
+    protected function withPermission(?int $userId, string $permission, bool $value, callable $run)
+    {
+        $user = $userId ? \XF::em()->find('XF:User', $userId) : \XF::visitor();
+        $combinationId = (int)$user->permission_combination_id;
+        $cache = \XF::permissionCache();
+        $original = $cache->getGlobalPerms($combinationId) ?: [];
+        $modified = $original;
+        $modified['general'][$permission] = $value;
+        $cache->setGlobalPerms($combinationId, $modified);
+        try {
+            return $run();
+        } finally {
+            $cache->setGlobalPerms($combinationId, $original);
+        }
+    }
+
+    /**
+     * Runs the unlock POST as $userId and returns the reply.
+     */
+    protected function unlockReply(int $userId): \XF\Mvc\Reply\AbstractReply
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $userId));
+
+        $request = new \XF\Http\Request(
+            \XF::app()->inputFilterer(),
+            ['content_type' => 'post', 'content_id' => $this->postId, 'amount' => 5],
+            [],
+            [],
+            ['REQUEST_METHOD' => 'POST']
+        );
+        $controller = \XF::app()->controller(\OpenCredits\Credits\Pub\Controller\Credits::class, $request);
+        return $controller->actionUnlock(new \XF\Mvc\ParameterBag([]));
     }
 
     protected function seedCharge(int $userId, float $amount): void

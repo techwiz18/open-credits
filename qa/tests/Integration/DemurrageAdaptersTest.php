@@ -62,7 +62,7 @@ class DemurrageAdaptersTest extends TestCase
     public function testAdminPinsBudgetAndReportsBusyAsRan(): void
     {
         $runner = new AdapterRunnerStub();
-        $runner->result = $this->verdict('busy', false);
+        $runner->nextResult = $runner->verdict('busy', false);
 
         $reply = $this->adminController($runner)->actionDemurrageSave();
         $params = $reply->getParams();
@@ -91,7 +91,7 @@ class DemurrageAdaptersTest extends TestCase
     public function testAdminIntervalSkipStillShowsTheForm(): void
     {
         $runner = new AdapterRunnerStub();
-        $runner->result = $this->verdict('done', false);
+        $runner->nextResult = $runner->verdict('done', false);
 
         $params = $this->adminController($runner)->actionDemurrageSave()->getParams();
 
@@ -144,7 +144,7 @@ class DemurrageAdaptersTest extends TestCase
     public function testAdminIncompletePassIsReportedAsRanAndNotBusy(): void
     {
         $runner = new AdapterRunnerStub();
-        $runner->result = $this->verdict('resume', true, 3, 1.5, 2);
+        $runner->nextResult = $runner->verdict('resume', true, 3, 1.5, 2);
 
         $params = $this->adminController($runner)->actionDemurrageSave()->getParams();
 
@@ -171,7 +171,7 @@ class DemurrageAdaptersTest extends TestCase
     public function testCliRunsTheFullPassWithNoBudget(): void
     {
         $runner = new AdapterRunnerStub();
-        $runner->result = $this->verdict('done', true, 2, 1.5, 2);
+        $runner->nextResult = $runner->verdict('done', true, 2, 1.5, 2);
 
         [$exit, $output] = $this->runCli($runner);
 
@@ -187,7 +187,7 @@ class DemurrageAdaptersTest extends TestCase
     public function testCliReportsBusyWithRerunWording(): void
     {
         $runner = new AdapterRunnerStub();
-        $runner->result = $this->verdict('busy', false);
+        $runner->nextResult = $runner->verdict('busy', false);
 
         [$exit, $output] = $this->runCli($runner);
 
@@ -198,7 +198,7 @@ class DemurrageAdaptersTest extends TestCase
     public function testCliReportsIncompleteAndTellsOperatorToRerun(): void
     {
         $runner = new AdapterRunnerStub();
-        $runner->result = $this->verdict('resume', true, 2, 1.0, 1);
+        $runner->nextResult = $runner->verdict('resume', true, 2, 1.0, 1);
 
         [$exit, $output] = $this->runCli($runner);
 
@@ -210,7 +210,7 @@ class DemurrageAdaptersTest extends TestCase
     public function testCliDoesNotReportAnIntervalSkipAsBusy(): void
     {
         $runner = new AdapterRunnerStub();
-        $runner->result = $this->verdict('done', false);
+        $runner->nextResult = $runner->verdict('done', false);
 
         [$exit, $output] = $this->runCli($runner);
 
@@ -292,28 +292,6 @@ class DemurrageAdaptersTest extends TestCase
 
         return $phrase;
     }
-
-    /** @return array<string, mixed> */
-    protected function verdict(
-        string $verdict,
-        bool $ran,
-        int $processed = 0,
-        float $burned = 0.0,
-        int $accounts = 0
-    ): array {
-        return [
-            'verdict' => $verdict,
-            'ran' => $ran,
-            'busy' => $verdict === 'busy',
-            'done' => $verdict === 'done',
-            'processed' => $processed,
-            'burned' => $burned,
-            'accounts' => $accounts,
-            'lastRun' => 0,
-            'nextRun' => 0,
-            'decimals' => 2,
-        ];
-    }
 }
 
 /**
@@ -324,19 +302,8 @@ class AdapterRunnerStub extends DemurrageRunner
     /** @var array<int, array{0: int, 1: bool, 2: int|null}> */
     public array $calls = [];
 
-    /** @var array<string, mixed> */
-    public array $result = [
-        'verdict' => 'done',
-        'ran' => true,
-        'busy' => false,
-        'done' => true,
-        'processed' => 0,
-        'burned' => 0.0,
-        'accounts' => 0,
-        'lastRun' => 0,
-        'nextRun' => 0,
-        'decimals' => 2,
-    ];
+    /** @var array<string, mixed>|null Canned run() result; null uses a default pass. */
+    public ?array $nextResult = null;
 
     /** @var array<string, mixed>|null Overrides preview() for verdict tests. */
     public ?array $preview = null;
@@ -345,11 +312,27 @@ class AdapterRunnerStub extends DemurrageRunner
     {
     }
 
+    /**
+     * Build a canned pass result through the runner's own factory so a new
+     * result field cannot be forgotten here.
+     *
+     * @return array<string, mixed>
+     */
+    public function verdict(
+        string $verdict,
+        bool $ran,
+        int $processed = 0,
+        float $burned = 0.0,
+        int $accounts = 0
+    ): array {
+        return $this->result($verdict, $ran, $processed, $burned, $accounts, 0, 0, 2);
+    }
+
     public function run(int $batchSize = 500, bool $ignoreInterval = true, ?int $timeBudget = null): array
     {
         $this->calls[] = [$batchSize, $ignoreInterval, $timeBudget];
 
-        return $this->result;
+        return $this->nextResult ?? $this->verdict('done', true);
     }
 
     public function preview(): array
