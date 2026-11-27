@@ -190,24 +190,47 @@ class BackfillRunner
             return ['rows' => 0, 'next' => null];
         }
 
-        $maxUserId = max(
-            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_user'),
-            $onlyUserId
-        );
-        $endUserId = $onlyUserId > 0
-            ? $maxUserId
-            : ($batchSize > 0 ? $startAfterUserId + $batchSize : $maxUserId);
-
-        // Row-level verdict, tallied per author: every paid row passed
-        // AwardScope::eligible(), so the backfill pays exactly what the live
-        // path would have paid. Ledger shape is unchanged (one lump sum per
-        // author), as are batch boundaries and resume markers.
-        $counts = $this->eligibleCounts($event, $onlyUserId, $startAfterUserId, $endUserId);
-        $next = ($batchSize > 0 && $onlyUserId <= 0 && $endUserId < $maxUserId) ? $endUserId : null;
-
+        $next = null;
         $rows = 0;
         $db->beginTransaction();
         try {
+            if ($backfillId > 0) {
+                // Re-read the resume marker under its row lock: two concurrent
+                // resumes can start from the same stale boundary, and the one
+                // that arrives second must not pay the first one's range again.
+                // Locked before any ledger row, like the other batch writes.
+                $state = $db->fetchRow(
+                    'SELECT last_user_id, completed_date FROM xf_oc_backfill'
+                    . ' WHERE backfill_id = ? FOR UPDATE',
+                    [$backfillId]
+                );
+                if ($state) {
+                    if ((int)$state['completed_date'] > 0) {
+                        // The other resume finished this event while we waited.
+                        $db->commit();
+                        return ['rows' => 0, 'next' => null];
+                    }
+                    if ($onlyUserId <= 0) {
+                        $startAfterUserId = max($startAfterUserId, (int)$state['last_user_id']);
+                    }
+                }
+            }
+
+            $maxUserId = max(
+                (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_user'),
+                $onlyUserId
+            );
+            $endUserId = $onlyUserId > 0
+                ? $maxUserId
+                : ($batchSize > 0 ? $startAfterUserId + $batchSize : $maxUserId);
+
+            // Row-level verdict, tallied per author: every paid row passed
+            // AwardScope::eligible(), so the backfill pays exactly what the live
+            // path would have paid. Ledger shape is unchanged (one lump sum per
+            // author), as are batch boundaries and resume markers.
+            $counts = $this->eligibleCounts($event, $onlyUserId, $startAfterUserId, $endUserId);
+            $next = ($batchSize > 0 && $onlyUserId <= 0 && $endUserId < $maxUserId) ? $endUserId : null;
+
             foreach ($counts as $userId => $count) {
                 $verdict = $this->ledgerWrite->commit([
                     'currency_id' => (int)$event['currency_id'],

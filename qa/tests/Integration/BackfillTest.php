@@ -160,9 +160,88 @@ class BackfillTest extends TestCase
         $this->assertNull($entries[0]['detailUser']);
     }
 
+    public function testConcurrentResumeDoesNotRepayTheAdvancedRange(): void
+    {
+        if ($this->previewUserCount() === 0) {
+            $this->markTestSkipped('No backfillable content for the post event.');
+        }
+
+        $event = $this->db->fetchRow(
+            'SELECT e.event_id, e.currency_id, e.trigger, e.amount, e.forum_ids, e.usergroup_ids,'
+            . ' c.decimals AS currency_decimals'
+            . ' FROM xf_oc_event AS e'
+            . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id'
+            . ' WHERE e.event_id = ?',
+            [$this->eventId]
+        );
+        $this->assertNotEmpty($event);
+
+        $this->db->delete('xf_oc_backfill', 'event_id = ? AND user_id = 0', [$this->eventId]);
+        $this->db->insert('xf_oc_backfill', [
+            'event_id' => $this->eventId,
+            'user_id' => 0,
+            'last_user_id' => 0,
+            'started_date' => \XF::$time,
+            'completed_date' => 0,
+        ]);
+        $backfillId = (int)$this->db->lastInsertId();
+
+        try {
+            // A concurrent resume advanced the marker after this call read its
+            // (stale) boundary of 0. The batch must continue from the locked
+            // marker, not pay the range the other run owns.
+            $maxUserId = (int)$this->db->fetchOne('SELECT MAX(user_id) FROM xf_user');
+            $this->db->update(
+                'xf_oc_backfill',
+                ['last_user_id' => $maxUserId],
+                'backfill_id = ?',
+                [$backfillId]
+            );
+
+            $runner = $this->batchRunner();
+            $batch = $runner->batch($event, 0, 0, 5000, $backfillId);
+            $this->assertSame(0, $batch['rows'], 'A stale boundary must not repay the advanced range.');
+
+            // The other resume then completes: a second stale call is skipped.
+            $again = $runner->batch($event, 0, 0, 5000, $backfillId);
+            $this->assertSame(0, $again['rows'], 'A completed event is never paid again.');
+
+            $paid = (int)$this->db->fetchOne(
+                "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
+                [$this->eventId]
+            );
+            $this->assertSame(0, $paid, 'No ledger row was written for the stale range.');
+        } finally {
+            $this->cleanup();
+        }
+    }
+
     protected function runner(): BackfillRunner
     {
         return \XF::app()->service('OpenCredits\Credits:Transact')->backfillRunner();
+    }
+
+    /**
+     * The real runner with runBatch exposed, so the resume-marker lock can be
+     * exercised without a second concurrent process.
+     */
+    protected function batchRunner(): BackfillRunner
+    {
+        $svc = \XF::app()->service('OpenCredits\Credits:Transact');
+
+        return new class($this->db, $svc->ledgerWrite(), static function (): int {
+            return 0;
+        }) extends BackfillRunner {
+            public function batch(
+                array $event,
+                int $onlyUserId,
+                int $startAfterUserId,
+                int $batchSize,
+                int $backfillId
+            ): array {
+                return $this->runBatch($event, $onlyUserId, $startAfterUserId, $batchSize, $backfillId);
+            }
+        };
     }
 
     /** The member count the admin preview promises for the post event. */
