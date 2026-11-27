@@ -61,6 +61,11 @@ class WalletViewTest extends TestCase
             'missing request without fallback is null' => [$two, 9, false, null],
             'no request uses primary' => [$primarySecond, 0, true, 2],
             'no primary uses lowest id' => [$two, 0, true, 1],
+            // A missing selection is not an invalid request: it always falls
+            // back, even on the transfer-save path (fallback disabled).
+            'no request without fallback uses primary' => [$primarySecond, 0, false, 2],
+            'no request without fallback uses lowest id' => [$two, 0, false, 1],
+            'negative request without fallback falls back' => [$primarySecond, -1, false, 2],
             'empty list is null' => [[], 1, true, null],
             'empty list without fallback is null' => [[], 1, false, null],
             'hidden or inactive rows are not candidates' => [[], 2, true, null],

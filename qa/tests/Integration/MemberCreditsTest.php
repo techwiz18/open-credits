@@ -446,6 +446,59 @@ class MemberCreditsTest extends TestCase
         }
     }
 
+    public function testTransferSaveWithoutCurrencyUsesThePrimary(): void
+    {
+        $sender = \XF::em()->find('XF:User', $this->otherId);
+        $recipient = \XF::em()->find('XF:User', $this->memberId);
+        $this->assertNotNull($sender);
+        $this->assertNotNull($recipient);
+        \XF::setVisitor($sender);
+
+        $before = (int)$this->db->fetchOne(
+            'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
+        );
+        $svc = \XF::app()->service('OpenCredits\Credits:Transact');
+        $svc->adjust($this->otherId, $this->currencyId, 10.00, 'octest_wallet_seed', 0, 'test');
+
+        try {
+            // No currency_id: the transfer-save path disables fallback for an
+            // explicit id, but a missing selection must still use the primary.
+            $request = new \XF\Http\Request(
+                \XF::app()->inputFilterer(),
+                ['to' => $recipient->username, 'amount' => 1],
+                [],
+                [],
+                ['REQUEST_METHOD' => 'POST']
+            );
+            $controller = \XF::app()->controller(Credits::class, $request);
+            $reply = $controller->actionTransferSave(new \XF\Mvc\ParameterBag([]));
+
+            $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $reply);
+            $this->assertStringContainsString('currency_id=' . $this->currencyId, $reply->getUrl());
+
+            // An explicit unknown id is still an error: only a missing
+            // selection falls back.
+            $bad = new \XF\Http\Request(
+                \XF::app()->inputFilterer(),
+                ['to' => $recipient->username, 'amount' => 1, 'currency_id' => 999999],
+                [],
+                [],
+                ['REQUEST_METHOD' => 'POST']
+            );
+            $controller = \XF::app()->controller(Credits::class, $bad);
+            try {
+                $controller->actionTransferSave(new \XF\Mvc\ParameterBag([]));
+                $this->fail('An unknown currency id was accepted.');
+            } catch (\XF\Mvc\Reply\Exception $e) {
+                $this->assertInstanceOf(\XF\Mvc\Reply\Error::class, $e->getReply());
+            }
+        } finally {
+            $this->db->delete('xf_oc_transaction', 'transaction_id > ?', [$before]);
+            $this->db->delete('xf_flood_check', 'user_id = ?', [$this->otherId]);
+            $svc->rebuildAllBalancesFully();
+        }
+    }
+
     public function testWalletTransferInProfileTabReturnsToSender(): void
     {
         $sender = \XF::em()->find('XF:User', $this->otherId);

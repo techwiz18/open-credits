@@ -246,7 +246,8 @@ class Credits extends AbstractController
      * unknown id is an error; otherwise a missing selection falls back to the
      * primary then the lowest id.
      */
-    protected function viewableCurrency(?int $currencyId = null, bool $allowFallback = true): Currency    {
+    protected function viewableCurrency(?int $currencyId = null, bool $allowFallback = true): Currency
+    {
         if ($currencyId === null) {
             $currencyId = (int)$this->filter('currency_id', 'uint');
         }

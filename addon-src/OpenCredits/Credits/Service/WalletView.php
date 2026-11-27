@@ -254,6 +254,9 @@ final class WalletView
      * $currencies is already filtered/sorted and each row has currency_id and
      * is_primary. Pure so the fallback order is unit-testable.
      *
+     * A missing/zero request always falls back: `false` only rejects an
+     * explicit non-zero id that is not viewable.
+     *
      * @param array<int, array{currency_id: int, is_primary: int}> $currencies
      */
     public static function chooseCurrencyId(array $currencies, int $currencyId, bool $allowFallback): ?int
@@ -264,9 +267,9 @@ final class WalletView
                     return $currencyId;
                 }
             }
-        }
-        if (!$allowFallback) {
-            return null;
+            if (!$allowFallback) {
+                return null;
+            }
         }
         foreach ($currencies AS $currency) {
             if (!empty($currency['is_primary'])) {
