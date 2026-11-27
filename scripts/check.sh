@@ -15,6 +15,7 @@ usage() {
 usage: scripts/check.sh [--docker] <step> [args]
 
   lint                  php -l over addon-src and qa (*.php; vendor/_releases skipped)
+  style                 no double spaces before a trailing opening brace
   unit [args]           PHPUnit unit suite (args reach PHPUnit)
   stan [args]           PHPStan on Service/ + tests/Unit (args reach PHPStan)
   artifacts             _output JSON parses; addon.json has a version
@@ -22,8 +23,8 @@ usage: scripts/check.sh [--docker] <step> [args]
   test-dev              check.sh/dev.sh CLI contract smoke test
   test-pr-comments      pr-comments.sh smoke test
   secrets               gitleaks working-tree scan (skipped when not installed)
-  check                 lint + unit + stan
-  host                  artifacts + balance-writes + test-dev + secrets
+  check                 lint + style + unit + stan
+  host                  artifacts + balance-writes + style + test-dev + secrets
   list                  print the canonical step table
 EOF
 }
@@ -32,6 +33,7 @@ list_steps() {
   cat <<'EOF'
 step              runs
 lint              php -l addon-src + qa (vendor/_releases skipped) [adapter]
+style             scripts/check-style.py [host]
 unit [args]       qa/vendor/bin/phpunit [args] [adapter]
 stan [args]       phpstan analyse --no-progress Service tests/Unit [args] [adapter]
 artifacts         python3 scripts/check-artifacts.py [host]
@@ -39,8 +41,8 @@ balance-writes    scripts/check-balance-writes.sh [host]
 test-dev          scripts/test-dev.sh [host]
 test-pr-comments  scripts/test-pr-comments.sh [host]
 secrets           gitleaks dir . (skipped when not installed) [host]
-check             lint + unit + stan [adapter]
-host              artifacts + balance-writes + test-dev + secrets [host]
+check             lint + style + unit + stan [adapter + host]
+host              artifacts + balance-writes + style + test-dev + secrets [host]
 list              this table [host]
 EOF
 }
@@ -91,6 +93,10 @@ step_lint() {
   echo "PHP lint OK (addon-src, qa)"
 }
 
+step_style() {
+  python3 scripts/check-style.py
+}
+
 step_unit() {
   run "cd $(printf '%q' "$qa") && env OC_ADDON_SRC=$(printf '%q' "$addon") ./vendor/bin/phpunit $(quote "$@")"
 }
@@ -126,6 +132,7 @@ step_secrets() {
 
 step_check() {
   step_lint
+  step_style
   step_unit
   step_stan
 }
@@ -133,6 +140,7 @@ step_check() {
 step_host() {
   step_artifacts
   step_balance_writes
+  step_style
   step_test_dev
   step_secrets
 }
@@ -141,7 +149,7 @@ case "$step" in
   "") usage >&2; exit 2 ;;
   list) list_steps; exit 0 ;;
   unit|stan) ;;
-  lint|artifacts|balance-writes|test-dev|test-pr-comments|secrets|check|host)
+  lint|style|artifacts|balance-writes|test-dev|test-pr-comments|secrets|check|host)
     if [ "$#" -gt 0 ]; then
       echo "check.sh $step takes no extra arguments (got: $*)" >&2
       exit 2
@@ -153,6 +161,7 @@ esac
 # The case statement doubles as dispatch; names are the CLI contract.
 case "$step" in
   lint) step_lint ;;
+  style) step_style ;;
   unit) step_unit "$@" ;;
   stan) step_stan "$@" ;;
   artifacts) step_artifacts ;;

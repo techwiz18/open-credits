@@ -23,7 +23,7 @@ can no longer report a false green) and installs dev dependencies on the first
 run. Delete `src/.qatmp` if `qa/composer.json` changes.
 `qa/phpunit.xml` sets `failOnEmptyTestSuite`, so a zero-test run fails.
 
-`./scripts/dev.sh test check` runs the `check` step (lint + unit + PHPStan, no
+`./scripts/dev.sh test check` runs the `check` step (lint + style + unit + PHPStan, no
 seeded content needed) through the docker adapter; the tracked pre-commit hook
 runs it alongside the host checks. Install the hook once per clone with
 `./scripts/dev.sh install-hooks`.
@@ -66,7 +66,7 @@ DB-backed service tests run against the licensed dev forum. The bootstrap
 without it the framework is not loaded (public CI runs only the unit suite).
 
 ```bash
-./scripts/dev.sh test all     # seeds, then lint + unit + PHPStan + integration
+./scripts/dev.sh test all     # seeds, then lint + style + unit + PHPStan + integration
 ./scripts/dev.sh test seed    # only for a bare `test integration`: content-dependent tests
 ./scripts/dev.sh test integration
 ./scripts/dev.sh test integration --filter InflationControl   # one file

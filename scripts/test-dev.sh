@@ -14,6 +14,8 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR \
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
+bash -n scripts/spec-frontier.sh || fail "spec-frontier.sh has a syntax error"
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 repo="$tmp/repo"
@@ -27,7 +29,7 @@ mkdir -p "$tmp/bin" "$repo/scripts" "$repo/qa/tests/Unit" "$repo/qa/vendor/bin" 
   "$repo/addon-src/OpenCredits/Credits/_output" \
   "$repo/src/.qatmp/vendor/bin"
 cp scripts/check.sh scripts/dev.sh scripts/check-artifacts.py \
-  scripts/check-balance-writes.sh "$repo/scripts/"
+  scripts/check-balance-writes.sh scripts/check-style.py "$repo/scripts/"
 cp qa/phpunit.xml qa/phpunit-integration.xml qa/phpstan.neon \
   qa/composer.json qa/composer.lock qa/seed-dev-content.php "$repo/qa/"
 chmod +x "$repo/scripts/check.sh" "$repo/scripts/dev.sh"
@@ -102,7 +104,7 @@ run() {
 run_check --help | grep -q 'usage: scripts/check.sh' || fail "--help prints no usage"
 
 run_check list > "$tmp/list"
-for step in lint unit stan artifacts balance-writes test-dev test-pr-comments \
+for step in lint style unit stan artifacts balance-writes test-dev test-pr-comments \
             secrets check host list; do
   grep -qE "^${step}([[:space:]]|$)" "$tmp/list" || fail "step table omits $step"
 done
@@ -159,6 +161,16 @@ set -e
 [ "$rc" -ne 0 ] || fail "lint accepted a broken addon file"
 rm -f "$repo/addon-src/OpenCredits/Credits/Service/Bad.php"
 
+# Style owns the one mechanical slip php -l cannot see.
+run_check style >/dev/null || fail "style rejected a clean fixture"
+printf '<?php function bad(): void  {\n}\n' > "$repo/qa/tests/Unit/Bad.php"
+set +e
+run_check style >/dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -eq 1 ] || fail "style accepted double spaces before a brace (rc=$rc)"
+rm -f "$repo/qa/tests/Unit/Bad.php"
+
 # A quoted value with a space stays one argument, and stays literal.
 marker="$tmp/pwned"
 clear_logs
@@ -177,7 +189,7 @@ mapfile -t got < "$stan_log"
 [ "${#got[@]}" -ge 1 ] && [ "${got[-1]}" = "--debug" ] \
   || fail "stan did not forward --debug: ${got[*]}"
 
-# `check` is lint + unit + stan, over both lint trees.
+# `check` is lint + style + unit + stan, over both lint trees.
 clear_logs
 rm -f "$argv_log" "$stan_log"
 run_check check >/dev/null || fail "check failed on a clean fixture"
@@ -186,6 +198,14 @@ grep -q 'addon-src/OpenCredits/Credits/Service/Good.php' "$php_log" \
   || fail "check linted no addon files"
 [ -s "$argv_log" ] || fail "check ran no unit suite"
 [ -s "$stan_log" ] || fail "check ran no phpstan"
+
+printf '<?php function bad(): void  {\n}\n' > "$repo/qa/tests/Unit/Bad.php"
+set +e
+run_check check >/dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -eq 1 ] || fail "check skipped the style step (rc=$rc)"
+rm -f "$repo/qa/tests/Unit/Bad.php"
 
 # Host steps are wired, not re-spelled.
 clear_logs
