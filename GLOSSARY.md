@@ -16,9 +16,21 @@ _Avoid_: award limits, eligibility check
 Per-award gates applied after eligibility passes (daily caps, reaction dedupe keys, faucet and balance-cap clamps).
 _Avoid_: award eligibility, throttling
 
+**Historical backfill**:
+A one-off, resumable payout of an event's existing content, so posts and threads made before the event changed earn what the live path would have paid. Preview and run share one tally, so the promised member count is the paid member count.
+_Avoid_: retrofit, re-award, batch payout
+
+**History prune**:
+Age-based deletion of ledger rows. Preview and run share one deletable predicate, so the count an admin sees is the count the run deletes; orphan charge rows are purged separately by the charge module.
+_Avoid_: cleanup, purge
+
 **Movement**:
 One intent to change balances: a currency, a trigger, and one or more legs, each a member and a signed amount. Applied whole or not at all.
 _Avoid_: transaction, entry, delta
+
+**Wallet view**:
+The currency selection, visibility and amount step one member sees on the wallet page and the profile tab, resolved once so every surface agrees.
+_Avoid_: wallet page state, view model, viewable currencies
 
 **Release-ready**:
 A tree state that has passed every gate a release tag requires, so tagging it needs no further code changes.

@@ -53,13 +53,30 @@ class BackfillRunner
                 'decimals' => (int)$event['currency_decimals'],
                 'amount' => (float)$event['amount'],
                 // Same tally as the run: preview promises exactly the users
-                // the run will pay. A full row fetch on large boards is the
-                // price of that guarantee; backfill is a one-shot admin op.
-                'users' => count($this->eligibleCounts($event, 0, 0, 0)),
+                // the run will pay, counted in the same user-id ranges.
+                'users' => $this->previewUserCount($event),
                 'ran' => $this->eventRan((int)$event['event_id'], 0),
             ];
         }
         return $preview;
+    }
+
+    /**
+     * Distinct eligible authors, tallied in user-id ranges. The ranges are
+     * disjoint, so the per-range author counts sum to exactly the users the
+     * run pays, without loading a large board's content table into memory.
+     *
+     * @param array<string, mixed> $event
+     */
+    protected function previewUserCount(array $event): int
+    {
+        $batchSize = 5000;
+        $maxUserId = (int)$this->db->fetchOne('SELECT MAX(user_id) FROM xf_user');
+        $users = 0;
+        for ($start = 0; $start < $maxUserId; $start += $batchSize) {
+            $users += count($this->eligibleCounts($event, 0, $start, $start + $batchSize));
+        }
+        return $users;
     }
 
     /**
@@ -248,11 +265,16 @@ class BackfillRunner
                         ],
                     ],
                 ]);
-                // A currency deactivated mid-run fails closed here; the
-                // member is not paid and the row is not counted.
-                if ($verdict === 'ok') {
-                    $rows++;
+                // A failed leg (currency deactivated mid-run, missing member)
+                // aborts the batch: the transaction rolls back whole, so the
+                // marker stays resumable instead of completing an event that
+                // still owes members their rows.
+                if ($verdict !== 'ok') {
+                    throw new \RuntimeException(
+                        "Backfill commit for user {$userId} returned '{$verdict}'."
+                    );
                 }
+                $rows++;
             }
             if ($backfillId > 0) {
                 // Commit the resume boundary in the same transaction as the
