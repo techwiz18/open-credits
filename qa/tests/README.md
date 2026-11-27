@@ -102,13 +102,21 @@ Covered today:
   `maxAmount` picking the highest valid block.
 - `ContentChargeTest` (unit) — the pure [charge] price rules: highest valid
   block wins, and non-positive, over-precise (at the currency's decimals), and
-  malformed blocks are ignored.
+  malformed blocks are ignored; also pins the per-content/member
+  prior-purchase memo with a counting DB stub.
+- `ChargeAccessTest` (unit) — the pure verdict matrix (`denied` → `author` →
+  `staff` → `bypass` → `paid` → `locked`), every exemption and the ownerless
+  case.
 - `ChargeRenderTest` — the renderer gates and fail-closed states: guest,
   non-paid/paid member, author stats, admin bypass, inactive currency,
   invalid price, and two-price posts using the highest price; blocked
-  (banned/email-confirm) payers cannot unlock via the controller.
+  (banned/email-confirm) payers cannot unlock via the controller; an exempt
+  crafted POST writes nothing, moves no credits and adds no ledger rows; and
+  a purchase through the service is visible to the next render in the same
+  request.
 - `ChargeUnlockTest` — a crafted cheap `amount` still charges the post's
-  highest valid `[charge]` block.
+  highest valid `[charge]` block; a repeat POST writes no second charge; and
+  a guest POST is refused with 403.
 - `BackfillTest` — the historical backfill through `Service/BackfillRunner`:
   the preview/run query applies the event's forum/group scope and skips first
   posts; the runner writes an `event_id` marker, is idempotent, reports the

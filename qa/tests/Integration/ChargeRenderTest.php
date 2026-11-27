@@ -48,6 +48,7 @@ class ChargeRenderTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
+        Transact::clearContentChargeCache();
 
         $rows = $this->db->fetchAll('SELECT currency_id, is_primary, active, visible FROM xf_oc_currency');
         foreach ($rows AS $row) {
@@ -122,6 +123,7 @@ class ChargeRenderTest extends TestCase
             );
         }
         Transact::clearPrimaryCache();
+        Transact::clearContentChargeCache();
         \XF::em()->clearEntityCache();
         \XF::setVisitor(null);
         Charge::clearRenderCaches();
@@ -186,6 +188,11 @@ class ChargeRenderTest extends TestCase
 
             $after = $this->render($this->memberId);
             $this->assertStringContainsString('RENDER_SECRET', $after);
+
+            // A fresh request drops the memo and still reads the purchase.
+            Transact::clearContentChargeCache();
+            $fresh = $this->render($this->memberId);
+            $this->assertStringContainsString('RENDER_SECRET', $fresh);
         } finally {
             $this->db->delete('xf_oc_transaction', 'transaction_id > ?', [$txnBefore]);
             $this->transact->rebuildAllBalancesFully();
@@ -296,6 +303,55 @@ class ChargeRenderTest extends TestCase
             });
             $this->assertInstanceOf(\XF\Mvc\Reply\Error::class, $denied);
             $this->assertSame(403, $denied->getResponseCode());
+        }
+    }
+
+    public function testExemptUnlockPostWritesNoRowsAndMovesNoCredits(): void
+    {
+        $cases = [
+            'author' => $this->authorId,
+            'staff' => $this->adminId,
+            'bypass' => $this->memberId,
+        ];
+
+        $chargeCount = function (): int {
+            return (int)$this->db->fetchOne(
+                "SELECT COUNT(*) FROM xf_oc_charge WHERE content_type = 'post' AND content_id = ?",
+                [$this->postId]
+            );
+        };
+
+        foreach ($cases AS $name => $userId) {
+            $txnBefore = (int)$this->db->fetchOne(
+                'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
+            );
+            $chargesBefore = $chargeCount();
+            $balanceBefore = $this->transact->getBalance($userId, $this->currencyId);
+
+            $reply = $this->withPermission($userId, 'ocView', false, function () use ($userId, $name) {
+                if ($name !== 'bypass') {
+                    return $this->unlockReply($userId);
+                }
+                return $this->withPermission($userId, 'ocChargeFree', true, function () use ($userId) {
+                    return $this->unlockReply($userId);
+                });
+            });
+
+            $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $reply, "{$name} should redirect");
+            $this->assertSame($chargesBefore, $chargeCount(), "{$name} should write no charge row");
+            $this->assertSame(
+                $txnBefore,
+                (int)$this->db->fetchOne(
+                    'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
+                ),
+                "{$name} should write no ledger row"
+            );
+            $this->assertEqualsWithDelta(
+                $balanceBefore,
+                $this->transact->getBalance($userId, $this->currencyId),
+                0.0001,
+                "{$name} should move no credits"
+            );
         }
     }
 

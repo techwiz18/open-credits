@@ -15,6 +15,14 @@ class Transact extends AbstractService
     protected static $balanceCache = [];
     protected static $eventRowsCache = [];
 
+    /**
+     * One charge module per request. Process-scoped like the other per-request
+     * statics here, so a long-running worker must clear it between requests.
+     *
+     * @var ContentCharge|null
+     */
+    protected static $contentChargeCache = null;
+
     public static function clearEventCache(): void
     {
         self::$eventRowsCache = [];
@@ -620,18 +628,32 @@ class Transact extends AbstractService
      */
     public function contentCharge(): ContentCharge
     {
-        $db = $this->db();
+        if (self::$contentChargeCache === null) {
+            $db = $this->db();
 
-        return new ContentCharge(
-            $db,
-            function (int $userId, int $currencyId, float $amount): void {
-                $this->applyBalanceDelta($userId, $currencyId, $amount);
-            },
-            function (int $userId, int $currencyId, float $amount, string $contentType, int $contentId): void {
-                self::clearBalanceCache($userId);
-                $this->fireAdjustEvent([$userId, $currencyId, $amount, Ledger::TRIGGER_CHARGE, $contentId]);
-            }
-        );
+            self::$contentChargeCache = new ContentCharge(
+                $db,
+                function (int $userId, int $currencyId, float $amount): void {
+                    $this->applyBalanceDelta($userId, $currencyId, $amount);
+                },
+                function (int $userId, int $currencyId, float $amount, string $contentType, int $contentId): void {
+                    self::clearBalanceCache($userId);
+                    $this->fireAdjustEvent([$userId, $currencyId, $amount, Ledger::TRIGGER_CHARGE, $contentId]);
+                }
+            );
+        }
+
+        return self::$contentChargeCache;
+    }
+
+    /**
+     * Drops the per-request charge module (and its paid memo). The container
+     * builds a new Transact per service() call, so the instance lives in a
+     * static to keep one module per request.
+     */
+    public static function clearContentChargeCache(): void
+    {
+        self::$contentChargeCache = null;
     }
 
     /**

@@ -16,6 +16,10 @@ _Avoid_: award limits, eligibility check
 Per-award gates applied after eligibility passes (daily caps, reaction dedupe keys, faucet and balance-cap clamps).
 _Avoid_: award eligibility, throttling
 
+**Charge access**:
+The one verdict for a `[charge]` block: `denied`, `author`, `staff`, `bypass`, `paid` or `locked`, resolved in that priority order (author beats staff so the stats line renders once). Render and the unlock POST branch on the same verdict.
+_Avoid_: paywall check, exemption list, paid cache
+
 **Historical backfill**:
 A one-off, resumable payout of an event's existing content, so posts and threads made before the event changed earn what the live path would have paid. Preview and run share one tally, so the promised member count is the paid member count.
 _Avoid_: retrofit, re-award, batch payout

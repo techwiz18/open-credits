@@ -37,6 +37,7 @@ class ChargeUnlockTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
+        Transact::clearContentChargeCache();
 
         $this->postId = (int)$this->db->fetchOne(
             "SELECT p.post_id FROM xf_post AS p"
@@ -87,6 +88,7 @@ class ChargeUnlockTest extends TestCase
         );
         \XF::em()->clearEntityCache();
         $this->transact->rebuildAllBalancesFully();
+        Transact::clearContentChargeCache();
     }
 
     public function testUnlockChargesHighestBlockPrice(): void
@@ -105,21 +107,18 @@ class ChargeUnlockTest extends TestCase
             'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
         );
         $this->transact->adjust($this->memberId, $this->currencyId, 100.00, 'octest_unlock_seed', 0, 'test');
+        $txnAfterSeed = (int)$this->db->fetchOne(
+            'SELECT COALESCE(MAX(transaction_id), 0) FROM xf_oc_transaction'
+        );
+        $chargeCount = function (): int {
+            return (int)$this->db->fetchOne(
+                "SELECT COUNT(*) FROM xf_oc_charge WHERE content_type = 'post' AND content_id = ? AND user_id = ?",
+                [$this->postId, $this->memberId]
+            );
+        };
 
         try {
-            $request = new \XF\Http\Request(
-                \XF::app()->inputFilterer(),
-                [
-                    'content_type' => 'post',
-                    'content_id' => $this->postId,
-                    'amount' => 5,
-                ],
-                [],
-                [],
-                ['REQUEST_METHOD' => 'POST']
-            );
-            $controller = \XF::app()->controller(Credits::class, $request);
-            $reply = $controller->actionUnlock(new \XF\Mvc\ParameterBag([]));
+            $reply = $this->unlock($this->memberId);
 
             $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $reply);
 
@@ -128,10 +127,26 @@ class ChargeUnlockTest extends TestCase
                 [$this->postId, $this->memberId]
             );
             $this->assertEqualsWithDelta(50.0, $charged, 0.0001);
+            $this->assertSame(1, $chargeCount(), 'One unlock writes one charge row');
+            $balanceAfterFirst = $this->transact->getBalance($this->memberId, $this->currencyId);
+            $this->assertEqualsWithDelta($balanceBefore + 50.0, $balanceAfterFirst, 0.0001);
+
+            $repeat = $this->unlock($this->memberId);
+            $this->assertInstanceOf(\XF\Mvc\Reply\Redirect::class, $repeat);
+            $this->assertSame(1, $chargeCount(), 'A repeat unlock writes no second charge row');
+            $this->assertSame(
+                2,
+                (int)$this->db->fetchOne(
+                    'SELECT COUNT(*) FROM xf_oc_transaction WHERE transaction_id > ?',
+                    [$txnAfterSeed]
+                ),
+                'One unlock writes exactly the payer and payee ledger rows'
+            );
             $this->assertEqualsWithDelta(
-                $balanceBefore + 50.0,
+                $balanceAfterFirst,
                 $this->transact->getBalance($this->memberId, $this->currencyId),
-                0.0001
+                0.0001,
+                'A repeat unlock moves no credits'
             );
         } finally {
             $this->db->delete('xf_oc_transaction', 'transaction_id > ?', [$txnBefore]);
@@ -142,5 +157,35 @@ class ChargeUnlockTest extends TestCase
             );
             $this->transact->rebuildAllBalancesFully();
         }
+    }
+
+    public function testGuestUnlockPostIsForbidden(): void
+    {
+        $reply = $this->unlock(null);
+
+        $this->assertInstanceOf(\XF\Mvc\Reply\Error::class, $reply);
+        $this->assertSame(403, $reply->getResponseCode());
+    }
+
+    /**
+     * Runs the unlock POST as $userId (or a guest when null).
+     */
+    protected function unlock(?int $userId): \XF\Mvc\Reply\AbstractReply
+    {
+        \XF::setVisitor($userId ? \XF::em()->find('XF:User', $userId) : null);
+
+        $request = new \XF\Http\Request(
+            \XF::app()->inputFilterer(),
+            [
+                'content_type' => 'post',
+                'content_id' => $this->postId,
+                'amount' => 5,
+            ],
+            [],
+            [],
+            ['REQUEST_METHOD' => 'POST']
+        );
+        $controller = \XF::app()->controller(Credits::class, $request);
+        return $controller->actionUnlock(new \XF\Mvc\ParameterBag([]));
     }
 }
