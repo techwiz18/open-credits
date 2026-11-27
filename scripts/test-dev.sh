@@ -285,6 +285,16 @@ set -e
 [ "$rc" -eq 1 ] || fail "test bogus exited $rc, want 1"
 grep -q 'usage: dev.sh test' <<<"$out" || fail "no usage for unknown kind: $out"
 
+# A stale add-on copy inside src/ shadows the bind-mounted add-on for PHPStan.
+mkdir -p "$repo/src/addon-src"
+set +e
+out=$(run test lint 2>&1)
+rc=$?
+set -e
+rm -rf "$repo/src/addon-src"
+[ "$rc" -eq 1 ] || fail "nested add-on copy exited $rc, want 1"
+grep -q 'stale add-on copy' <<<"$out" || fail "nested-copy message missing: $out"
+
 # `up` records an isolated compose project in .env for later shells and hooks.
 COMPOSE_PROJECT_NAME=open-credits-test WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 \
   run up >/dev/null 2>&1 || fail "up failed"

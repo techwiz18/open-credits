@@ -24,10 +24,10 @@ Paths below and in issues are relative to the add-on root
   host checks; `install-hooks` wires it up. Integration needs the licensed dev
   forum, so neither CI nor the hook runs it: run `./scripts/dev.sh test all`
   (it seeds itself) before pushing changes to services or adapters.
-- **Worktrees:** copy `src/` from the primary checkout (never symlink it) and
-  reuse or claim the dev stack; see
-  `docs/DEV.md#worktrees-and-the-dev-stack`. Claim the stack in `HANDOFF.md`
-  before seeding or running integration.
+- **Worktrees:** copy `src/` from any worktree that has it (never symlink it,
+  and delete any `src/addon-src` / `src/addon-test` copies) and reuse or claim
+  the dev stack; see `docs/DEV.md#worktrees-and-the-dev-stack`. Claim the stack
+  in `HANDOFF.md` before seeding or running integration.
 - **Docs:** `docs/DEV.md`, `docs/ARCHITECTURE.md`, `docs/XF-DEV-GOTCHAS.md`, `docs/API.md`.
 - **`HANDOFF.md`:** local-only session notes (gitignored).
 
@@ -57,6 +57,9 @@ PHPStan) inside the `web` container. Inside it the addon is
   a rebase would replay the inherited branch too.
 - One branch and PR per issue. If `dev/<issue>-<slug>` already exists on the
   remote, continue on that branch instead of creating a second one.
+- **Spec batches:** a dependent ticket is not started on an unmerged tip. Land
+  the blocking ticket's PR (ask for review) before branching the ticket that
+  needs it.
 - Features on `dev/*`; merge to `main` only after full testing; cut releases
   from `main`. `main` is always release-ready.
 - An implemented issue is finished when it is committed, pushed, and opened as

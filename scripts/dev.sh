@@ -42,9 +42,16 @@ integration_failed() {
 require_real_src() {
   if [ -L src ]; then
     echo "dev.sh: src/ is a symlink; copy the licensed tree instead —" >&2
-    echo "  cp -a ../open-credits/src ./src (docs/DEV.md#worktrees-and-the-dev-stack)" >&2
+    echo "  cp -a ../<worktree-with-src>/src ./src (docs/DEV.md#worktrees-and-the-dev-stack)" >&2
     exit 1
   fi
+  for stale in src/addon-src src/addon-test; do
+    if [ -e "$stale" ]; then
+      echo "dev.sh: $stale is a stale add-on copy inside src/; it shadows the" >&2
+      echo "  bind-mounted add-on for PHPStan. Remove it: rm -rf src/addon-src src/addon-test" >&2
+      exit 1
+    fi
+  done
 }
 
 seed_fixtures() {

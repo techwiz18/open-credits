@@ -18,4 +18,5 @@ if docker compose ps web --format '{{.State}}' 2>/dev/null | grep -qx running; t
     ./scripts/dev.sh test check
 else
     echo "pre-commit: web container not running in compose project '$project'; skipped php lint/unit/phpstan."
+    echo "pre-commit: a shared stack needs COMPOSE_PROJECT_NAME in .env (docs/DEV.md#worktrees-and-the-dev-stack)."
 fi
