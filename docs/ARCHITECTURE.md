@@ -16,12 +16,13 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `Service/LedgerWrite.php` | **The one author of balance changes and ledger rows.** `commit(movement)` owns user-row lock order, currency precision, the overdraw policy, `xf_oc_balance`, the `oc_credits` mirror, and the `xf_oc_transaction` row shape; callers own the transaction and the post-commit effects |
 | `Service/Ledger.php` | Ledger vocabulary: the one trigger-label map (`label()`, award-only `eventTriggers()`), trigger constants, and stored markers (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) shared by history, alerts, and the prune guard |
 | `Service/AccountStanding.php` | **The one account-standing rule**: four verdicts (earn, receive, send, unlock) over one state table, pure so every money path reads the same decision |
+| `Service/WalletView.php` | **The one wallet view**: viewable currencies, selection order (requested → primary → lowest id), the viewer's balance, show flags, pager/switch/form URLs, amount step, and wallet-vs-member-tab mode. The controller, `XF/Entity/User` getters, the widget and both wallet templates read it |
 | `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; owns the burn math (`burn()`) and the "pass can run" verdict, so preview and the pass share one formula; burns and orphan purges go through the `LedgerWrite` module supplied by `Transact` |
 | `Service/ContentCharge.php` | `[charge]` premium-content decision: parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
 | `BbCode/Charge.php` | `[charge=X]` renderer: view gates, locked box, author stats |
-| `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect |
-| `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated); lists strict `valid` accounts only — a display choice, not account standing |
+| `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect. Maps `WalletView` values into history/action params |
+| `Widget/TopHolders.php` | "Top credit holders" leaderboard widget (top N by balance, one currency, `ocView`-gated); keeps only its guest gate — currency visibility/selection comes from `WalletView`. Lists strict `valid` accounts only — a display choice, not account standing |
 | `Cli/Command/Rebuild.php` | `oc-credits:rebuild` CLI (calls the service) |
 | `Cli/Command/Demurrage.php` | `oc-credits:demurrage` CLI (`--preview` or run now; calls the runner) |
 | `Cron/DailyLogin.php` | Stub (daily_login is awarded via `visitor_setup`, not cron) |
@@ -183,9 +184,12 @@ change fires the `oc_credits_adjust` code event with
   per-member tab shows the member's balances, a "Send credits" form for other
   members, and an "Open wallet" link for self. On single-currency forums the
   self tab renders the wallet template directly; other members keep the
-  per-member card. When the wallet is embedded, its pager/per-page/currency links use the
-  member route and are AJAX-reloaded by `oc_credits_tab.js` so they stay in
-  the profile tab.
+  per-member card. `Service/WalletView` decides currency visibility/selection,
+  the balance, the show flags, the amount step, wallet-vs-member-tab mode and
+  every pager/switch/form URL, so templates branch only on those values, never
+  on which surface embedded them. When the wallet is embedded, the view builds
+  member-route URLs and `oc_in_tab`/`oc_return_user_id` hidden fields;
+  `oc_credits_tab.js` reloads those links inside the pane.
 * Template mods: `oc_credits_postbit` (`message_macros`, after reaction score),
   `oc_credits_account_menu` (`account_visitor_menu`, visitor stats),
   `oc_credits_criteria` (`helper_criteria`, admin trophy/promotion form).
@@ -250,8 +254,11 @@ change fires the `oc_credits_adjust` code event with
   its legacy `applyBalanceDelta` until the last caller moves). `DemurrageRunner`
   mutates balances only through the module.
 * Domain logic that is not an XF service is a plain class under `Service/`
-  (`AwardScope`, `AccountStanding`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `ContentCharge`), constructed directly or
+  (`AwardScope`, `AccountStanding`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `ContentCharge`, `WalletView`), constructed directly or
   through a `Transact` factory. You do not need `\XF::app()->service()` for it.
+* Presentation decisions for the wallet live in `Service/WalletView`, not in
+  the controller, entity getters, widget or templates. Add a view rule there so
+  the wallet, profile pane and leaderboard cannot drift.
 * Per-request caches belong to the presentation layer (renderer/controller).
   Service reads stay DB-fresh so moderation and cleanup see deletions
   immediately; `BbCode\Charge` caches its renders, `ContentCharge` queries each
