@@ -22,19 +22,34 @@ cp /path/to/xenforo_2.3.x.zip ../xenforo_dev.zip   # parent dir, any xf 2.3 zip
 The addon source (`addon-src/OpenCredits/Credits/`) is bind-mounted live into the
 container; edits apply on next page load (templates recompile automatically).
 
+## Checks
+
+Every check is a step in `scripts/check.sh`; that script owns the step →
+command mapping, the flags, and the lint file set. The canonical table is its
+own output:
+
+```bash
+./scripts/check.sh list
+```
+
+Adapters only choose where a step runs:
+
+* `./scripts/check.sh <step>` — host PHP/python (the adapter public CI uses).
+* `./scripts/dev.sh test <kind>` — the docker adapter: syncs `qa/` into the
+  `web` container, then runs the same step with `scripts/check.sh --docker`
+  (`lint`, `unit`, `stan`, `check`) or its own integration/seed commands.
+* Host-only steps (`artifacts`, `balance-writes`, `test-dev`,
+  `test-pr-comments`, `secrets`) always run on the checkout host.
+
+`check` means PHP lint (both trees) + unit + PHPStan. `host` means the
+host-only steps. `scripts/test-dev.sh` pins the CLI contract.
+
 ## Git hooks
 
 `./scripts/dev.sh install-hooks` points `core.hooksPath` at `.githooks/` so the
-tracked `pre-commit` hook runs on every commit. It runs:
-
-* `scripts/check-balance-writes.sh` — the ledger guardrail (also in CI).
-* `scripts/test-dev.sh` — dev.sh argument smoke test (also in CI).
-* `scripts/check-artifacts.py` — every `_output` JSON parses and `addon.json`
-  has a version (the exact script public CI runs).
-* `gitleaks dir .` — secret scan of the working tree when `gitleaks` is
-  installed; prints a one-line skip note when it is not.
-* `./scripts/dev.sh test check` — PHP lint, unit tests, PHPStan, only when the
-  Docker `web` container is running (skipped with a note otherwise).
+tracked `pre-commit` hook runs on every commit. It runs `./scripts/check.sh
+host`, then `./scripts/dev.sh test check` only when the Docker `web` container
+is running (skipped with a note otherwise).
 
 Required host tools: `bash`, `python3`, `git`. Optional: `docker compose` (the
 PHP checks) and `gitleaks` ≥ 8.19 (the secret scan; older versions lack the
@@ -57,12 +72,13 @@ project files are still scanned.
 | Command | Purpose |
 |---|---|
 | `./scripts/dev.sh help` | every command and test kind |
+| `./scripts/check.sh list` | canonical check step table (see [Checks](#checks)) |
 | `./scripts/dev.sh up/down/logs` | lifecycle |
 | `./scripts/dev.sh fix-perms` | **run after any `xf-make:*`** — generators run as root; Apache needs writable `_output` |
 | `./scripts/dev.sh install-hooks [--force]` | install the tracked pre-commit hook (see [Git hooks](#git-hooks)) |
 | `./scripts/dev.sh uninstall-hooks` | restore the hooks path recorded at install |
-| `./scripts/dev.sh test check` | CI parity without integration: lint, unit, PHPStan |
-| `./scripts/dev.sh test all` | seeds the forum fixtures, then lint, unit, PHPStan, integration (skips count as failures) |
+| `./scripts/dev.sh test check` | the `check` step through the docker adapter: lint, unit, PHPStan |
+| `./scripts/dev.sh test all` | seeds the forum fixtures, then the `check` step, then integration (skips count as failures) |
 | `docker compose exec web php /var/www/html/cmd.php xf-addon:upgrade OpenCredits/Credits` | import new `_output` (bump version first) |
 | `docker compose exec web php /var/www/html/cmd.php oc-credits:rebuild` | rebuild balances from ledger |
 | `docker compose exec web php /var/www/html/cmd.php oc-credits:demurrage --preview` | preview the next demurrage pass |
