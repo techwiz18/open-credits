@@ -38,10 +38,10 @@ Adapters only choose where a step runs:
 * `./scripts/dev.sh test <kind>` — the docker adapter: syncs `qa/` into the
   `web` container, then runs the same step with `scripts/check.sh --docker`
   (`lint`, `unit`, `stan`, `check`) or its own integration/seed commands.
-* Host-only steps (`artifacts`, `balance-writes`, `test-dev`,
+* Host-only steps (`style`, `artifacts`, `balance-writes`, `test-dev`,
   `test-pr-comments`, `secrets`) always run on the checkout host.
 
-`check` means PHP lint (both trees) + unit + PHPStan. `host` means the
+`check` means PHP lint (both trees) + style + unit + PHPStan. `host` means the
 host-only steps. `scripts/test-dev.sh` pins the CLI contract.
 
 ## Git hooks
@@ -77,7 +77,7 @@ project files are still scanned.
 | `./scripts/dev.sh fix-perms` | **run after any `xf-make:*`** — generators run as root; Apache needs writable `_output` |
 | `./scripts/dev.sh install-hooks [--force]` | install the tracked pre-commit hook (see [Git hooks](#git-hooks)) |
 | `./scripts/dev.sh uninstall-hooks` | restore the hooks path recorded at install |
-| `./scripts/dev.sh test check` | the `check` step through the docker adapter: lint, unit, PHPStan |
+| `./scripts/dev.sh test check` | the `check` step through the docker adapter: lint, style, unit, PHPStan |
 | `./scripts/dev.sh test all` | seeds the forum fixtures, then the `check` step, then integration (skips count as failures) |
 | `docker compose exec web php /var/www/html/cmd.php xf-addon:upgrade OpenCredits/Credits` | import new `_output` (bump version first) |
 | `docker compose exec web php /var/www/html/cmd.php oc-credits:rebuild` | rebuild balances from ledger |
@@ -96,6 +96,38 @@ project files are still scanned.
   containers. Claim the stack there before seeding or running integration
   tests, and release it when done.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
+
+## Worktrees and the dev stack
+
+A linked worktree starts without `src/` (gitignored). For a worktree that needs
+the forum, copy the licensed tree from the primary checkout and reuse the
+installed database:
+
+```bash
+cp -a ../open-credits/src ./src          # copy, never symlink
+COMPOSE_PROJECT_NAME=open-credits docker compose up -d
+```
+
+Do not symlink `src/`: Docker's nested binds (`./src` plus `./addon-src`) make
+PHPStan resolve the add-on twice and report every `OpenCredits\Credits\Entity\*`
+class as unknown. Reusing `COMPOSE_PROJECT_NAME` reuses that project's installed
+`db_data` volume, so no `/install` is needed; use the isolated recipe above when
+another session owns the volume. Run integration against the worktree's bind
+mount with `COMPOSE_PROJECT_NAME=open-credits ./scripts/dev.sh test integration
+--filter <Test>`.
+
+Without a stack, run the PHP gate in a one-off container against the primary
+checkout's vendor:
+
+```bash
+PRIMARY=../open-credits
+docker run --rm -v "$PWD/qa":/qatmp \
+  -v "$PWD/addon-src/OpenCredits/Credits":/addon \
+  -v "$PRIMARY/src/.qatmp/vendor":/qatmp/vendor:ro \
+  -w /qatmp -e OC_ADDON_SRC=/addon php:8.4-cli \
+  php vendor/bin/phpunit
+# PHPStan: php vendor/bin/phpstan analyse --no-progress /addon/Service tests/Unit
+```
 
 ## Release checklist (local — needs the licensed XF runtime, so not in CI)
 

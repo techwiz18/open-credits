@@ -17,6 +17,10 @@ lives in `.agents/skills/` (load it as described below).
   (`./scripts/check.sh list`); test details (including arg forwarding) are in
   `qa/tests/README.md`. The tracked pre-commit hook runs `test check` plus the
   host checks; `install-hooks` wires it up.
+- **Worktrees:** copy `src/` from the primary checkout (never symlink it) and
+  reuse or claim the dev stack; see
+  `docs/DEV.md#worktrees-and-the-dev-stack`. Claim the stack in `HANDOFF.md`
+  before seeding or running integration.
 - **Docs:** `docs/DEV.md`, `docs/ARCHITECTURE.md`, `docs/XF-DEV-GOTCHAS.md`, `docs/API.md`.
 - **`HANDOFF.md`:** local-only session notes (gitignored).
 

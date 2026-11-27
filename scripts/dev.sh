@@ -37,6 +37,16 @@ integration_failed() {
   exit 1
 }
 
+# A symlinked src/ breaks PHPStan's class discovery under the nested Docker
+# binds. Refuse it early with the fix instead of failing the PHP gate.
+require_real_src() {
+  if [ -L src ]; then
+    echo "dev.sh: src/ is a symlink; copy the licensed tree instead —" >&2
+    echo "  cp -a ../open-credits/src ./src (docs/DEV.md#worktrees-and-the-dev-stack)" >&2
+    exit 1
+  fi
+}
+
 seed_fixtures() {
   qatmp env OC_XF_ROOT=/var/www/html php seed-dev-content.php "$1"
 }
@@ -57,6 +67,7 @@ sync_qatmp() {
 
 case "$cmd" in
   up)
+    require_real_src
     cp -n .env.example .env || true
     docker compose up -d --build
     docker compose ps
@@ -65,6 +76,7 @@ case "$cmd" in
     docker compose down
     ;;
   unpack)
+    require_real_src
     if [ -z "$ZIP" ]; then echo "No xenforo_*.zip found in parent dir"; exit 1; fi
     mkdir -p src
     echo "Unpacking $ZIP -> src/"
@@ -161,6 +173,7 @@ PHP
         fi
         ;;
     esac
+    require_real_src
     mkdir -p src
     # One copy is shared by every test command; serialize runs so a sync or a
     # first-run install cannot race another run's PHPUnit process.
