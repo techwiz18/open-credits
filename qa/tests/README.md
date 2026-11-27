@@ -115,7 +115,6 @@ Covered today:
   a purchase through the service is visible to the next render in the same
   request.
 - `ChargeUnlockTest` — a crafted cheap `amount` still charges the post's
-- `ChargeUnlockTest` — a crafted cheap `amount` still charges the post's
   highest valid `[charge]` block; a repeat POST writes no second charge; and
   a guest POST is refused with 403.
 - `BackfillTest` — the historical backfill through `Service/BackfillRunner`:
