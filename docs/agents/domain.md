@@ -10,6 +10,18 @@ How the engineering skills should consume this repo's domain documentation when 
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
+## Before implementing a ticket
+
+Check the decision record for the ticket number:
+
+```bash
+grep -l "#<ticket>" docs/adr/*.md
+```
+
+If an ADR rejects or constrains the work, comment on the ticket and surface the
+conflict **before** coding. A spec written before the ADR can still list a
+candidate the ADR has since rejected.
+
 ## File structure
 
 Single-context repo (most repos):
