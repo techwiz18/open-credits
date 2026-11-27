@@ -23,11 +23,17 @@ can no longer report a false green) and installs dev dependencies on the first
 run. Delete `src/.qatmp` if `qa/composer.json` changes.
 `qa/phpunit.xml` sets `failOnEmptyTestSuite`, so a zero-test run fails.
 
-`./scripts/dev.sh test check` runs lint + unit + PHPStan (no seeded content
-needed); the tracked pre-commit hook runs it alongside the host checks. Install
-the hook once per clone with `./scripts/dev.sh install-hooks`.
+`./scripts/dev.sh test check` runs the `check` step (lint + unit + PHPStan, no
+seeded content needed) through the docker adapter; the tracked pre-commit hook
+runs it alongside the host checks. Install the hook once per clone with
+`./scripts/dev.sh install-hooks`.
 
-(On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI does exactly that.)
+The steps, their commands, flags and the lint file set are defined once in
+`scripts/check.sh` — run `./scripts/check.sh list` for the canonical table
+(the same one `docs/DEV.md#checks` points at). Public CI calls those steps with
+the host-PHP adapter, so local and CI cannot drift.
+
+(On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI runs the same PHPUnit through `scripts/check.sh unit`.)
 
 ## Assertions
 
@@ -102,10 +108,15 @@ Covered today:
   (banned/email-confirm) payers cannot unlock via the controller.
 - `ChargeUnlockTest` — a crafted cheap `amount` still charges the post's
   highest valid `[charge]` block.
-- `BackfillTest` — the historical backfill preview/run query applies the
-  event's forum/group scope and skips first posts; the action writes an
-  `event_id` marker, is idempotent, refuses a per-member run after a
+- `BackfillTest` — the historical backfill through `Service/BackfillRunner`:
+  the preview/run query applies the event's forum/group scope and skips first
+  posts; the runner writes an `event_id` marker, is idempotent, reports the
+  already-completed event as skipped, refuses a per-member run after a
   site-wide run, and the history row is labelled/unlinked.
+- `BackfillAdaptersTest` — #24 pins the admin backfill adapter (needs the XF
+  boot; no DB writes): the parsed event ids, member scope and force flag, the
+  5000-row batch budget, and every runner verdict (`done` renders the result
+  block, each failure verdict keeps its operator message).
 - `ChargeCleanupTest` — hard-deleting a post drops its unlock rows; member
   deletion covers both payer and author charge rows.
 - `InflationMathTest` (unit) — pure cap/faucet/demurrage math: partial fills,

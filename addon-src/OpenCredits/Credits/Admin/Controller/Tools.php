@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Admin\Controller;
 
+use OpenCredits\Credits\Service\BackfillRunner;
 use OpenCredits\Credits\Service\DemurrageRunner;
-use OpenCredits\Credits\Service\Ledger;
 use XF\Admin\Controller\AbstractController;
 use XF\Mvc\ParameterBag;
 
@@ -92,7 +92,7 @@ class Tools extends AbstractController
                 'ran' => false,
                 'awarded' => 0,
                 'skipped' => [],
-                'preview' => $this->backfillPreview(),
+                'preview' => $this->backfillRunner()->preview(),
             ]
         );
     }
@@ -105,113 +105,31 @@ class Tools extends AbstractController
         $username = trim($this->filter('username', 'str'));
         $force = $this->filter('force', 'bool');
 
-        if (!$eventIds) {
-            return $this->error('Select at least one event to backfill.');
-        }
-
-        $onlyUserId = 0;
+        $scopeUserId = 0;
         if (strlen($username)) {
             $target = $this->finder('XF:User')->where('username', $username)->fetchOne();
             if (!$target) {
                 return $this->error('User not found. Check the spelling and try again.');
             }
-            $onlyUserId = (int)$target->user_id;
+            $scopeUserId = (int)$target->user_id;
         }
 
-        $events = $this->finder('OpenCredits\Credits:CreditEvent')
-            ->with('Currency')
-            ->where('event_id', $eventIds)
-            ->where('active', 1)
-            ->where('trigger', [Ledger::TRIGGER_POST, Ledger::TRIGGER_THREAD])
-            ->fetch();
+        $result = $this->backfillRunner()->run($eventIds, $scopeUserId, $force, 5000);
 
-        if (!count($events)) {
-            return $this->error('No eligible events selected. Only active post/thread events can be backfilled.');
-        }
-
-        // Events on inactive currencies are skipped, never paid.
-        $eligible = [];
-        $awarded = 0;
-        $skipped = [];
-        foreach ($events as $event) {
-            $currency = $event->Currency;
-            if ($currency && $currency->active) {
-                $eligible[] = $event;
-            } else {
-                $skipped[] = (int)$event->event_id;
-            }
-        }
-        if (!$eligible) {
-            return $this->error('No eligible events selected. The chosen events use inactive currencies.');
-        }
-
-        // Each event (and each site-wide batch) commits separately so huge
-        // forums complete in small transactions instead of one giant one. A
-        // batch's rows and its resume marker commit atomically, so a retry
-        // resumes exactly where the last committed batch stopped.
-        $db = $this->app->db();
-        $error = null;
-        try {
-            foreach ($eligible as $event) {
-                if (!$force && $onlyUserId > 0 && $this->backfillEventRan($event, 0)) {
-                    // A completed site-wide run already paid this member.
-                    $skipped[] = (int)$event->event_id;
-                    continue;
-                }
-                $state = $this->findBackfillState($event, $onlyUserId);
-                if (!$force && !empty($state['completed_date'])) {
-                    $skipped[] = (int)$event->event_id;
-                    continue;
-                }
-
-                if ($force || !$state) {
-                    $state = $this->resetBackfillState($event, $onlyUserId);
-                }
-
-                $backfillId = (int)$state['backfill_id'];
-                if ($onlyUserId > 0) {
-                    $result = $this->runBackfillEvent($event, $onlyUserId, 0, 0, $backfillId);
-                    $awarded += $result['rows'];
-                } else {
-                    // Resume from the last completed batch boundary.
-                    $next = (int)($state['last_user_id'] ?? 0);
-                    do {
-                        $result = $this->runBackfillEvent($event, 0, $next, 5000, $backfillId);
-                        $awarded += $result['rows'];
-                        if ($result['next'] === null) {
-                            break;
-                        }
-                        $next = $result['next'];
-                    } while (true);
-                }
-
-                $db->update(
-                    'xf_oc_backfill',
-                    ['completed_date' => \XF::$time, 'last_user_id' => 0],
-                    'backfill_id = ?',
-                    [(int)$state['backfill_id']]
+        switch ($result['verdict']) {
+            case 'no_events':
+                return $this->error('Select at least one event to backfill.');
+            case 'no_eligible_events':
+                return $this->error('No eligible events selected. Only active post/thread events can be backfilled.');
+            case 'inactive_currencies':
+                return $this->error('No eligible events selected. The chosen events use inactive currencies.');
+            case 'incomplete':
+                return $this->error('Backfill paused part-way. Completed batches are kept — re-run to resume.');
+            case 'rebuild_failed':
+                return $this->error(
+                    'Backfill rows were written, but the balance rebuild failed. '
+                    . 'Run AdminCP → Credits → Tools → Rebuild balances to finish.'
                 );
-            }
-        } catch (\Throwable $e) {
-            \XF::logException($e, false, 'OpenCredits backfill failed: ');
-            $error = 'Backfill paused part-way. Completed batches are kept — re-run to resume.';
-        }
-
-        // Always rebuild whatever committed so cached balances match the ledger.
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
-        $svc = $this->service('OpenCredits\Credits:Transact');
-        try {
-            $svc->rebuildAllBalancesFully();
-        } catch (\Throwable $e) {
-            \XF::logException($e, false, 'OpenCredits backfill rebuild failed: ');
-            if ($error === null) {
-                $error = 'Backfill rows were written, but the balance rebuild failed. '
-                    . 'Run AdminCP → Credits → Tools → Rebuild balances to finish.';
-            }
-        }
-
-        if ($error !== null) {
-            return $this->error($error);
         }
 
         return $this->view(
@@ -219,11 +137,19 @@ class Tools extends AbstractController
             'oc_tools_backfill',
             [
                 'ran' => true,
-                'awarded' => $awarded,
-                'skipped' => $skipped,
+                'awarded' => $result['awarded'],
+                'skipped' => $result['skipped'],
                 'preview' => [],
             ]
         );
+    }
+
+    protected function backfillRunner(): BackfillRunner
+    {
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+
+        return $svc->backfillRunner();
     }
 
     public function actionAdjust(): \XF\Mvc\Reply\AbstractReply
@@ -378,15 +304,16 @@ class Tools extends AbstractController
     public function actionPrune(): \XF\Mvc\Reply\AbstractReply
     {
         $retention = (int)$this->app()->options()->ocHistoryRetentionDays;
+        $days = $retention > 0 ? $retention : 365;
         return $this->view(
             'OpenCredits\Credits:Tools\Prune',
             'oc_tools_prune',
             [
                 'ran' => false,
-                'days' => $retention > 0 ? $retention : 365,
+                'days' => $days,
                 'snapshots' => 0,
                 'deleted' => 0,
-                'preview' => $this->prunePreview($retention > 0 ? $retention : 365),
+                'preview' => $this->historyPrune()->preview($days),
             ]
         );
     }
@@ -399,32 +326,19 @@ class Tools extends AbstractController
         if ($days < 1) {
             return $this->error('Enter at least 1 day.');
         }
-        $cutoff = \XF::$time - $days * 86400;
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
-        $snapshots = 0;
-        $deleted = 0;
         try {
-            $next = 0;
-            do {
-                $result = $svc->pruneHistory($cutoff, $next, 5000);
-                $snapshots += $result['snapshots'];
-                $deleted += $result['deleted'];
-                $next = $result['next'];
-            } while ($next !== null);
+            $result = $svc->historyPrune()->run($days, 5000);
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits prune failed: ');
             return $this->error('Pruning failed due to a server error. Completed batches are kept — fix the cause and re-run.');
         }
 
-        // Remove unlock rows for content that no longer exists (e.g. a thread
-        // hard-deleted in bulk). Ledger rows stay as financial history.
-        $this->app->db()->query(
-            "DELETE c FROM xf_oc_charge AS c
-             LEFT JOIN xf_post AS p ON (c.content_type = 'post' AND p.post_id = c.content_id)
-             WHERE c.content_type = 'post' AND p.post_id IS NULL"
-        );
+        // Unlock rows the per-post listener missed (bulk-deleted threads) are
+        // the charge module's cleanup; ledger rows stay as financial history.
+        $svc->contentCharge()->purgeOrphans();
 
         return $this->view(
             'OpenCredits\Credits:Tools\Prune',
@@ -432,254 +346,19 @@ class Tools extends AbstractController
             [
                 'ran' => true,
                 'days' => $days,
-                'snapshots' => $snapshots,
-                'deleted' => $deleted,
+                'snapshots' => $result['snapshots'],
+                'deleted' => $result['deleted'],
                 'preview' => [],
             ]
         );
     }
 
-    protected function prunePreview(int $days): array
+    protected function historyPrune(): \OpenCredits\Credits\Service\HistoryPrune
     {
-        // Match pruneHistory()'s current-day guard so the preview never
-        // promises to delete rows the service will refuse to touch.
-        $cutoff = min(
-            \XF::$time - $days * 86400,
-            \OpenCredits\Credits\Service\Transact::dayStart() - 1
-        );
-        $db = $this->app->db();
-        $rows = $db->fetchAll(
-            'SELECT c.currency_id, c.title, COUNT(*) AS entry_count FROM xf_oc_transaction AS t'
-            . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = t.currency_id'
-            . ' WHERE t.log_date <= ? AND t.`trigger` != ? AND t.note != ? AND t.note NOT LIKE ?'
-            . ' GROUP BY c.currency_id, c.title ORDER BY c.currency_id',
-            [$cutoff, ...Ledger::pruneGuardParams()]
-        );
-        $preview = [];
-        foreach ($rows as $row) {
-            $preview[] = [
-                'currency' => $row['title'],
-                'rows' => (int)$row['entry_count'],
-            ];
-        }
-        return $preview;
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+
+        return $svc->historyPrune();
     }
 
-    protected function backfillEventRan($event, int $onlyUserId = 0): bool
-    {
-        return (bool)$this->app->db()->fetchOne(
-            'SELECT backfill_id FROM xf_oc_backfill WHERE event_id = ? AND user_id = ?'
-            . ' AND completed_date > 0 LIMIT 1',
-            [(int)$event->event_id, $onlyUserId]
-        );
-    }
-
-    protected function findBackfillState($event, int $scopeUserId): array
-    {
-        $row = $this->app->db()->fetchRow(
-            'SELECT * FROM xf_oc_backfill WHERE event_id = ? AND user_id = ?',
-            [(int)$event->event_id, $scopeUserId]
-        );
-        return $row ?: [];
-    }
-
-    protected function resetBackfillState($event, int $scopeUserId): array
-    {
-        $db = $this->app->db();
-        $state = $this->findBackfillState($event, $scopeUserId);
-        if (!empty($state['backfill_id'])) {
-            $db->update('xf_oc_backfill', [
-                'last_user_id' => 0,
-                'started_date' => \XF::$time,
-                'completed_date' => 0,
-            ], 'backfill_id = ?', [(int)$state['backfill_id']]);
-        } else {
-            $db->insert('xf_oc_backfill', [
-                'event_id' => (int)$event->event_id,
-                'user_id' => $scopeUserId,
-                'last_user_id' => 0,
-                'started_date' => \XF::$time,
-                'completed_date' => 0,
-            ]);
-        }
-        return $this->findBackfillState($event, $scopeUserId);
-    }
-
-    protected function backfillPreview(): array
-    {
-        $preview = [];
-        $events = $this->finder('OpenCredits\Credits:CreditEvent')
-            ->with('Currency')
-            ->where('active', 1)
-            ->where('trigger', [Ledger::TRIGGER_POST, Ledger::TRIGGER_THREAD])
-            ->fetch();
-        foreach ($events as $event) {
-            $previewCurrency = $event->Currency;
-            if (!$previewCurrency || !$previewCurrency->active) {
-                continue;
-            }
-            [$sql, $params] = $this->backfillContentQuery($event, 0, 0, 0);
-            // Same verdict path as the run: preview promises exactly the
-            // users the action will pay. A full row fetch on large boards is
-            // the price of that guarantee; backfill is a one-shot admin op.
-            $users = count($this->backfillEligibleCounts($event));
-            $preview[] = [
-                'event_id' => (int)$event->event_id,
-                'label' => Ledger::label((string)$event->trigger),
-                'currency' => $previewCurrency->title,
-                'decimals' => (int)$previewCurrency->decimals,
-                'amount' => (float)$event->amount,
-                'users' => $users,
-                'ran' => $this->backfillEventRan($event),
-            ];
-        }
-        return $preview;
-    }
-
-    /**
-     * Backfills one event. Per-member mode writes a single row. Site-wide
-     * mode processes one user-id range per call (pass $batchSize > 0 and loop
-     * on 'next') so huge forums complete in small transactions. Each call
-     * commits atomically and returns ['rows', 'next' (or null when done)].
-     */
-    protected function runBackfillEvent($event, int $onlyUserId = 0, int $startAfterUserId = 0, int $batchSize = 0, int $backfillId = 0): array
-    {
-        $db = $this->app->db();
-        $now = \XF::$time;
-
-        $currency = $event->Currency;
-        $decimals = $currency ? (int)$currency->decimals : 2;
-        // Quantize like every other write path: 0-decimal currencies must
-        // never receive sub-unit lump sums.
-        $perItem = round((float)$event->amount, $decimals);
-        if ($perItem == 0.0) {
-            return ['rows' => 0, 'next' => null];
-        }
-
-        $maxUserId = max(
-            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_user'),
-            $onlyUserId
-        );
-        $endUserId = $onlyUserId > 0
-            ? $maxUserId
-            : ($batchSize > 0 ? $startAfterUserId + $batchSize : $maxUserId);
-
-        [$sql, $params] = $this->backfillContentQuery($event, $onlyUserId, $startAfterUserId, $endUserId);
-        // Row-level verdict, tallied per author: every paid row passed
-        // AwardScope::eligible(), so the backfill pays exactly what the live
-        // path would have paid. Ledger shape is unchanged (one lump sum per
-        // author), as are batch boundaries and resume markers.
-        $counts = $this->backfillEligibleCounts($event, $onlyUserId, $startAfterUserId, $endUserId);
-        $next = ($batchSize > 0 && $onlyUserId <= 0 && $endUserId < $maxUserId) ? $endUserId : null;
-
-        $rows = 0;
-        $db->beginTransaction();
-        try {
-            foreach ($counts as $userId => $count) {
-                $db->insert('xf_oc_transaction', [
-                    'user_id' => (int)$userId,
-                    'currency_id' => (int)$event->currency_id,
-                    'amount' => round($count * $perItem, $decimals),
-                    'trigger' => $event->trigger,
-                    'content_type' => $event->trigger,
-                    'content_id' => $onlyUserId > 0 ? $onlyUserId : 0,
-                    'event_id' => (int)$event->event_id,
-                    'note' => Ledger::NOTE_BACKFILL,
-                    'log_date' => $now,
-                ]);
-                $rows++;
-            }
-            if ($backfillId > 0) {
-                // Commit the resume boundary in the same transaction as the
-                // rows; a crash can never leave paid rows behind a stale
-                // marker (which would double-pay on resume).
-                if ($onlyUserId > 0 || $next === null) {
-                    $db->update('xf_oc_backfill', [
-                        'last_user_id' => 0,
-                        'completed_date' => $now,
-                    ], 'backfill_id = ?', [$backfillId]);
-                } else {
-                    $db->update('xf_oc_backfill', [
-                        'last_user_id' => $next,
-                    ], 'backfill_id = ?', [$backfillId]);
-                }
-            }
-            $db->commit();
-        } catch (\Throwable $e) {
-            $db->rollBack();
-            throw $e;
-        }
-        return ['rows' => $rows, 'next' => $next];
-    }
-
-    /**
-     * Eligible content counts per author for one backfill scope. Single seam
-     * for preview, run, and tests: fetch candidate rows, verdict each one
-     * through AwardScope, tally per author.
-     *
-     * @return array<int,int> author user_id => eligible row count
-     */
-    protected function backfillEligibleCounts($event, int $onlyUserId = 0, int $startAfterUserId = 0, int $endUserId = 0): array
-    {
-        [$sql, $params] = $this->backfillContentQuery($event, $onlyUserId, $startAfterUserId, $endUserId);
-        return \OpenCredits\Credits\Service\AwardScope::countEligible(
-            ['forum_ids' => $event->forum_ids, 'usergroup_ids' => $event->usergroup_ids],
-            $event->trigger === Ledger::TRIGGER_POST,
-            $this->app->db()->fetchAll($sql, $params)
-        );
-    }
-
-    /**
-     * Builds the candidate content query for a backfill. Selects per-row
-     * facts (author, node, state, position, member standing and groups) over
-     * the user-id range; every eligibility rule is decided per row by
-     * AwardScope, never here. Keeps the user-id range and (for site-wide
-     * runs) the exclusion of members who already received a per-member
-     * backfill for the same event — that is bookkeeping, not eligibility.
-     *
-     * @return array{0: string, 1: array}
-     */
-    protected function backfillContentQuery(
-        $event,
-        int $onlyUserId = 0,
-        int $startAfterUserId = 0,
-        int $endUserId = 0
-    ): array {
-        $isPost = $event->trigger === Ledger::TRIGGER_POST;
-        if ($isPost) {
-            $from = 'xf_post AS p INNER JOIN xf_thread AS t ON t.thread_id = p.thread_id';
-            $author = 'p';
-            $select = 'p.user_id AS author_id, t.node_id AS node_id,'
-                . ' p.position AS position, p.message_state AS content_state,';
-        } else {
-            $from = 'xf_thread AS t';
-            $author = 't';
-            $select = 't.user_id AS author_id, t.node_id AS node_id,'
-                . ' t.discussion_state AS content_state,';
-        }
-        $from .= ' INNER JOIN xf_user AS u ON u.user_id = ' . $author . '.user_id';
-
-        $where = "{$author}.user_id > 0";
-        $params = [];
-
-        if ($onlyUserId > 0) {
-            $where .= " AND {$author}.user_id = ?";
-            $params[] = $onlyUserId;
-        } else {
-            if ($endUserId > 0) {
-                $where .= " AND {$author}.user_id > ? AND {$author}.user_id <= ?";
-                $params[] = $startAfterUserId;
-                $params[] = $endUserId;
-            }
-            // Don't re-pay members who already got a per-member backfill for
-            // this event (those rows carry a nonzero content_id).
-            $where .= " AND {$author}.user_id NOT IN ("
-                . 'SELECT user_id FROM xf_oc_transaction WHERE event_id = ? AND content_id <> 0)';
-            $params[] = (int)$event->event_id;
-        }
-
-        $select .= ' u.user_state AS user_state, u.is_banned AS is_banned,'
-            . ' u.user_group_id AS user_group_id, u.secondary_group_ids AS secondary_group_ids';
-        return ['SELECT ' . $select . ' FROM ' . $from . ' WHERE ' . $where, $params];
-    }
 }
