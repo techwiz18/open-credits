@@ -78,9 +78,22 @@ namespace XF\Service {
 namespace {
     // Addon root: repo layout (<repo>/addon-src/OpenCredits/Credits) by
     // default; override with OC_ADDON_SRC when the checkout is mounted
-    // elsewhere (e.g. a temp copy inside the web container).
-    $addonRoot = getenv('OC_ADDON_SRC')
-        ?: (__DIR__ . '/../../addon-src/OpenCredits/Credits');
+    // elsewhere (e.g. a temp copy inside the web container). The docker
+    // adapter mounts the licensed tree at /var/www/html, so .qatmp's sibling
+    // copy sits under src/addons rather than addon-src.
+    $addonRoot = getenv('OC_ADDON_SRC');
+    if (!$addonRoot) {
+        foreach ([
+            __DIR__ . '/../../addon-src/OpenCredits/Credits',
+            __DIR__ . '/../../src/addons/OpenCredits/Credits',
+        ] as $candidate) {
+            if (is_dir($candidate)) {
+                $addonRoot = $candidate;
+                break;
+            }
+        }
+    }
+    $addonRoot = $addonRoot ?: (__DIR__ . '/../../addon-src/OpenCredits/Credits');
     spl_autoload_register(function ($class) use ($addonRoot) {
         $prefix = 'OpenCredits\\Credits\\';
         if (strpos($class, $prefix) === 0) {

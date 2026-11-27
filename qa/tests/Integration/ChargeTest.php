@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\TestCase;
 
@@ -180,6 +181,6 @@ class ChargeTest extends TestCase
             'content_id = ? AND `trigger` IN (?, ?)',
             [self::CONTENT_ID, 'charge', self::SEED_TRIGGER]
         );
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 }

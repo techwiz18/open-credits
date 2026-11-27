@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Pub\Controller\Credits;
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\TestCase;
 
@@ -37,7 +38,7 @@ class ChargeUnlockTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
-        Transact::clearContentChargeCache();
+        RequestCache::reset();
 
         $this->postId = (int)$this->db->fetchOne(
             "SELECT p.post_id FROM xf_post AS p"
@@ -88,7 +89,7 @@ class ChargeUnlockTest extends TestCase
         );
         \XF::em()->clearEntityCache();
         $this->transact->rebuildAllBalancesFully();
-        Transact::clearContentChargeCache();
+        RequestCache::reset();
     }
 
     public function testUnlockChargesHighestBlockPrice(): void

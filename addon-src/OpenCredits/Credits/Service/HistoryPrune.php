@@ -168,7 +168,7 @@ class HistoryPrune
             $db->rollBack();
             throw $e;
         }
-        Transact::clearBalanceCache();
+        RequestCache::instance()->invalidate();
         $next = ($batchSize > 0 && $endUserId < $maxUserId) ? $endUserId : null;
         return ['snapshots' => $snapshots, 'deleted' => $deleted, 'next' => $next];
     }

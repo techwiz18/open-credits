@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
-use OpenCredits\Credits\BbCode\Charge;
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -48,7 +48,7 @@ class ChargeRenderTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
-        Transact::clearContentChargeCache();
+        RequestCache::reset();
 
         $rows = $this->db->fetchAll('SELECT currency_id, is_primary, active, visible FROM xf_oc_currency');
         foreach ($rows AS $row) {
@@ -122,11 +122,9 @@ class ChargeRenderTest extends TestCase
                 [$currencyId]
             );
         }
-        Transact::clearPrimaryCache();
-        Transact::clearContentChargeCache();
         \XF::em()->clearEntityCache();
         \XF::setVisitor(null);
-        Charge::clearRenderCaches();
+        RequestCache::reset();
     }
 
     public function testGuestSeesLockedBoxWithoutBody(): void
@@ -190,7 +188,7 @@ class ChargeRenderTest extends TestCase
             $this->assertStringContainsString('RENDER_SECRET', $after);
 
             // A fresh request drops the memo and still reads the purchase.
-            Transact::clearContentChargeCache();
+            RequestCache::reset();
             $fresh = $this->render($this->memberId);
             $this->assertStringContainsString('RENDER_SECRET', $fresh);
         } finally {
@@ -262,7 +260,7 @@ class ChargeRenderTest extends TestCase
         $this->db->update('xf_oc_currency', ['active' => 1, 'visible' => 1], 'currency_id = ?', [$zeroDecimal]);
         $this->db->update('xf_oc_currency', ['is_primary' => 0], 'currency_id = ?', [$this->currencyId]);
         $this->db->update('xf_oc_currency', ['is_primary' => 1], 'currency_id = ?', [$zeroDecimal]);
-        Transact::clearPrimaryCache();
+        RequestCache::reset();
         \XF::em()->clearEntityCache();
 
         $message = '[charge=1.5]RENDER_SECRET[/charge]';

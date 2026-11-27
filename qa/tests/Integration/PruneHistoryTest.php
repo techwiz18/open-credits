@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Service\HistoryPrune;
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\TestCase;
 
@@ -321,7 +322,7 @@ class PruneHistoryTest extends TestCase
         $this->db->delete('xf_oc_balance', 'user_id = ?', [$this->userId]);
         $this->db->delete('xf_oc_faucet', 'user_id = ?', [$this->userId]);
         $this->db->delete('xf_oc_daily_claim', 'user_id = ?', [$this->userId]);
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 
     private function removeThrowawayUser(): void
@@ -330,6 +331,6 @@ class PruneHistoryTest extends TestCase
         if ($existing) {
             $existing->delete();
         }
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 }

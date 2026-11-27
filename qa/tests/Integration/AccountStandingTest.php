@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Entity\Code;
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\TestCase;
 
@@ -94,8 +95,7 @@ class AccountStandingTest extends TestCase
         foreach ($this->originalOptions as $key => $value) {
             $options->{$key} = $value;
         }
-        Transact::clearEventCache();
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 
     public function testUnconfirmedAndAwaitingApprovalCannotSend(): void
@@ -199,7 +199,7 @@ class AccountStandingTest extends TestCase
         $this->db->delete('xf_oc_transaction', 'user_id = ?', [$userId]);
         $this->db->delete('xf_oc_balance', 'user_id = ?', [$userId]);
         $this->db->delete('xf_oc_faucet', 'user_id = ?', [$userId]);
-        Transact::clearBalanceCache();
+        RequestCache::reset();
 
         return $userId;
     }
@@ -246,6 +246,6 @@ class AccountStandingTest extends TestCase
                 $existing->delete();
             }
         }
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 }

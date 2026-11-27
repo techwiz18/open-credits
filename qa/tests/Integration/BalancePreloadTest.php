@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\TestCase;
 
@@ -42,7 +43,7 @@ class BalancePreloadTest extends TestCase
         }
         $this->memberId = (int)$ids[0];
         $this->otherId = (int)$ids[1];
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 
     public function testPreloadMatchesLazyForMemberWithNoLedgerRows(): void
@@ -50,9 +51,9 @@ class BalancePreloadTest extends TestCase
         // A missing member cannot have balance rows, so this pins the
         // no-activity shape without depending on the dev forum's data.
         $ghost = 999999999;
-        Transact::clearBalanceCache();
+        RequestCache::reset();
         $expected = $this->transact->balancesFor($ghost, true);
-        Transact::clearBalanceCache();
+        RequestCache::reset();
 
         $this->transact->preloadBalances([$ghost], true);
 
@@ -61,20 +62,19 @@ class BalancePreloadTest extends TestCase
 
     protected function tearDown(): void
     {
-        Transact::clearBalanceCache();
+        RequestCache::reset();
         \XF::setVisitor(null);
     }
 
     public function testPreloadMatchesLazyLookups(): void
     {
         $this->transact->adjust($this->memberId, $this->currencyId, 7.5, 'admin_adjust');
-        Transact::clearBalanceCache();
 
         // Lazy path first: the per-user shape, including zero rows.
         $expectedMember = $this->transact->balancesFor($this->memberId, true);
         $expectedOther = $this->transact->balancesFor($this->otherId, true);
         $this->assertNotEmpty($expectedMember);
-        Transact::clearBalanceCache();
+        RequestCache::reset();
 
         // Includes junk and duplicates without extra work or errors.
         $this->transact->preloadBalances([$this->memberId, 0, -3, $this->memberId, $this->otherId], true);

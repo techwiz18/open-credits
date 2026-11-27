@@ -13,8 +13,10 @@ namespace OpenCredits\Credits\Service;
  *
  * Callers own the transaction, because their side tables (charge rows, code
  * counters, faucet tallies, resume markers) must commit with the money, and
- * because the cache clear and post-commit event must not fire for a
- * transaction that later rolls back.
+ * because the post-commit event must not fire for a transaction that later
+ * rolls back. The module drops the request cache itself: a clear is safe
+ * before commit (a later read sees the connection's own rows, and a rollback
+ * only costs a reload), so no caller has to remember it.
  */
 class LedgerWrite
 {
@@ -24,14 +26,18 @@ class LedgerWrite
     /** @var callable(): int Primary currency id (the mirror's currency). */
     protected $primaryCurrencyId;
 
+    /** @var RequestCache Request memo a committed movement drops. */
+    protected $cache;
+
     /**
      * @param mixed $db
      * @param callable(): int $primaryCurrencyId
      */
-    public function __construct($db, callable $primaryCurrencyId)
+    public function __construct($db, callable $primaryCurrencyId, RequestCache $cache)
     {
         $this->db = $db;
         $this->primaryCurrencyId = $primaryCurrencyId;
+        $this->cache = $cache;
     }
 
     /**
@@ -155,6 +161,9 @@ class LedgerWrite
             $db->insert('xf_oc_transaction', self::buildRow($movement, $row, $now));
         }
 
+        // One invalidation point for every movement, so a caller cannot
+        // forget the cache when it adds a write path.
+        $this->cache->invalidate();
         return 'ok';
     }
 
@@ -169,6 +178,7 @@ class LedgerWrite
             'user_id = ? AND currency_id = ?',
             [$userId, $currencyId]
         );
+        $this->cache->invalidate();
     }
 
     /**

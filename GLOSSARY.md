@@ -28,6 +28,10 @@ _Avoid_: retrofit, re-award, batch payout
 Age-based deletion of ledger rows. Preview and run share one deletable predicate, so the count an admin sees is the count the run deletes; orphan charge rows are purged separately by the charge module.
 _Avoid_: cleanup, purge
 
+**Request cache**:
+The one memo that survives for a request: balance rows, active event rows, the primary currency id, and the charge price, unlock-count and prior-purchase state. A committed write invalidates the whole memo, so no caller clears a section by hand.
+_Avoid_: static cache, balance cache, render cache
+
 **Movement**:
 One intent to change balances: a currency, a trigger, and one or more legs, each a member and a signed amount. Applied whole or not at all.
 _Avoid_: transaction, entry, delta

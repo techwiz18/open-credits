@@ -114,7 +114,7 @@ class Currency extends AbstractController
                 );
                 /** @var \OpenCredits\Credits\Service\Transact $svc */
                 $svc = $this->service('OpenCredits\Credits:Transact');
-                \OpenCredits\Credits\Service\Transact::clearPrimaryCache();
+                $svc->requestCache()->invalidate();
                 // A new primary has never been burned: mark the last run now
                 // so the next cron does not fire an immediate surprise pass.
                 $svc->demurrageRunner()->seedLastRun(\XF::$time, (int)$currency->decimals);

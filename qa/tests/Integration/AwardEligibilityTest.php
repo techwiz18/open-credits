@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\TestCase;
 
@@ -71,7 +72,7 @@ class AwardEligibilityTest extends TestCase
         $this->db->query('DELETE FROM xf_oc_transaction WHERE user_id = ?', [$this->userId]);
         $this->db->query('DELETE FROM xf_oc_faucet WHERE user_id = ?', [$this->userId]);
         $this->db->query('DELETE FROM xf_oc_balance WHERE user_id = ?', [$this->userId]);
-        Transact::clearBalanceCache();
+        RequestCache::reset();
 
         $this->db->insert('xf_oc_event', [
             'currency_id' => $this->currencyId,
@@ -81,7 +82,7 @@ class AwardEligibilityTest extends TestCase
             'active' => 1,
             'send_alert' => 0,
         ]);
-        Transact::clearEventCache();
+        RequestCache::reset();
     }
 
     protected function tearDown(): void
@@ -101,8 +102,7 @@ class AwardEligibilityTest extends TestCase
             $options->{$key} = $value;
         }
         $this->removeThrowawayUser();
-        Transact::clearEventCache();
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('ineligibleStates')]
@@ -192,6 +192,6 @@ class AwardEligibilityTest extends TestCase
         if ($existing) {
             $existing->delete();
         }
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 }
