@@ -11,8 +11,11 @@ cd "$(dirname "$0")/.."
 # artifacts + balance-writes + the CLI smoke test + the gitleaks tree scan.
 ./scripts/check.sh host
 
+project=$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env 2>/dev/null | tail -n1 || true)
+# Compose defaults to the checkout directory when .env does not name a project.
+project="${COMPOSE_PROJECT_NAME:-${project:-$(basename "$PWD")}}"
 if docker compose ps web --format '{{.State}}' 2>/dev/null | grep -qx running; then
     ./scripts/dev.sh test check
 else
-    echo "pre-commit: web container not running; skipped php lint/unit/phpstan."
+    echo "pre-commit: web container not running in compose project '$project'; skipped php lint/unit/phpstan."
 fi

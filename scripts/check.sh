@@ -21,10 +21,11 @@ usage: scripts/check.sh [--docker] <step> [args]
   artifacts             _output JSON parses; addon.json has a version
   balance-writes        only the ledger module writes balances
   test-dev              check.sh/dev.sh CLI contract smoke test
+  test-pre-push         pre-push branch-base guard smoke test
   test-pr-comments      pr-comments.sh smoke test
   secrets               gitleaks working-tree scan (skipped when not installed)
   check                 lint + style + unit + stan
-  host                  artifacts + balance-writes + style + test-dev + secrets
+  host                  artifacts + balance-writes + style + test-dev + test-pre-push + secrets
   list                  print the canonical step table
 EOF
 }
@@ -39,10 +40,11 @@ stan [args]       phpstan analyse --no-progress Service tests/Unit [args] [adapt
 artifacts         python3 scripts/check-artifacts.py [host]
 balance-writes    scripts/check-balance-writes.sh [host]
 test-dev          scripts/test-dev.sh [host]
+test-pre-push     scripts/test-pre-push.sh [host]
 test-pr-comments  scripts/test-pr-comments.sh [host]
 secrets           gitleaks dir . (skipped when not installed) [host]
 check             lint + style + unit + stan [adapter + host]
-host              artifacts + balance-writes + style + test-dev + secrets [host]
+host              artifacts + balance-writes + style + test-dev + test-pre-push + secrets [host]
 list              this table [host]
 EOF
 }
@@ -117,6 +119,10 @@ step_test_dev() {
   ./scripts/test-dev.sh
 }
 
+step_test_pre_push() {
+  ./scripts/test-pre-push.sh
+}
+
 step_test_pr_comments() {
   ./scripts/test-pr-comments.sh
 }
@@ -142,6 +148,7 @@ step_host() {
   step_balance_writes
   step_style
   step_test_dev
+  step_test_pre_push
   step_secrets
 }
 
@@ -149,7 +156,7 @@ case "$step" in
   "") usage >&2; exit 2 ;;
   list) list_steps; exit 0 ;;
   unit|stan) ;;
-  lint|style|artifacts|balance-writes|test-dev|test-pr-comments|secrets|check|host)
+  lint|style|artifacts|balance-writes|test-dev|test-pre-push|test-pr-comments|secrets|check|host)
     if [ "$#" -gt 0 ]; then
       echo "check.sh $step takes no extra arguments (got: $*)" >&2
       exit 2
@@ -167,6 +174,7 @@ case "$step" in
   artifacts) step_artifacts ;;
   balance-writes) step_balance_writes ;;
   test-dev) step_test_dev ;;
+  test-pre-push) step_test_pre_push ;;
   test-pr-comments) step_test_pr_comments ;;
   secrets) step_secrets ;;
   check) step_check ;;

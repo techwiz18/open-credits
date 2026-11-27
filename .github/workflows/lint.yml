@@ -49,6 +49,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: check contract smoke test
         run: ./scripts/check.sh test-dev
+      - name: pre-push branch-base smoke test
+        run: ./scripts/check.sh test-pre-push
       - name: PR comments smoke test
         run: ./scripts/check.sh test-pr-comments
 

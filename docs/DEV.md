@@ -39,7 +39,7 @@ Adapters only choose where a step runs:
   `web` container, then runs the same step with `scripts/check.sh --docker`
   (`lint`, `unit`, `stan`, `check`) or its own integration/seed commands.
 * Host-only steps (`style`, `artifacts`, `balance-writes`, `test-dev`,
-  `test-pr-comments`, `secrets`) always run on the checkout host.
+  `test-pre-push`, `test-pr-comments`, `secrets`) always run on the checkout host.
 
 `check` means PHP lint (both trees) + style + unit + PHPStan. `host` means the
 host-only steps. `scripts/test-dev.sh` pins the CLI contract.
@@ -47,9 +47,16 @@ host-only steps. `scripts/test-dev.sh` pins the CLI contract.
 ## Git hooks
 
 `./scripts/dev.sh install-hooks` points `core.hooksPath` at `.githooks/` so the
-tracked `pre-commit` hook runs on every commit. It runs `./scripts/check.sh
-host`, then `./scripts/dev.sh test check` only when the Docker `web` container
-is running (skipped with a note otherwise).
+tracked hooks run on every commit and push.
+
+`pre-commit` runs `./scripts/check.sh host` (artifacts, balance-writes, style,
+the `test-dev` contract, the `test-pre-push` guard smoke test, and the gitleaks
+tree scan), then `./scripts/dev.sh test check` only when the Docker `web`
+container is running (skipped with a note otherwise).
+
+`pre-push` checks the refs actually being pushed and refuses a branch that
+starts below `origin/main` or contains another unmerged feature tip, so a
+stacked PR cannot be pushed by accident. Rebase onto `origin/main` first.
 
 Required host tools: `bash`, `python3`, `git`. Optional: `docker compose` (the
 PHP checks) and `gitleaks` ≥ 8.19 (the secret scan; older versions lack the
@@ -75,7 +82,7 @@ project files are still scanned.
 | `./scripts/check.sh list` | canonical check step table (see [Checks](#checks)) |
 | `./scripts/dev.sh up/down/logs` | lifecycle |
 | `./scripts/dev.sh fix-perms` | **run after any `xf-make:*`** — generators run as root; Apache needs writable `_output` |
-| `./scripts/dev.sh install-hooks [--force]` | install the tracked pre-commit hook (see [Git hooks](#git-hooks)) |
+| `./scripts/dev.sh install-hooks [--force]` | install the tracked hooks (see [Git hooks](#git-hooks)) |
 | `./scripts/dev.sh uninstall-hooks` | restore the hooks path recorded at install |
 | `./scripts/dev.sh test check` | the `check` step through the docker adapter: lint, style, unit, PHPStan |
 | `./scripts/dev.sh test all` | seeds the forum fixtures, then the `check` step, then integration (skips count as failures) |
@@ -91,10 +98,12 @@ project files are still scanned.
   compose file honors it, defaulting to 8080.
 * Parallel agent session? Isolate the whole stack — project name, all ports,
   and (consequently) a separate DB volume needing its own forum install:
-  `COMPOSE_PROJECT_NAME=open-credits-b WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 docker compose up -d`.
-  Record it in `HANDOFF.md` open threads so sessions don't chase each other's
-  containers. Claim the stack there before seeding or running integration
-  tests, and release it when done.
+  `COMPOSE_PROJECT_NAME=open-credits-b WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 ./scripts/dev.sh up`.
+  `dev.sh up` records the project name and any port overrides in `.env`, so
+  later shells and the pre-commit hook check the same stack. Record it in
+  `HANDOFF.md` open threads so sessions don't chase each other's containers.
+  Claim the stack there before seeding or running integration tests, and
+  release it when done.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
 
 ## Worktrees and the dev stack

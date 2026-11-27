@@ -69,6 +69,19 @@ case "$cmd" in
   up)
     require_real_src
     cp -n .env.example .env || true
+    # Persist the settings that isolate this stack, so later shells and the
+    # hooks address the same project and ports. printf/grep rather than sed:
+    # the values are caller input, and sed would evaluate `e` in a replacement.
+    for key in COMPOSE_PROJECT_NAME WEB_PORT DB_PORT PMA_PORT; do
+      value=$(printenv "$key" || true)
+      [ -n "$value" ] || continue
+      if [[ ! "$value" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+        echo "dev.sh up: $key has characters Compose cannot use: $value" >&2
+        exit 2
+      fi
+      { grep -v "^$key=" .env || true; printf '%s=%s\n' "$key" "$value"; } > .env.tmp
+      mv .env.tmp .env
+    done
     docker compose up -d --build
     docker compose ps
     ;;
@@ -120,7 +133,7 @@ PHP
         *) echo "usage: dev.sh install-hooks [--force]" >&2; exit 2 ;;
       esac
     done
-    chmod +x .githooks/pre-commit
+    chmod +x .githooks/pre-commit .githooks/pre-push
     current=$(git config --get core.hooksPath || true)
     if [ "$current" = ".githooks" ]; then
       echo "Git hooks already installed (core.hooksPath=.githooks)."
@@ -225,7 +238,7 @@ usage: dev.sh <command> [args]
   link-addon          show the mounted addon dir and rebuild the addon
   fix-perms           make _output writable after a generator/import
   install-hooks [--force]
-                      install the tracked pre-commit hook; --force replaces a
+                      install the tracked hooks; --force replaces a
                       different core.hooksPath (recorded for uninstall)
   uninstall-hooks     restore the hooks path recorded at install
   test <kind> [args]  run the suite; kinds: $test_kinds

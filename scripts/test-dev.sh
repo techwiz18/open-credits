@@ -34,6 +34,7 @@ cp qa/phpunit.xml qa/phpunit-integration.xml qa/phpstan.neon \
   qa/composer.json qa/composer.lock qa/seed-dev-content.php "$repo/qa/"
 chmod +x "$repo/scripts/check.sh" "$repo/scripts/dev.sh"
 touch "$repo/src/.qatmp/vendor/autoload.php"
+printf 'WEB_PORT=8080\n' > "$repo/.env.example"
 
 printf '{"version_id": 942, "version_string": "0.14.0"}\n' \
   > "$repo/addon-src/OpenCredits/Credits/addon.json"
@@ -60,6 +61,9 @@ EOF
 # locally, pointing the container paths at the throwaway copy.
 cat > "$tmp/bin/docker" <<'EOF'
 #!/usr/bin/env bash
+if [ "${1:-}" = "compose" ] && { [ "${2:-}" = "up" ] || [ "${2:-}" = "ps" ]; }; then
+    exit 0
+fi
 payload="${!#}"
 payload="${payload//\/var\/www\/html\/.qatmp/$STUB_QATMP}"
 payload="${payload//\/var\/www\/html\/src\/addons\/OpenCredits\/Credits/$STUB_ADDON}"
@@ -104,8 +108,8 @@ run() {
 run_check --help | grep -q 'usage: scripts/check.sh' || fail "--help prints no usage"
 
 run_check list > "$tmp/list"
-for step in lint style unit stan artifacts balance-writes test-dev test-pr-comments \
-            secrets check host list; do
+for step in lint style unit stan artifacts balance-writes test-dev test-pre-push \
+            test-pr-comments secrets check host list; do
   grep -qE "^${step}([[:space:]]|$)" "$tmp/list" || fail "step table omits $step"
 done
 
@@ -281,11 +285,34 @@ set -e
 [ "$rc" -eq 1 ] || fail "test bogus exited $rc, want 1"
 grep -q 'usage: dev.sh test' <<<"$out" || fail "no usage for unknown kind: $out"
 
+# `up` records an isolated compose project in .env for later shells and hooks.
+COMPOSE_PROJECT_NAME=open-credits-test WEB_PORT=8083 DB_PORT=33061 PMA_PORT=8084 \
+  run up >/dev/null 2>&1 || fail "up failed"
+grep -qx 'COMPOSE_PROJECT_NAME=open-credits-test' "$repo/.env" \
+  || fail "up did not record the compose project in .env"
+grep -qx 'WEB_PORT=8083' "$repo/.env" || fail "up did not record WEB_PORT"
+grep -qx 'DB_PORT=33061' "$repo/.env" || fail "up did not record DB_PORT"
+grep -qx 'PMA_PORT=8084' "$repo/.env" || fail "up did not record PMA_PORT"
+
+# A later plain `up` keeps the isolated ports instead of reverting to defaults.
+run up >/dev/null 2>&1 || fail "plain up failed"
+grep -qx 'WEB_PORT=8083' "$repo/.env" || fail "plain up lost the isolated port"
+
+# A caller-supplied value cannot inject the .env rewrite.
+marker="$tmp/pwned"
+set +e
+COMPOSE_PROJECT_NAME="x/;e touch $marker;#" run up >/dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -eq 2 ] || fail "unsafe project name exited $rc, want 2"
+[ ! -e "$marker" ] || fail "project name executed a command"
+
 # Hook install/uninstall state machine, in the throwaway repo so the real
 # core.hooksPath is never touched.
 git init -q "$repo"
 mkdir -p "$repo/.githooks"
-cp .githooks/pre-commit "$repo/.githooks/pre-commit"
+cp .githooks/pre-commit .githooks/pre-push "$repo/.githooks/"
+chmod -x "$repo/.githooks/pre-commit" "$repo/.githooks/pre-push"
 
 hooks_path() { git -C "$repo" config --get core.hooksPath || true; }
 prev_path() { git -C "$repo" config --get opencredits.previousHooksPath || true; }
@@ -296,6 +323,8 @@ expect_hooks() {
 # A default install points core.hooksPath at .githooks and marks the default.
 run install-hooks >/dev/null 2>&1 || fail "install-hooks failed"
 expect_hooks .githooks
+[ -x "$repo/.githooks/pre-commit" ] || fail "install-hooks left pre-commit non-executable"
+[ -x "$repo/.githooks/pre-push" ] || fail "install-hooks left pre-push non-executable"
 [ "$(prev_path)" = __default__ ] || fail "install recorded prior '$(prev_path)', want __default__"
 
 # A pre-existing foreign path is left untouched without --force.
