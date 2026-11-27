@@ -378,15 +378,16 @@ class Tools extends AbstractController
     public function actionPrune(): \XF\Mvc\Reply\AbstractReply
     {
         $retention = (int)$this->app()->options()->ocHistoryRetentionDays;
+        $days = $retention > 0 ? $retention : 365;
         return $this->view(
             'OpenCredits\Credits:Tools\Prune',
             'oc_tools_prune',
             [
                 'ran' => false,
-                'days' => $retention > 0 ? $retention : 365,
+                'days' => $days,
                 'snapshots' => 0,
                 'deleted' => 0,
-                'preview' => $this->prunePreview($retention > 0 ? $retention : 365),
+                'preview' => $this->historyPrune()->preview($days),
             ]
         );
     }
@@ -399,32 +400,19 @@ class Tools extends AbstractController
         if ($days < 1) {
             return $this->error('Enter at least 1 day.');
         }
-        $cutoff = \XF::$time - $days * 86400;
 
         /** @var \OpenCredits\Credits\Service\Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
-        $snapshots = 0;
-        $deleted = 0;
         try {
-            $next = 0;
-            do {
-                $result = $svc->pruneHistory($cutoff, $next, 5000);
-                $snapshots += $result['snapshots'];
-                $deleted += $result['deleted'];
-                $next = $result['next'];
-            } while ($next !== null);
+            $result = $svc->historyPrune()->run($days, 5000);
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits prune failed: ');
             return $this->error('Pruning failed due to a server error. Completed batches are kept — fix the cause and re-run.');
         }
 
-        // Remove unlock rows for content that no longer exists (e.g. a thread
-        // hard-deleted in bulk). Ledger rows stay as financial history.
-        $this->app->db()->query(
-            "DELETE c FROM xf_oc_charge AS c
-             LEFT JOIN xf_post AS p ON (c.content_type = 'post' AND p.post_id = c.content_id)
-             WHERE c.content_type = 'post' AND p.post_id IS NULL"
-        );
+        // Unlock rows the per-post listener missed (bulk-deleted threads) are
+        // the charge module's cleanup; ledger rows stay as financial history.
+        $svc->contentCharge()->purgeOrphans();
 
         return $this->view(
             'OpenCredits\Credits:Tools\Prune',
@@ -432,37 +420,19 @@ class Tools extends AbstractController
             [
                 'ran' => true,
                 'days' => $days,
-                'snapshots' => $snapshots,
-                'deleted' => $deleted,
+                'snapshots' => $result['snapshots'],
+                'deleted' => $result['deleted'],
                 'preview' => [],
             ]
         );
     }
 
-    protected function prunePreview(int $days): array
+    protected function historyPrune(): \OpenCredits\Credits\Service\HistoryPrune
     {
-        // Match pruneHistory()'s current-day guard so the preview never
-        // promises to delete rows the service will refuse to touch.
-        $cutoff = min(
-            \XF::$time - $days * 86400,
-            \OpenCredits\Credits\Service\Transact::dayStart() - 1
-        );
-        $db = $this->app->db();
-        $rows = $db->fetchAll(
-            'SELECT c.currency_id, c.title, COUNT(*) AS entry_count FROM xf_oc_transaction AS t'
-            . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = t.currency_id'
-            . ' WHERE t.log_date <= ? AND t.`trigger` != ? AND t.note != ? AND t.note NOT LIKE ?'
-            . ' GROUP BY c.currency_id, c.title ORDER BY c.currency_id',
-            [$cutoff, ...Ledger::pruneGuardParams()]
-        );
-        $preview = [];
-        foreach ($rows as $row) {
-            $preview[] = [
-                'currency' => $row['title'],
-                'rows' => (int)$row['entry_count'],
-            ];
-        }
-        return $preview;
+        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        $svc = $this->service('OpenCredits\Credits:Transact');
+
+        return $svc->historyPrune();
     }
 
     protected function backfillEventRan($event, int $onlyUserId = 0): bool

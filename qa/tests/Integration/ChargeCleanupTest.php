@@ -19,6 +19,9 @@ class ChargeCleanupTest extends TestCase
 
     protected int $postId = 0;
 
+    /** @var int[] Charge rows parked on nonexistent posts, cleaned in tearDown. */
+    protected array $orphanPostIds = [];
+
     protected function setUp(): void
     {
         if (!class_exists('XF', false) || !\XF::app()) {
@@ -80,6 +83,32 @@ class ChargeCleanupTest extends TestCase
         );
     }
 
+    public function testOrphanChargeRowsArePurgedByTheChargeModule(): void
+    {
+        $base = (int)$this->db->fetchOne('SELECT COALESCE(MAX(post_id), 0) FROM xf_post');
+        $this->orphanPostIds = [$base + 1000001, $base + 1000002];
+        foreach ($this->orphanPostIds as $postId) {
+            $this->db->insert('xf_oc_charge', [
+                'content_type' => 'post',
+                'content_id' => $postId,
+                'user_id' => 1,
+                'author_user_id' => 1,
+                'currency_id' => 1,
+                'amount' => 1.00,
+                'charge_date' => \XF::$time,
+            ]);
+        }
+
+        $purged = \XF::app()->service('OpenCredits\Credits:Transact')->contentCharge()->purgeOrphans();
+
+        $this->assertGreaterThanOrEqual(2, $purged, 'Both orphan rows are reported as removed');
+        $remaining = (int)$this->db->fetchOne(
+            "SELECT COUNT(*) FROM xf_oc_charge WHERE content_type = 'post' AND content_id IN (?, ?)",
+            $this->orphanPostIds
+        );
+        $this->assertSame(0, $remaining, 'Orphan unlock rows no longer exist');
+    }
+
     protected function chargeCount(): int
     {
         return (int)$this->db->fetchOne(
@@ -90,6 +119,14 @@ class ChargeCleanupTest extends TestCase
 
     protected function cleanup(): void
     {
+        foreach ($this->orphanPostIds as $postId) {
+            $this->db->delete(
+                'xf_oc_charge',
+                "content_type = 'post' AND content_id = ?",
+                [$postId]
+            );
+        }
+        $this->orphanPostIds = [];
         if ($this->postId) {
             $this->db->delete(
                 'xf_oc_charge',
