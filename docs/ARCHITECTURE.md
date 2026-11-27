@@ -9,7 +9,7 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 
 | Path | Role |
 |---|---|
-| `addon.json` | Add-on meta. Current: 0.14.0 / 942. Requires XF 2.3.0+, PHP 8.2+ |
+| `addon.json` | Add-on meta. Current: 0.14.1 / 943. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | Façade for every money path (earn, transfer, redeem, charge, prune, rebuild); supplies the `LedgerWrite` and `HistoryPrune` modules and keeps the public API integrators call |
