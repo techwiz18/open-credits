@@ -72,7 +72,11 @@ class DemurrageRunner
      * `busy` step aborts immediately so overlapping admin/CLI/cron runs
      * cannot start a second pass over the same balances.
      *
-     * @return array<string, mixed> verdict/progress for the caller
+     * @return array{
+     *     verdict: string, ran: bool, busy: bool, done: bool,
+     *     processed: int, burned: float, accounts: int,
+     *     lastRun: int, nextRun: int, decimals: int
+     * } verdict/progress for the caller
      */
     public function run(int $batchSize = 500, bool $ignoreInterval = true, ?int $timeBudget = null): array
     {
@@ -81,8 +85,15 @@ class DemurrageRunner
         $burned = 0.0;
         $accounts = 0;
         $ran = false;
+        $decimals = 0;
         do {
             $step = $this->step($batchSize, $ignoreInterval);
+            // A later step can exit early (settings disabled, currency
+            // deactivated) with decimals 0; the total already accumulated
+            // still belongs to the pass's precision.
+            if ($step['ran']) {
+                $decimals = $step['decimals'];
+            }
             if ($step['busy']) {
                 return $this->result(
                     'busy',
@@ -92,7 +103,7 @@ class DemurrageRunner
                     $accounts + $step['accounts'],
                     $step['lastRun'],
                     $step['nextRun'],
-                    $step['decimals']
+                    $decimals
                 );
             }
             if (!$step['ran']) {
@@ -104,7 +115,7 @@ class DemurrageRunner
                     $accounts,
                     $step['lastRun'],
                     $step['nextRun'],
-                    $step['decimals']
+                    $decimals
                 );
             }
             $ran = true;
@@ -112,10 +123,10 @@ class DemurrageRunner
             $burned += $step['burned'];
             $accounts += $step['accounts'];
             if ($step['done']) {
-                return $this->result('done', true, $processed, $burned, $accounts, $step['lastRun'], $step['nextRun'], $step['decimals']);
+                return $this->result('done', true, $processed, $burned, $accounts, $step['lastRun'], $step['nextRun'], $decimals);
             }
             if ($timeBudget !== null && (microtime(true) - $start) >= $timeBudget) {
-                return $this->result('resume', true, $processed, $burned, $accounts, $step['lastRun'], $step['nextRun'], $step['decimals']);
+                return $this->result('resume', true, $processed, $burned, $accounts, $step['lastRun'], $step['nextRun'], $decimals);
             }
         } while (true);
     }
@@ -124,7 +135,12 @@ class DemurrageRunner
      * Snapshot for the admin Tools page: current rate, last/next run, and
      * what a pass would burn right now.
      *
-     * @return array<string, mixed>
+     * @return array{
+     *     enabled: bool, active: bool, rate: float, days: int,
+     *     currency: array<string, mixed>|null, decimals: int,
+     *     lastRun: int, nextRun: int, inProgress: bool,
+     *     accounts: int, total: float
+     * }
      */
     public function preview(): array
     {
@@ -135,7 +151,8 @@ class DemurrageRunner
             [$this->currencyId]
         );
         $state = $db->fetchRow(
-            'SELECT last_run, cursor_user_id, pass_started FROM xf_oc_inflation WHERE currency_id = ?',
+            'SELECT last_run, cursor_user_id, pass_started, pass_rate, pass_decimals'
+            . ' FROM xf_oc_inflation WHERE currency_id = ?',
             [$this->currencyId]
         );
         $lastRun = $state ? (int)$state['last_run'] : 0;
@@ -143,13 +160,21 @@ class DemurrageRunner
         // One verdict for "a pass can run at all"; adapters read it instead
         // of re-testing settings and currency themselves.
         $active = $settings['enabled'] && $settings['rate'] > 0 && $currency && (int)$currency['active'];
+        // An in-flight pass burns the rest at the snapshot it claimed, and
+        // step() resumes with those values, so estimate with them too.
+        $rate = (float)$settings['rate'];
+        $decimals = $currency ? (int)$currency['decimals'] : 0;
+        if ($inProgress && (float)$state['pass_rate'] > 0) {
+            $rate = (float)$state['pass_rate'];
+            $decimals = (int)$state['pass_decimals'];
+        }
         $result = [
             'enabled' => $settings['enabled'],
             'active' => $active,
-            'rate' => $settings['rate'],
+            'rate' => $rate,
             'days' => $settings['days'],
             'currency' => $currency ?: null,
-            'decimals' => $currency ? (int)$currency['decimals'] : 0,
+            'decimals' => $decimals,
             'lastRun' => $lastRun,
             'nextRun' => $lastRun > 0 ? $lastRun + $settings['days'] * 86400 : 0,
             'inProgress' => $inProgress,
@@ -159,7 +184,6 @@ class DemurrageRunner
         if (!$active) {
             return $result;
         }
-        $decimals = (int)$currency['decimals'];
         // Only real members count: orphan balance rows (member deleted) are
         // skipped by the burn and must not inflate the preview. An in-flight
         // pass already burned up to the cursor, so those are excluded too.
@@ -178,7 +202,7 @@ class DemurrageRunner
                 [$this->currencyId, $after]
             );
             foreach ($rows as $row) {
-                $burn = self::burn((float)$row['balance'], $settings['rate'], $decimals);
+                $burn = self::burn((float)$row['balance'], $rate, $decimals);
                 if ($burn > 0) {
                     $result['accounts']++;
                     $result['total'] += $burn;
@@ -206,7 +230,11 @@ class DemurrageRunner
     /**
      * One resumable demurrage batch.
      *
-     * @return array<string, mixed>
+     * @return array{
+     *     ran: bool, done: bool, busy: bool,
+     *     processed: int, burned: float, accounts: int,
+     *     lastRun: int, nextRun: int, decimals: int
+     * }
      */
     protected function step(int $batchSize, bool $ignoreInterval): array
     {
@@ -496,7 +524,11 @@ class DemurrageRunner
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{
+     *     verdict: string, ran: bool, busy: bool, done: bool,
+     *     processed: int, burned: float, accounts: int,
+     *     lastRun: int, nextRun: int, decimals: int
+     * }
      */
     protected function result(
         string $verdict,

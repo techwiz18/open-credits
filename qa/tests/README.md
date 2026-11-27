@@ -23,11 +23,17 @@ can no longer report a false green) and installs dev dependencies on the first
 run. Delete `src/.qatmp` if `qa/composer.json` changes.
 `qa/phpunit.xml` sets `failOnEmptyTestSuite`, so a zero-test run fails.
 
-`./scripts/dev.sh test check` runs lint + unit + PHPStan (no seeded content
-needed); the tracked pre-commit hook runs it alongside the host checks. Install
-the hook once per clone with `./scripts/dev.sh install-hooks`.
+`./scripts/dev.sh test check` runs the `check` step (lint + style + unit + PHPStan, no
+seeded content needed) through the docker adapter; the tracked pre-commit hook
+runs it alongside the host checks. Install the hook once per clone with
+`./scripts/dev.sh install-hooks`.
 
-(On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI does exactly that.)
+The steps, their commands, flags and the lint file set are defined once in
+`scripts/check.sh` — run `./scripts/check.sh list` for the canonical table
+(the same one `docs/DEV.md#checks` points at). Public CI calls those steps with
+the host-PHP adapter, so local and CI cannot drift.
+
+(On any machine with PHP 8.2+ just run `cd qa && composer install && ./vendor/bin/phpunit` — public CI runs the same PHPUnit through `scripts/check.sh unit`.)
 
 ## Assertions
 
@@ -60,7 +66,7 @@ DB-backed service tests run against the licensed dev forum. The bootstrap
 without it the framework is not loaded (public CI runs only the unit suite).
 
 ```bash
-./scripts/dev.sh test all     # seeds, then lint + unit + PHPStan + integration
+./scripts/dev.sh test all     # seeds, then lint + style + unit + PHPStan + integration
 ./scripts/dev.sh test seed    # only for a bare `test integration`: content-dependent tests
 ./scripts/dev.sh test integration
 ./scripts/dev.sh test integration --filter InflationControl   # one file
@@ -82,10 +88,11 @@ boot to build a controller) are not covered by public CI; run
 
 Covered today:
 - `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,
-  and reaction dedupe rows survive; net-zero rows are still pruned; and the
-  current earning day is never touched. It writes only under a throwaway
-  member (the rebuild only counts live members, so synthetic ids would never
-  rebuild).
+  and reaction dedupe rows survive; net-zero rows are still pruned; the current
+  earning day is never touched; and the preview counts exactly the rows the run
+  deletes (a `user_id = 0` row is neither previewed nor pruned). It writes only
+  under a throwaway member (the rebuild only counts live members, so synthetic
+  ids would never rebuild).
 - `ChargeTest` — the `[charge]` service (#5): funds move reader → author, a
   repeat charge (including a changed price) is a no-op, overdrafts are refused,
   and self-charges are free. It uses two real members (the service locks user
@@ -108,14 +115,22 @@ Covered today:
   a purchase through the service is visible to the next render in the same
   request.
 - `ChargeUnlockTest` — a crafted cheap `amount` still charges the post's
+- `ChargeUnlockTest` — a crafted cheap `amount` still charges the post's
   highest valid `[charge]` block; a repeat POST writes no second charge; and
   a guest POST is refused with 403.
-- `BackfillTest` — the historical backfill preview/run query applies the
-  event's forum/group scope and skips first posts; the action writes an
-  `event_id` marker, is idempotent, refuses a per-member run after a
-  site-wide run, and the history row is labelled/unlinked.
+- `BackfillTest` — the historical backfill through `Service/BackfillRunner`:
+  the preview/run query applies the event's forum/group scope and skips first
+  posts; the runner writes an `event_id` marker, is idempotent, reports the
+  already-completed event as skipped, refuses a per-member run after a
+  site-wide run, never repays a range another resume already advanced, and the
+  history row is labelled/unlinked.
+- `BackfillAdaptersTest` — #24 pins the admin backfill adapter (needs the XF
+  boot; no DB writes): the parsed event ids, member scope and force flag, the
+  5000-row batch budget, and every runner verdict (`done` renders the result
+  block, each failure verdict keeps its operator message).
 - `ChargeCleanupTest` — hard-deleting a post drops its unlock rows; member
-  deletion covers both payer and author charge rows.
+  deletion covers both payer and author charge rows; and the charge module's
+  orphan purge removes unlocks whose post no longer exists.
 - `InflationMathTest` (unit) — pure cap/faucet/demurrage math: partial fills,
   sub-unit headroom flooring on 0-decimal currencies, floor-at-zero, rounding.
 - `InflationControlTest` — #8 against the dev forum under a synthetic primary
@@ -144,9 +159,15 @@ Covered today:
 - `LedgerTest` (unit) — the one trigger-label map: every label, the humanised
   unknown-trigger fallback, the awardable subset, and the stored marker strings
   the prune guard relies on.
-- `MemberCreditsTest` — the wallet page (pagination 10 by default with per-page links, currency switcher,
-  retired transfer/redeem redirects) and the per-member profile Credits tab
-  (balances; send form for other members; no history for self; single-currency self tab uses the wallet).
+- `WalletViewTest` (unit) — the wallet view's rules without XenForo: selection
+  fallback order, balance lookup, amount step, show flags, profile-tab mode,
+  per-page choice and per-page URLs.
+- `MemberCreditsTest` — drives `WalletView` directly for currency selection,
+  balance, step, show flags, pager URLs and tab mode; the wallet page (pagination
+  10 by default with per-page links, rendered from the tracked template source),
+  retired transfer/redeem redirects, and the per-member profile Credits tab
+  (balances; send form for other members; no history for self; single-currency
+  self tab uses the wallet).
 
 All clean up in `tearDown()`.
 

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Pub\Controller;
 
+use OpenCredits\Credits\Entity\Currency;
 use OpenCredits\Credits\Service\AccountStanding;
 use OpenCredits\Credits\Service\ChargeAccess;
 use OpenCredits\Credits\Service\ContentCharge;
 use OpenCredits\Credits\Service\Ledger;
+use OpenCredits\Credits\Service\WalletView;
 use XF\Mvc\ParameterBag;
 use XF\Mvc\Reply\AbstractReply;
 use XF\Pub\Controller\AbstractController;
@@ -34,37 +36,21 @@ class Credits extends AbstractController
     protected function buildWalletParams(bool $inProfileTab = false): array
     {
         $visitor = \XF::visitor();
-        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
-
-        $balance = 0.0;
-        foreach ($visitor->oc_all_balances as $row) {
-            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
-                $balance = (float)$row['balance'];
-                break;
-            }
-        }
+        $view = $this->walletView();
+        $currency = $this->viewableCurrency();
+        $currencyId = (int)$currency->currency_id;
 
         // Standing, not just permission: the send form only renders when the
         // transfer endpoint would accept it.
         $canSend = $visitor->hasPermission('general', 'ocTransfer')
             && AccountStanding::canSend((string)$visitor->user_state, !empty($visitor->is_banned));
         $page = $this->filter('page', 'uint');
-
-        $perPageOptions = [10, 20, 50];
-        $requestedPerPage = $this->filter('per_page', 'uint');
-        if ($requestedPerPage && in_array($requestedPerPage, $perPageOptions, true)) {
-            $perPage = $requestedPerPage;
-            \XF::app()->session()->set('ocWalletPerPage', $perPage);
-        } else {
-            $perPage = (int)\XF::app()->session()->get('ocWalletPerPage');
-            if (!in_array($perPage, $perPageOptions, true)) {
-                $perPage = 10;
-            }
-        }
+        $requestedPerPage = (int)$this->filter('per_page', 'uint');
+        $perPage = $view->perPage($requestedPerPage ?: null);
 
         $finder = $this->finder('OpenCredits\Credits:Transaction')
             ->where('user_id', $visitor->user_id)
-            ->where('currency_id', $currency->currency_id)
+            ->where('currency_id', $currencyId)
             ->order('log_date', 'DESC')->order('transaction_id', 'DESC');
 
         $total = $finder->total();
@@ -74,57 +60,25 @@ class Credits extends AbstractController
         }
         $transactions = $finder->limitByPage($page, $perPage)->fetch();
 
-        $currencies = $this->finder('OpenCredits\Credits:Currency')
-            ->where('active', 1)
-            ->where('visible', 1)
-            ->order('currency_id')
-            ->fetch();
-
-        // When the wallet is embedded in the profile tab, paging and per-page
-        // links go through the member route so they can reload the pane.
-        $pagerLink = $inProfileTab ? 'credits/member' : 'credits';
-        $pagerBaseParams = $inProfileTab
-            ? ['user_id' => (int)$visitor->user_id, 'currency_id' => (int)$currency->currency_id]
-            : ['currency_id' => (int)$currency->currency_id];
-        $perPageUrls = [];
-        foreach ($perPageOptions AS $option) {
-            $perPageUrls[$option] = $this->buildLink(
-                $pagerLink,
-                null,
-                $pagerBaseParams + ['per_page' => $option]
-            );
-        }
+        $flags = $view->showFlags($inProfileTab);
 
         return [
             'currency' => $currency,
-            'currencies' => $currencies,
-            'showBalance' => !$inProfileTab || count($currencies) > 1
-                || !\XF::app()->options()->ocShowProfileStats,
-            'balance' => $balance,
+            'currencies' => $view->viewable(),
+            'showBalance' => $flags['showBalance'],
+            'balance' => $view->balanceFor((int)$visitor->user_id, $currencyId),
             'entries' => $this->buildHistoryEntries($transactions),
             'page' => $page,
             'perPage' => $perPage,
-            'perPageOptions' => $perPageOptions,
+            'perPageOptions' => WalletView::PER_PAGE_OPTIONS,
             'total' => $total,
             'canSend' => $canSend,
-            'showRedeem' => (bool)\XF::app()->options()->ocShowWalletRedeem,
-            'showTransfer' => (bool)\XF::app()->options()->ocShowTransfer,
-            'inProfileTab' => $inProfileTab,
-            'returnUserId' => (int)$visitor->user_id,
-            'pagerLink' => $pagerLink,
-            'pagerParams' => $pagerBaseParams + ['per_page' => $perPage],
-            'perPageUrls' => $perPageUrls,
-            'amountStep' => self::amountStep((int)$currency->decimals),
-        ];
-    }
-
-    /**
-     * Smallest input step for an amount field, e.g. "1" for 0-decimal
-     * currencies, "0.01" for 2-decimal ones.
-     */
-    protected static function amountStep(int $decimals): string
-    {
-        return $decimals > 0 ? '0.' . str_repeat('0', $decimals - 1) . '1' : '1';
+            'showRedeem' => $flags['showRedeem'],
+            'showTransfer' => $flags['showTransfer'],
+            'switchUrls' => $view->switchUrls($inProfileTab, (int)$visitor->user_id, $currencyId),
+            'formHidden' => $view->formHidden($inProfileTab, (int)$visitor->user_id),
+            'amountStep' => $view->step((int)$currency->decimals),
+        ] + $view->pager($inProfileTab, (int)$visitor->user_id, $currencyId, $perPage);
     }
 
     /**
@@ -246,30 +200,18 @@ class Credits extends AbstractController
         $isSelf = (int)$user->user_id === (int)$visitor->user_id;
 
         // Profile tab mode: auto (wallet on single-currency forums), wallet, or member.
-        if ($isSelf) {
-            $mode = (string)\XF::app()->options()->ocProfileTabMode;
-            $useWallet = false;
-            if ($mode === 'wallet') {
-                $useWallet = true;
-            } elseif ($mode !== 'member') {
-                $visibleCurrencyCount = $this->finder('OpenCredits\Credits:Currency')
-                    ->where('active', 1)
-                    ->where('visible', 1)
-                    ->total();
-                $useWallet = $visibleCurrencyCount <= 1;
-            }
-
-            if ($useWallet) {
-                return $this->view(
-                    'OpenCredits\Credits:Credits\Index',
-                    'credits_index',
-                    $this->buildWalletParams(true)
-                );
-            }
+        if ($isSelf && $this->walletView()->tabMode(true) === 'wallet') {
+            return $this->view(
+                'OpenCredits\Credits:Credits\Index',
+                'credits_index',
+                $this->buildWalletParams(true)
+            );
         }
 
         // Per-member card: balances + a send form locked to this member.
-        $currency = $this->assertViewableCurrency(0);
+        $view = $this->walletView();
+        $currency = $this->viewableCurrency(0);
+        $flags = $view->showFlags(false);
         $canSend = $visitor->hasPermission('general', 'ocTransfer')
             && AccountStanding::canSend((string)$visitor->user_state, !empty($visitor->is_banned));
         $lockedTo = $isSelf ? '' : $user->username;
@@ -278,14 +220,6 @@ class Credits extends AbstractController
             !empty($user->is_banned)
         );
 
-        $senderBalance = 0.0;
-        foreach ($visitor->oc_all_balances as $row) {
-            if ((int)$row['currency_id'] === (int)$currency->currency_id) {
-                $senderBalance = (float)$row['balance'];
-                break;
-            }
-        }
-
         return $this->view(
             'OpenCredits\Credits:Credits\Member',
             'credits_member',
@@ -293,39 +227,39 @@ class Credits extends AbstractController
                 'user' => $user,
                 'isSelf' => $isSelf,
                 'currency' => $currency,
-                'senderBalance' => $senderBalance,
+                'senderBalance' => $view->balanceFor((int)$visitor->user_id, (int)$currency->currency_id),
                 'canSend' => $canSend,
                 'lockedTo' => $lockedTo,
                 'targetReceivable' => $targetReceivable,
-                'showTransfer' => (bool)\XF::app()->options()->ocShowTransfer,
-                'amountStep' => self::amountStep((int)$currency->decimals),
+                'showTransfer' => $flags['showTransfer'],
+                'amountStep' => $view->step((int)$currency->decimals),
             ]
         );
     }
 
-    protected function assertViewableCurrency(int $currencyId, bool $fallback = true): \XF\Mvc\Entity\Entity
+    protected function walletView(): WalletView
     {
-        $finder = $this->finder('OpenCredits\Credits:Currency')
-            ->where('active', 1)
-            ->where('visible', 1);
-        if ($currencyId) {
-            $currency = (clone $finder)->where('currency_id', $currencyId)->fetchOne();
-            if ($currency) {
-                return $currency;
-            }
-            if (!$fallback) {
-                throw $this->exception($this->error('Please select a valid currency.'));
-            }
+        return new WalletView($this->app);
+    }
+
+    /**
+     * The requested viewable currency. With fallback disabled an explicit,
+     * unknown id is an error; otherwise a missing selection falls back to the
+     * primary then the lowest id.
+     */
+    protected function viewableCurrency(?int $currencyId = null, bool $allowFallback = true): Currency
+    {
+        if ($currencyId === null) {
+            $currencyId = (int)$this->filter('currency_id', 'uint');
         }
-        $primary = (clone $finder)->where('is_primary', 1)->fetchOne();
-        if ($primary) {
-            return $primary;
+        $currency = $this->walletView()->selected($currencyId, $allowFallback);
+        if ($currency) {
+            return $currency;
         }
-        $fallback = $finder->order('currency_id')->fetchOne();
-        if (!$fallback) {
-            throw $this->exception($this->notFound('No active currencies.'));
+        if ($currencyId > 0 && !$allowFallback) {
+            throw $this->exception($this->error('Please select a valid currency.'));
         }
-        return $fallback;
+        throw $this->exception($this->notFound('No active currencies.'));
     }
 
     public function actionTransfer(ParameterBag $params): AbstractReply
@@ -334,7 +268,7 @@ class Credits extends AbstractController
         if (!$visitor->user_id || !$visitor->hasPermission('general', 'ocView')) {
             return $this->noPermission();
         }
-        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'));
+        $currency = $this->viewableCurrency();
 
         return $this->redirect($this->buildLink('credits', null, [
             'currency_id' => (int)$currency->currency_id,
@@ -354,7 +288,7 @@ class Credits extends AbstractController
         }
 
         $to = $this->filter('to', 'str');
-        $currency = $this->assertViewableCurrency($this->filter('currency_id', 'uint'), false);
+        $currency = $this->viewableCurrency(null, false);
         $amount = round($this->filter('amount', 'float'), (int)$currency->decimals);
 
         if (!strlen($to)) {

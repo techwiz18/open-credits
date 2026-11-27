@@ -404,6 +404,29 @@ class InflationControlTest extends TestCase
         );
     }
 
+    public function testPreviewUsesTheInProgressPassSnapshot(): void
+    {
+        // The rest of an in-flight pass burns at the rate and precision it
+        // claimed, so the estimate must not follow later settings changes.
+        \XF::app()->options()->ocInflationDemurrageRate = 10;
+        $this->transact->adjust($this->otherId, $this->currencyId, 10.0, 'admin_adjust');
+        $this->db->insert('xf_oc_inflation', [
+            'currency_id' => $this->currencyId,
+            'last_run' => 0,
+            'cursor_user_id' => $this->memberId,
+            'pass_started' => \XF::$time,
+            'pass_token' => 424242,
+            'pass_rate' => 50,
+            'pass_decimals' => 2,
+        ]);
+
+        $preview = $this->transact->demurragePreview();
+        $this->assertTrue($preview['inProgress']);
+        $this->assertSame(50.0, (float)$preview['rate'], 'The estimate reports the pass rate');
+        $this->assertEqualsWithDelta(5.0, $preview['total'], 0.0001, 'Burn at the pass rate, not the new 10%');
+        $this->assertSame(1, $preview['accounts']);
+    }
+
     public function testRedeemEnforcesDailyFaucet(): void
     {
         \XF::app()->options()->ocInflationFaucetDaily = 8;

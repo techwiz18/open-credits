@@ -115,6 +115,15 @@ class InflationMathTest extends TestCase
         $this->assertSame(0.0, DemurrageRunner::burn(100.0, 0.0, 2));
     }
 
+    public function testTransactDemurrageShimKeepsSentinels(): void
+    {
+        $this->assertSame(0.0, Transact::calculateDemurrage(0.0, 10.0, 2), 'Zero balance');
+        $this->assertSame(0.0, Transact::calculateDemurrage(-5.0, 10.0, 2), 'Negative balance');
+        $this->assertSame(0.0, Transact::calculateDemurrage(100.0, 0.0, 2), 'Zero rate');
+        $this->assertSame(0.0, Transact::calculateDemurrage(4.0, 10.0, 0), 'Rounds to zero');
+        $this->assertSame(10.0, Transact::calculateDemurrage(10.0, 150.0, 2), 'Capped at the balance');
+    }
+
     public function testTransactDemurrageShimDelegatesToTheRunner(): void
     {
         $this->assertSame(1.25, Transact::calculateDemurrage(12.5, 10.0, 2));

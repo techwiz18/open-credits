@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Pre-push guardrail: a feature branch must start on origin/main and must not
+# carry another unmerged feature tip (a stacked branch that only looks like
+# one). Git supplies the refs actually being pushed on stdin, so pushing any
+# branch — not just the checked-out one — is checked.
+# Install with `./scripts/dev.sh install-hooks`; see docs/DEV.md "Git hooks".
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+    echo "pre-push: origin/main not found; skipped branch-base check."
+    exit 0
+fi
+
+# Fails when <branch> starts below origin/main, or when it contains the tip of
+# another branch that is not on origin/main.
+check_branch() {
+    local branch=$1 oldest parent upstream ref
+    oldest=$(git rev-list --reverse origin/main.."$branch" | sed -n '1p')
+    [ -n "$oldest" ] || return 0
+
+    parent=$(git rev-parse "$oldest^" 2>/dev/null || true)
+    if [ -z "$parent" ] || ! git merge-base --is-ancestor "$parent" origin/main; then
+        echo "pre-push: $branch starts at $parent, which is not on origin/main." >&2
+        echo "pre-push: rebase onto origin/main before pushing (see AGENTS.md)." >&2
+        return 1
+    fi
+
+    upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "$branch@{u}" 2>/dev/null || true)
+    while IFS= read -r ref; do
+        case "$ref" in
+            "refs/heads/$branch"|"refs/remotes/origin/$branch"|"$upstream") continue ;;
+            refs/heads/main|refs/remotes/origin/main) continue ;;
+        esac
+        # A tip that is already on origin/main is history, not a stacked base.
+        git merge-base --is-ancestor "$ref" origin/main && continue
+        echo "pre-push: $branch is stacked on $ref, which is not on origin/main." >&2
+        echo "pre-push: rebase onto origin/main before pushing (see AGENTS.md)." >&2
+        return 1
+    done < <(git for-each-ref --format='%(refname)' --merged "$branch")
+}
+
+status=0
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+    [ -n "$local_ref" ] || continue
+    [[ "$local_sha" =~ ^0+$ ]] && continue    # branch deletion, nothing to check
+    case "$local_ref" in
+        refs/heads/*) check_branch "${local_ref#refs/heads/}" || status=1 ;;
+    esac
+done
+exit "$status"

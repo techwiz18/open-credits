@@ -3,7 +3,9 @@
 namespace OpenCredits\Credits;
 
 use OpenCredits\Credits\Service\AccountStanding;
+use OpenCredits\Credits\Service\AwardScope;
 use OpenCredits\Credits\Service\Ledger;
+use OpenCredits\Credits\Service\Transact;
 use XF\Mvc\Entity\Entity;
 use XF\Mvc\Entity\Manager as EntityManager;
 use XF\Mvc\Entity\Structure;
@@ -16,30 +18,25 @@ use XF\Mvc\Entity\Structure;
 class Listener
 {
     /**
-     * Per-request cache: does any active event for this trigger carry a
-     * forum restriction? Avoids parent-content lookups when unscoped.
+     * Whether awards for this trigger are forum-scoped, so the caller must
+     * resolve a node id. Event rows come from Transact's request cache and
+     * AwardScope reads the scope column, so the listener neither queries the
+     * event table nor parses that column itself.
      */
-    protected static $needsForumContext = [];
-
     protected static function needsForumContext(string $trigger): bool
     {
-        if (!array_key_exists($trigger, self::$needsForumContext)) {
-            // Guarded: this runs on core hot paths (post save, reactions),
-            // which must never 500 when the addon tables are unavailable
-            // (mid-upgrade, failed install). Fail open — downstream award
-            // calls fail safe on their own.
-            try {
-                self::$needsForumContext[$trigger] = (bool)\XF::app()->db()->fetchOne(
-                    'SELECT event_id FROM xf_oc_event WHERE `trigger` = ? AND active = 1'
-                    . " AND forum_ids IS NOT NULL AND forum_ids != '' AND forum_ids != '[]' LIMIT 1",
-                    $trigger
-                );
-            } catch (\Throwable $e) {
-                \XF::logException($e, false, 'OpenCredits forum-context check failed: ');
-                self::$needsForumContext[$trigger] = false;
-            }
+        // Guarded: this runs on core hot paths (post save, reactions),
+        // which must never 500 when the addon tables are unavailable
+        // (mid-upgrade, failed install). Fail open — downstream award
+        // calls fail safe on their own.
+        try {
+            /** @var Transact $svc */
+            $svc = \XF::app()->service('OpenCredits\Credits:Transact');
+            return AwardScope::needsNodeContext($svc->eventRowsForTrigger($trigger));
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits forum-context check failed: ');
+            return false;
         }
-        return self::$needsForumContext[$trigger];
     }
 
     public static function threadEntityPostSave(Entity $entity)
@@ -162,12 +159,12 @@ class Listener
             return;
         }
         // Registration day is covered by the register bonus, not the daily one.
-        if ((int)$user->get('register_date') >= Service\Transact::dayStart()) {
+        if ((int)$user->get('register_date') >= Transact::dayStart()) {
             return;
         }
         try {
             $app = \XF::app();
-            /** @var Service\Transact $svc */
+            /** @var Transact $svc */
             $svc = $app->service('OpenCredits\Credits:Transact');
             $svc->awardDailyLoginIfNeeded((int)$user->user_id);
         } catch (\Throwable $e) {
@@ -235,7 +232,7 @@ class Listener
         }
         try {
             $app = \XF::app();
-            /** @var Service\Transact $svc */
+            /** @var Transact $svc */
             $svc = $app->service('OpenCredits\Credits:Transact');
             $svc->awardByTrigger($trigger, $userId, $contentId, $contentType, $nodeId, [], $dedupeKey);
         } catch (\Throwable $e) {

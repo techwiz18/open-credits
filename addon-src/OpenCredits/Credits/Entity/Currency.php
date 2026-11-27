@@ -5,6 +5,17 @@ namespace OpenCredits\Credits\Entity;
 use XF\Mvc\Entity\Entity;
 use XF\Mvc\Entity\Structure;
 
+/**
+ * @property int $currency_id
+ * @property string $title
+ * @property string $prefix
+ * @property string $suffix
+ * @property int $decimals
+ * @property bool $allow_negative
+ * @property bool $active
+ * @property bool $is_primary
+ * @property bool $visible
+ */
 class Currency extends Entity
 {
     public static function getStructure(Structure $structure): Structure
