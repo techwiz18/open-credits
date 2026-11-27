@@ -5,6 +5,7 @@ namespace OpenCredits\Credits;
 use OpenCredits\Credits\Service\AccountStanding;
 use OpenCredits\Credits\Service\AwardScope;
 use OpenCredits\Credits\Service\Ledger;
+use OpenCredits\Credits\Service\Transact;
 use XF\Mvc\Entity\Entity;
 use XF\Mvc\Entity\Manager as EntityManager;
 use XF\Mvc\Entity\Structure;
@@ -29,7 +30,7 @@ class Listener
         // (mid-upgrade, failed install). Fail open — downstream award
         // calls fail safe on their own.
         try {
-            /** @var Service\Transact $svc */
+            /** @var Transact $svc */
             $svc = \XF::app()->service('OpenCredits\Credits:Transact');
             return AwardScope::needsNodeContext($svc->eventRowsForTrigger($trigger));
         } catch (\Throwable $e) {
@@ -158,12 +159,12 @@ class Listener
             return;
         }
         // Registration day is covered by the register bonus, not the daily one.
-        if ((int)$user->get('register_date') >= Service\Transact::dayStart()) {
+        if ((int)$user->get('register_date') >= Transact::dayStart()) {
             return;
         }
         try {
             $app = \XF::app();
-            /** @var Service\Transact $svc */
+            /** @var Transact $svc */
             $svc = $app->service('OpenCredits\Credits:Transact');
             $svc->awardDailyLoginIfNeeded((int)$user->user_id);
         } catch (\Throwable $e) {
@@ -231,7 +232,7 @@ class Listener
         }
         try {
             $app = \XF::app();
-            /** @var Service\Transact $svc */
+            /** @var Transact $svc */
             $svc = $app->service('OpenCredits\Credits:Transact');
             $svc->awardByTrigger($trigger, $userId, $contentId, $contentType, $nodeId, [], $dedupeKey);
         } catch (\Throwable $e) {

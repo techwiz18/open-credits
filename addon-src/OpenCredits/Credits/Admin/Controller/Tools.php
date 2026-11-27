@@ -6,6 +6,8 @@ namespace OpenCredits\Credits\Admin\Controller;
 
 use OpenCredits\Credits\Service\BackfillRunner;
 use OpenCredits\Credits\Service\DemurrageRunner;
+use OpenCredits\Credits\Service\HistoryPrune;
+use OpenCredits\Credits\Service\Transact;
 use XF\Admin\Controller\AbstractController;
 use XF\Mvc\ParameterBag;
 
@@ -67,7 +69,7 @@ class Tools extends AbstractController
     {
         $this->assertPostOnly();
 
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        /** @var Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
         try {
             $rows = $svc->rebuildAllBalancesFully();
@@ -146,7 +148,7 @@ class Tools extends AbstractController
 
     protected function backfillRunner(): BackfillRunner
     {
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        /** @var Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
 
         return $svc->backfillRunner();
@@ -217,7 +219,7 @@ class Tools extends AbstractController
             );
         }
 
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        /** @var Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
         try {
             $ok = $svc->adjust(
@@ -295,7 +297,7 @@ class Tools extends AbstractController
 
     protected function demurrageRunner(): DemurrageRunner
     {
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        /** @var Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
 
         return $svc->demurrageRunner();
@@ -327,7 +329,7 @@ class Tools extends AbstractController
             return $this->error('Enter at least 1 day.');
         }
 
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        /** @var Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
         try {
             $result = $svc->historyPrune()->run($days, 5000);
@@ -338,7 +340,13 @@ class Tools extends AbstractController
 
         // Unlock rows the per-post listener missed (bulk-deleted threads) are
         // the charge module's cleanup; ledger rows stay as financial history.
-        $svc->contentCharge()->purgeOrphans();
+        // The prune already committed, so a cleanup failure must not replace
+        // the result page with a 500.
+        try {
+            $svc->contentCharge()->purgeOrphans();
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits prune orphan purge failed: ');
+        }
 
         return $this->view(
             'OpenCredits\Credits:Tools\Prune',
@@ -353,9 +361,9 @@ class Tools extends AbstractController
         );
     }
 
-    protected function historyPrune(): \OpenCredits\Credits\Service\HistoryPrune
+    protected function historyPrune(): HistoryPrune
     {
-        /** @var \OpenCredits\Credits\Service\Transact $svc */
+        /** @var Transact $svc */
         $svc = $this->service('OpenCredits\Credits:Transact');
 
         return $svc->historyPrune();

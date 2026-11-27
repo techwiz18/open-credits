@@ -88,10 +88,11 @@ boot to build a controller) are not covered by public CI; run
 
 Covered today:
 - `PruneHistoryTest` — prune + rebuild keeps balances exact; redeem, backfill,
-  and reaction dedupe rows survive; net-zero rows are still pruned; and the
-  current earning day is never touched. It writes only under a throwaway
-  member (the rebuild only counts live members, so synthetic ids would never
-  rebuild).
+  and reaction dedupe rows survive; net-zero rows are still pruned; the current
+  earning day is never touched; and the preview counts exactly the rows the run
+  deletes (a `user_id = 0` row is neither previewed nor pruned). It writes only
+  under a throwaway member (the rebuild only counts live members, so synthetic
+  ids would never rebuild).
 - `ChargeTest` — the `[charge]` service (#5): funds move reader → author, a
   repeat charge (including a changed price) is a no-op, overdrafts are refused,
   and self-charges are free. It uses two real members (the service locks user
@@ -112,13 +113,15 @@ Covered today:
   the preview/run query applies the event's forum/group scope and skips first
   posts; the runner writes an `event_id` marker, is idempotent, reports the
   already-completed event as skipped, refuses a per-member run after a
-  site-wide run, and the history row is labelled/unlinked.
+  site-wide run, never repays a range another resume already advanced, and the
+  history row is labelled/unlinked.
 - `BackfillAdaptersTest` — #24 pins the admin backfill adapter (needs the XF
   boot; no DB writes): the parsed event ids, member scope and force flag, the
   5000-row batch budget, and every runner verdict (`done` renders the result
   block, each failure verdict keeps its operator message).
 - `ChargeCleanupTest` — hard-deleting a post drops its unlock rows; member
-  deletion covers both payer and author charge rows.
+  deletion covers both payer and author charge rows; and the charge module's
+  orphan purge removes unlocks whose post no longer exists.
 - `InflationMathTest` (unit) — pure cap/faucet/demurrage math: partial fills,
   sub-unit headroom flooring on 0-decimal currencies, floor-at-zero, rounding.
 - `InflationControlTest` — #8 against the dev forum under a synthetic primary
