@@ -12,7 +12,7 @@
 					<div class="block-row block-row--separated">
 						{{ phrase('ocadm_demurrage_incomplete', {
 							'accounts': $result.accounts|number,
-							'amount': $result.burned|number($preview.decimals),
+							'amount': $result.burned|number($result.decimals),
 							'currency': $preview.currency.title
 						}) }}
 					</div>
@@ -20,7 +20,7 @@
 					<div class="block-row block-row--separated">
 						{{ phrase('ocadm_demurrage_done', {
 							'accounts': $result.accounts|number,
-							'amount': $result.burned|number($preview.decimals),
+							'amount': $result.burned|number($result.decimals),
 							'currency': $preview.currency.title
 						}) }}
 					<xf:else />

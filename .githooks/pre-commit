@@ -1,24 +1,15 @@
 #!/usr/bin/env bash
-# Pre-commit guardrail. Host checks always run; the PHP checks mirror public CI
-# plus PHPStan and run only when the Docker web container is up, so a checkout
-# with the stack down can still commit. Everything checks the working tree, not
-# the staged index. Bypass one commit with `git commit --no-verify`.
-# Install with `./scripts/dev.sh install-hooks`; see docs/DEV.md "Git hooks".
+# Pre-commit guardrail. Host checks always run; the PHP checks run through the
+# docker adapter only when the web container is up, so a checkout with the
+# stack down can still commit. Everything checks the working tree, not the
+# staged index. Bypass one commit with `git commit --no-verify`.
+# Install with `./scripts/dev.sh install-hooks`; the step contract lives in
+# scripts/check.sh (`./scripts/check.sh list`) and docs/DEV.md "Git hooks".
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-./scripts/check-balance-writes.sh
-./scripts/test-dev.sh
-./scripts/test-pre-push.sh
-
-python3 scripts/check-artifacts.py
-
-if command -v gitleaks >/dev/null 2>&1; then
-    # `dir` needs gitleaks >= 8.19; older versions fail loudly under set -e.
-    gitleaks dir . --no-banner --redact
-else
-    echo "pre-commit: gitleaks not installed; skipped working-tree secret scan."
-fi
+# artifacts + balance-writes + the CLI smoke test + the gitleaks tree scan.
+./scripts/check.sh host
 
 project=$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env 2>/dev/null | tail -n1 || true)
 # Compose defaults to the checkout directory when .env does not name a project.

@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
-use OpenCredits\Credits\Admin\Controller\Tools;
-use OpenCredits\Credits\Service\Transact;
+use OpenCredits\Credits\Service\BackfillRunner;
 use PHPUnit\Framework\TestCase;
 
 /**
  * DB-backed checks for the historical backfill: event scoping, the first-post
  * rule, event-id completion markers, re-run idempotency, and the per-member
- * double-pay guard.
+ * double-pay guard. Everything drives Service\BackfillRunner; the controller
+ * is only covered by BackfillAdaptersTest.
  *
  * Runs against the licensed dev forum and cleans its own backfill rows and
  * markers in tearDown(); skips without OC_XF_ROOT.
@@ -20,9 +20,6 @@ class BackfillTest extends TestCase
 {
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
-
-    /** @var \XF\App */
-    protected $app;
 
     protected int $eventId = 0;
 
@@ -34,7 +31,6 @@ class BackfillTest extends TestCase
         if (!\XF::$time) {
             \XF::$time = time();
         }
-        $this->app = \XF::app();
         $this->db = \XF::db();
 
         $event = \XF::finder('OpenCredits\Credits:CreditEvent')
@@ -57,16 +53,16 @@ class BackfillTest extends TestCase
         }
     }
 
-    public function testPreviewMatchesActionUsers(): void
+    public function testPreviewMatchesRunUsers(): void
     {
-        $users = $this->backfillUserCount();
+        $users = $this->previewUserCount();
         if ($users === 0) {
             $this->markTestSkipped('No backfillable content for the post event.');
         }
 
-        $this->runAction([$this->eventId]);
+        $this->runner()->run([$this->eventId], 0, false);
 
-        // Preview and action share the verdict seam (backfillEligibleCounts),
+        // Preview and run share the candidate query and the AwardScope tally,
         // so the promised user count must equal the paid distinct users.
         $paid = (int)$this->db->fetchOne(
             "SELECT COUNT(DISTINCT user_id) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
@@ -75,19 +71,21 @@ class BackfillTest extends TestCase
         $this->assertSame($users, $paid);
     }
 
-    public function testActionBackfillsOnceAndSkipsReruns(): void
+    public function testRunBackfillsOnceAndSkipsReruns(): void
     {
-        if ($this->backfillUserCount() === 0) {
+        if ($this->previewUserCount() === 0) {
             $this->markTestSkipped('No backfillable content for the post event.');
         }
 
-        $this->runAction([$this->eventId]);
+        $result = $this->runner()->run([$this->eventId], 0, false);
+        $this->assertSame('done', $result['verdict']);
 
         $rows = (int)$this->db->fetchOne(
             "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
             [$this->eventId]
         );
         $this->assertGreaterThan(0, $rows);
+        $this->assertSame($rows, $result['awarded'], 'The runner reports the rows it wrote.');
 
         $marker = $this->db->fetchRow(
             'SELECT * FROM xf_oc_backfill WHERE event_id = ? AND user_id = 0',
@@ -96,30 +94,34 @@ class BackfillTest extends TestCase
         $this->assertNotEmpty($marker);
         $this->assertGreaterThan(0, (int)$marker['completed_date']);
 
-        // Re-run: the completed marker means no new rows.
-        $this->runAction([$this->eventId]);
-        $again = (int)$this->db->fetchOne(
+        // Re-run: the completed marker means no new rows, and the event is
+        // reported as skipped instead of silently paid again.
+        $again = $this->runner()->run([$this->eventId], 0, false);
+        $this->assertSame('done', $again['verdict']);
+        $this->assertSame([$this->eventId], $again['skipped']);
+        $this->assertSame(0, $again['awarded']);
+        $rowsAgain = (int)$this->db->fetchOne(
             "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
             [$this->eventId]
         );
-        $this->assertSame($rows, $again);
+        $this->assertSame($rows, $rowsAgain);
     }
 
     public function testMemberRunAfterSiteWideIsSkipped(): void
     {
-        if ($this->backfillUserCount() === 0) {
+        if ($this->previewUserCount() === 0) {
             $this->markTestSkipped('No backfillable content for the post event.');
         }
 
-        $this->runAction([$this->eventId]);
+        $this->runner()->run([$this->eventId], 0, false);
         $rows = (int)$this->db->fetchOne(
             "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
             [$this->eventId]
         );
 
         // A completed site-wide run already paid this member.
-        $username = (string)$this->db->fetchOne('SELECT username FROM xf_user ORDER BY user_id LIMIT 1');
-        $this->runAction([$this->eventId], $username);
+        $userId = (int)$this->db->fetchOne('SELECT user_id FROM xf_user ORDER BY user_id LIMIT 1');
+        $this->runner()->run([$this->eventId], $userId, false);
         $again = (int)$this->db->fetchOne(
             "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
             [$this->eventId]
@@ -129,11 +131,11 @@ class BackfillTest extends TestCase
 
     public function testBackfillHistoryIsLabelledAndUnlinked(): void
     {
-        if ($this->backfillUserCount() === 0) {
+        if ($this->previewUserCount() === 0) {
             $this->markTestSkipped('No backfillable content for the post event.');
         }
 
-        $this->runAction([$this->eventId]);
+        $this->runner()->run([$this->eventId], 0, false);
 
         $txns = \XF::finder('OpenCredits\Credits:Transaction')
             ->where('event_id', $this->eventId)
@@ -142,13 +144,13 @@ class BackfillTest extends TestCase
         $this->assertGreaterThan(0, $txns->count());
 
         $request = new \XF\Http\Request(
-            $this->app->inputFilterer(),
+            \XF::app()->inputFilterer(),
             [],
             [],
             [],
             ['REQUEST_METHOD' => 'GET']
         );
-        $controller = $this->app->controller(\OpenCredits\Credits\Pub\Controller\Credits::class, $request);
+        $controller = \XF::app()->controller(\OpenCredits\Credits\Pub\Controller\Credits::class, $request);
         $ref = new \ReflectionMethod($controller, 'buildHistoryEntries');
         $ref->setAccessible(true);
         $entries = $ref->invoke($controller, $txns);
@@ -158,46 +160,156 @@ class BackfillTest extends TestCase
         $this->assertNull($entries[0]['detailUser']);
     }
 
-    protected function backfillUserCount(): int
+    public function testFailedLegAbortsTheBatchAndStaysResumable(): void
     {
-        $event = \XF::finder('OpenCredits\Credits:CreditEvent')
-            ->where('event_id', $this->eventId)
-            ->fetchOne();
-        if (!$event) {
-            return 0;
+        if ($this->previewUserCount() === 0) {
+            $this->markTestSkipped('No backfillable content for the post event.');
         }
-        $counts = $this->invoke('backfillEligibleCounts', $event, 0, 0, 0);
-        return count($counts);
+
+        // Snapshot the event while its currency is active, the way run() does
+        // before a batch starts.
+        $event = $this->db->fetchRow(
+            'SELECT e.event_id, e.currency_id, e.trigger, e.amount, e.forum_ids, e.usergroup_ids,'
+            . ' c.decimals AS currency_decimals'
+            . ' FROM xf_oc_event AS e'
+            . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id'
+            . ' WHERE e.event_id = ?',
+            [$this->eventId]
+        );
+        $this->assertNotEmpty($event);
+        $currencyId = (int)$event['currency_id'];
+
+        $this->db->delete('xf_oc_backfill', 'event_id = ? AND user_id = 0', [$this->eventId]);
+        $this->db->insert('xf_oc_backfill', [
+            'event_id' => $this->eventId,
+            'user_id' => 0,
+            'last_user_id' => 0,
+            'started_date' => \XF::$time,
+            'completed_date' => 0,
+        ]);
+        $backfillId = (int)$this->db->lastInsertId();
+
+        // Deactivated between load and commit: every leg fails closed inside
+        // LedgerWrite, which is what a mid-run deactivation looks like.
+        $this->db->update('xf_oc_currency', ['active' => 0], 'currency_id = ?', [$currencyId]);
+        try {
+            $completed = false;
+            try {
+                $this->batchRunner()->batch($event, 0, 0, 5000, $backfillId);
+                $completed = true;
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString("'currency_inactive'", $e->getMessage());
+            }
+            $this->assertFalse($completed, 'A failed leg must abort the batch, not complete it.');
+
+            $marker = $this->db->fetchRow(
+                'SELECT * FROM xf_oc_backfill WHERE backfill_id = ?',
+                [$backfillId]
+            );
+            $this->assertSame(0, (int)$marker['completed_date'], 'A failed batch stays resumable.');
+            $paid = (int)$this->db->fetchOne(
+                "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
+                [$this->eventId]
+            );
+            $this->assertSame(0, $paid, 'A rolled-back batch writes no ledger rows.');
+        } finally {
+            $this->db->update('xf_oc_currency', ['active' => 1], 'currency_id = ?', [$currencyId]);
+        }
     }
 
-    protected function runAction(array $eventIds, string $username = ''): void
+    public function testConcurrentResumeDoesNotRepayTheAdvancedRange(): void
     {
-        $request = new \XF\Http\Request(
-            $this->app->inputFilterer(),
-            ['event_ids' => $eventIds, 'username' => $username, 'force' => 0],
-            [],
-            [],
-            ['REQUEST_METHOD' => 'POST']
+        if ($this->previewUserCount() === 0) {
+            $this->markTestSkipped('No backfillable content for the post event.');
+        }
+
+        $event = $this->db->fetchRow(
+            'SELECT e.event_id, e.currency_id, e.trigger, e.amount, e.forum_ids, e.usergroup_ids,'
+            . ' c.decimals AS currency_decimals'
+            . ' FROM xf_oc_event AS e'
+            . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id'
+            . ' WHERE e.event_id = ?',
+            [$this->eventId]
         );
-        $controller = $this->app->controller(Tools::class, $request);
-        $this->invoke('actionBackfillSave', $controller);
+        $this->assertNotEmpty($event);
+
+        $this->db->delete('xf_oc_backfill', 'event_id = ? AND user_id = 0', [$this->eventId]);
+        $this->db->insert('xf_oc_backfill', [
+            'event_id' => $this->eventId,
+            'user_id' => 0,
+            'last_user_id' => 0,
+            'started_date' => \XF::$time,
+            'completed_date' => 0,
+        ]);
+        $backfillId = (int)$this->db->lastInsertId();
+
+        try {
+            // A concurrent resume advanced the marker after this call read its
+            // (stale) boundary of 0. The batch must continue from the locked
+            // marker, not pay the range the other run owns.
+            $maxUserId = (int)$this->db->fetchOne('SELECT MAX(user_id) FROM xf_user');
+            $this->db->update(
+                'xf_oc_backfill',
+                ['last_user_id' => $maxUserId],
+                'backfill_id = ?',
+                [$backfillId]
+            );
+
+            $runner = $this->batchRunner();
+            $batch = $runner->batch($event, 0, 0, 5000, $backfillId);
+            $this->assertSame(0, $batch['rows'], 'A stale boundary must not repay the advanced range.');
+
+            // The other resume then completes: a second stale call is skipped.
+            $again = $runner->batch($event, 0, 0, 5000, $backfillId);
+            $this->assertSame(0, $again['rows'], 'A completed event is never paid again.');
+
+            $paid = (int)$this->db->fetchOne(
+                "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
+                [$this->eventId]
+            );
+            $this->assertSame(0, $paid, 'No ledger row was written for the stale range.');
+        } finally {
+            $this->cleanup();
+        }
+    }
+
+    protected function runner(): BackfillRunner
+    {
+        return \XF::app()->service('OpenCredits\Credits:Transact')->backfillRunner();
     }
 
     /**
-     * @return mixed
+     * The real runner with runBatch exposed, so the resume-marker lock can be
+     * exercised without a second concurrent process.
      */
-    protected function invoke(string $method, ...$args)
+    protected function batchRunner(): BackfillRunner
     {
-        if (($args[0] ?? null) instanceof Tools) {
-            $controller = array_shift($args);
-        } else {
-            $request = new \XF\Http\Request($this->app->inputFilterer(), [], [], [], ['REQUEST_METHOD' => 'POST']);
-            $controller = $this->app->controller(Tools::class, $request);
-        }
+        $svc = \XF::app()->service('OpenCredits\Credits:Transact');
 
-        $ref = new \ReflectionMethod($controller, $method);
-        $ref->setAccessible(true);
-        return $ref->invoke($controller, ...$args);
+        return new class($this->db, $svc->ledgerWrite(), static function (): int {
+            return 0;
+        }) extends BackfillRunner {
+            public function batch(
+                array $event,
+                int $onlyUserId,
+                int $startAfterUserId,
+                int $batchSize,
+                int $backfillId
+            ): array {
+                return $this->runBatch($event, $onlyUserId, $startAfterUserId, $batchSize, $backfillId);
+            }
+        };
+    }
+
+    /** The member count the admin preview promises for the post event. */
+    protected function previewUserCount(): int
+    {
+        foreach ($this->runner()->preview() as $row) {
+            if ((int)$row['event_id'] === $this->eventId) {
+                return (int)$row['users'];
+            }
+        }
+        return 0;
     }
 
     protected function cleanup(): void

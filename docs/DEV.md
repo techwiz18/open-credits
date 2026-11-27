@@ -22,24 +22,37 @@ cp /path/to/xenforo_2.3.x.zip ../xenforo_dev.zip   # parent dir, any xf 2.3 zip
 The addon source (`addon-src/OpenCredits/Credits/`) is bind-mounted live into the
 container; edits apply on next page load (templates recompile automatically).
 
+## Checks
+
+Every check is a step in `scripts/check.sh`; that script owns the step →
+command mapping, the flags, and the lint file set. The canonical table is its
+own output:
+
+```bash
+./scripts/check.sh list
+```
+
+Adapters only choose where a step runs:
+
+* `./scripts/check.sh <step>` — host PHP/python (the adapter public CI uses).
+* `./scripts/dev.sh test <kind>` — the docker adapter: syncs `qa/` into the
+  `web` container, then runs the same step with `scripts/check.sh --docker`
+  (`lint`, `unit`, `stan`, `check`) or its own integration/seed commands.
+* Host-only steps (`style`, `artifacts`, `balance-writes`, `test-dev`,
+  `test-pre-push`, `test-pr-comments`, `secrets`) always run on the checkout host.
+
+`check` means PHP lint (both trees) + style + unit + PHPStan. `host` means the
+host-only steps. `scripts/test-dev.sh` pins the CLI contract.
+
 ## Git hooks
 
 `./scripts/dev.sh install-hooks` points `core.hooksPath` at `.githooks/` so the
 tracked hooks run on every commit and push.
 
-`pre-commit` runs:
-
-* `scripts/check-balance-writes.sh` — the ledger guardrail (also in CI).
-* `scripts/test-dev.sh` — dev.sh argument smoke test (also in CI, including
-  under the `GIT_DIR` a hook inherits).
-* `scripts/test-pre-push.sh` — branch-base guard smoke test (also in CI).
-* `scripts/check-artifacts.py` — every `_output` JSON parses and `addon.json`
-  has a version (the exact script public CI runs).
-* `gitleaks dir .` — secret scan of the working tree when `gitleaks` is
-  installed; prints a one-line skip note when it is not.
-* `./scripts/dev.sh test check` — PHP lint, unit tests, PHPStan, only when the
-  Docker `web` container is running for the active compose project; the skip
-  note names the project.
+`pre-commit` runs `./scripts/check.sh host` (artifacts, balance-writes, style,
+the `test-dev` contract, the `test-pre-push` guard smoke test, and the gitleaks
+tree scan), then `./scripts/dev.sh test check` only when the Docker `web`
+container is running (skipped with a note otherwise).
 
 `pre-push` checks the refs actually being pushed and refuses a branch that
 starts below `origin/main` or contains another unmerged feature tip, so a
@@ -66,12 +79,13 @@ project files are still scanned.
 | Command | Purpose |
 |---|---|
 | `./scripts/dev.sh help` | every command and test kind |
+| `./scripts/check.sh list` | canonical check step table (see [Checks](#checks)) |
 | `./scripts/dev.sh up/down/logs` | lifecycle |
 | `./scripts/dev.sh fix-perms` | **run after any `xf-make:*`** — generators run as root; Apache needs writable `_output` |
 | `./scripts/dev.sh install-hooks [--force]` | install the tracked hooks (see [Git hooks](#git-hooks)) |
 | `./scripts/dev.sh uninstall-hooks` | restore the hooks path recorded at install |
-| `./scripts/dev.sh test check` | CI parity without integration: lint, unit, PHPStan |
-| `./scripts/dev.sh test all` | seeds the forum fixtures, then lint, unit, PHPStan, integration (skips count as failures) |
+| `./scripts/dev.sh test check` | the `check` step through the docker adapter: lint, style, unit, PHPStan |
+| `./scripts/dev.sh test all` | seeds the forum fixtures, then the `check` step, then integration (skips count as failures) |
 | `docker compose exec web php /var/www/html/cmd.php xf-addon:upgrade OpenCredits/Credits` | import new `_output` (bump version first) |
 | `docker compose exec web php /var/www/html/cmd.php oc-credits:rebuild` | rebuild balances from ledger |
 | `docker compose exec web php /var/www/html/cmd.php oc-credits:demurrage --preview` | preview the next demurrage pass |
@@ -91,6 +105,38 @@ project files are still scanned.
   Claim the stack there before seeding or running integration tests, and
   release it when done.
 * `src/src/config.php` holds dev DB creds + `debug`/`development.enabled` (gitignored).
+
+## Worktrees and the dev stack
+
+A linked worktree starts without `src/` (gitignored). For a worktree that needs
+the forum, copy the licensed tree from the primary checkout and reuse the
+installed database:
+
+```bash
+cp -a ../open-credits/src ./src          # copy, never symlink
+COMPOSE_PROJECT_NAME=open-credits docker compose up -d
+```
+
+Do not symlink `src/`: Docker's nested binds (`./src` plus `./addon-src`) make
+PHPStan resolve the add-on twice and report every `OpenCredits\Credits\Entity\*`
+class as unknown. Reusing `COMPOSE_PROJECT_NAME` reuses that project's installed
+`db_data` volume, so no `/install` is needed; use the isolated recipe above when
+another session owns the volume. Run integration against the worktree's bind
+mount with `COMPOSE_PROJECT_NAME=open-credits ./scripts/dev.sh test integration
+--filter <Test>`.
+
+Without a stack, run the PHP gate in a one-off container against the primary
+checkout's vendor:
+
+```bash
+PRIMARY=../open-credits
+docker run --rm -v "$PWD/qa":/qatmp \
+  -v "$PWD/addon-src/OpenCredits/Credits":/addon \
+  -v "$PRIMARY/src/.qatmp/vendor":/qatmp/vendor:ro \
+  -w /qatmp -e OC_ADDON_SRC=/addon php:8.4-cli \
+  php vendor/bin/phpunit
+# PHPStan: php vendor/bin/phpstan analyse --no-progress /addon/Service tests/Unit
+```
 
 ## Release checklist (local — needs the licensed XF runtime, so not in CI)
 

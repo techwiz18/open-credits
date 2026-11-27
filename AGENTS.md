@@ -7,15 +7,27 @@ lives in `.agents/skills/` (load it as described below).
 
 ## Project shape
 
+Paths below and in issues are relative to the add-on root
+`addon-src/OpenCredits/Credits/` unless they start with `docs/`, `qa/`,
+`scripts/`, or `src/`.
+
 - **Add-on source:** `addon-src/OpenCredits/Credits/` (bind-mounted into the dev forum).
 - **Runtime `src/`:** licensed XenForo 2.3.10, gitignored — never commit it.
   The XF tree unpacks at `src/src/XF/` (not `src/XF/`); see `docs/DEV.md`.
-- **`_output/`:** the development surface (templates, phrases, options, routes, etc.).
+- **`_output/`:** the add-on's development surface (templates, phrases, options,
+  routes, etc.).
 - **`_data/`:** generated release artifacts (gitignored); never edit by hand.
-- **Tests:** `./scripts/dev.sh help` lists every command and test kind; test
-  details (including arg forwarding) are in `qa/tests/README.md`. The tracked
-  pre-commit hook runs `test check` plus the host checks; `install-hooks` wires
-  it up.
+- **Tests:** `./scripts/dev.sh help` lists every command and test kind; every
+  check step (and its lint file set) is defined once in `scripts/check.sh`
+  (`./scripts/check.sh list`); test details (including arg forwarding) are in
+  `qa/tests/README.md`. The tracked pre-commit hook runs `test check` plus the
+  host checks; `install-hooks` wires it up. Integration needs the licensed dev
+  forum, so neither CI nor the hook runs it: run `./scripts/dev.sh test all`
+  (it seeds itself) before pushing changes to services or adapters.
+- **Worktrees:** copy `src/` from the primary checkout (never symlink it) and
+  reuse or claim the dev stack; see
+  `docs/DEV.md#worktrees-and-the-dev-stack`. Claim the stack in `HANDOFF.md`
+  before seeding or running integration.
 - **Docs:** `docs/DEV.md`, `docs/ARCHITECTURE.md`, `docs/XF-DEV-GOTCHAS.md`, `docs/API.md`.
 - **`HANDOFF.md`:** local-only session notes (gitignored).
 
@@ -37,10 +49,19 @@ PHPStan) inside the `web` container. Inside it the addon is
 
 ## Workflow
 
+- Start each issue from `origin/main` after `git fetch`: `git switch -c
+  dev/<issue>-<slug> origin/main`. Never stack a new branch on another feature
+  tip. If the session starts detached or already has commits, create the branch
+  from `origin/main` and cherry-pick only this issue's commits
+  (`git switch -c dev/<issue>-<slug> origin/main && git cherry-pick <sha>...`);
+  a rebase would replay the inherited branch too.
+- One branch and PR per issue. If `dev/<issue>-<slug>` already exists on the
+  remote, continue on that branch instead of creating a second one.
 - Features on `dev/*`; merge to `main` only after full testing; cut releases
   from `main`. `main` is always release-ready.
-- An implemented issue is finished when it is committed, pushed, and closed on
-  GitHub with a short proof comment (commits + verification).
+- An implemented issue is finished when it is committed, pushed, and opened as
+  a PR against `main` that links the issue (`Closes #<n>`). Leave the issue
+  open until the PR merges; the merge closes it.
 - Read `docs/DEV.md` (release checklist) and `docs/XF-DEV-GOTCHAS.md` before
   touching `_output`.
 - **Never run `xf-dev:export` manually.** It is destructive and is only invoked

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Widget;
 
+use OpenCredits\Credits\Service\WalletView;
 use XF\Http\Request;
 use XF\Widget\AbstractWidget;
 
@@ -24,11 +25,7 @@ class TopHolders extends AbstractWidget
     {
         $params = parent::getDefaultTemplateParams($context);
         if ($context === 'options') {
-            $params['currencies'] = $this->app->finder('OpenCredits\Credits:Currency')
-                ->where('active', 1)
-                ->where('visible', 1)
-                ->order('currency_id')
-                ->fetch();
+            $params['currencies'] = (new WalletView($this->app))->viewable();
         }
         return $params;
     }
@@ -47,19 +44,14 @@ class TopHolders extends AbstractWidget
             return '';
         }
 
-        /** @var \OpenCredits\Credits\Service\Transact $transact */
-        $transact = $this->app->service('OpenCredits\Credits:Transact');
-
-        $currencyId = (int)($this->options['currency_id'] ?? 0);
-        if ($currencyId <= 0) {
-            $currencyId = $transact->primaryCurrencyId();
-        }
-
-        /** @var \OpenCredits\Credits\Entity\Currency|null $currency */
-        $currency = $this->app->em()->find('OpenCredits\Credits:Currency', $currencyId);
-        if (!$currency || !$currency->active || !$currency->visible) {
+        // Which currency the widget shows (explicit option or the primary) is
+        // the wallet view's selection: inactive/hidden currencies render ''.
+        $currency = (new WalletView($this->app))
+            ->configuredCurrency((int)($this->options['currency_id'] ?? 0));
+        if (!$currency) {
             return '';
         }
+        $currencyId = (int)$currency->currency_id;
 
         $limit = min(100, max(1, (int)($this->options['limit'] ?? 5)));
 

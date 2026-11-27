@@ -2,7 +2,7 @@
 
 namespace OpenCredits\Credits\XF\Entity;
 
-use OpenCredits\Credits\Service\Transact;
+use OpenCredits\Credits\Service\WalletView;
 
 class User extends XFCP_User
 {
@@ -15,7 +15,7 @@ class User extends XFCP_User
     public function getOcBalances(): array
     {
         try {
-            return $this->ocTransact()->balancesFor((int)$this->user_id, true);
+            return $this->ocWallet()->visibleBalancesFor((int)$this->user_id);
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits balances lookup failed: ');
             return [];
@@ -28,7 +28,7 @@ class User extends XFCP_User
     public function getOcAllBalances(): array
     {
         try {
-            return $this->ocTransact()->balancesFor((int)$this->user_id, false);
+            return $this->ocWallet()->balancesFor((int)$this->user_id);
         } catch (\Throwable $e) {
             \XF::logException($e, false, 'OpenCredits balances lookup failed: ');
             return [];
@@ -40,16 +40,16 @@ class User extends XFCP_User
      */
     public function getOcPrimary(): ?array
     {
-        foreach ($this->getOcBalances() as $row) {
-            if (!empty($row['is_primary'])) {
-                return $row;
-            }
+        try {
+            return $this->ocWallet()->primaryBalanceFor((int)$this->user_id);
+        } catch (\Throwable $e) {
+            \XF::logException($e, false, 'OpenCredits balances lookup failed: ');
+            return null;
         }
-        return null;
     }
 
-    protected function ocTransact(): Transact
+    protected function ocWallet(): WalletView
     {
-        return $this->app()->service('OpenCredits\Credits:Transact');
+        return new WalletView($this->app());
     }
 }
