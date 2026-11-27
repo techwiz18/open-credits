@@ -262,14 +262,15 @@ change fires the `oc_credits_adjust` code event with
   its legacy `applyBalanceDelta` until the last caller moves). `DemurrageRunner`
   mutates balances only through the module.
 * Domain logic that is not an XF service is a plain class under `Service/`
-  (`AwardScope`, `AccountStanding`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `ContentCharge`), constructed directly or
+  (`AwardScope`, `AccountStanding`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `ContentCharge`, `ChargeAccess`), constructed directly or
   through a `Transact` factory. You do not need `\XF::app()->service()` for it.
 * Per-request caches are explicit static caches with a clear method, owned by
-  the module that knows the data. `Transact::contentCharge()` returns one
-  `ContentCharge` per request (`clearContentChargeCache()`); that module
-  memoises each member's prior-purchase answer per content and drops the
-  content after a committed purchase, so service reads stay DB-fresh for
-  everything else. Presentation-only caches stay in the renderer:
+  the module that knows the data. `Transact` holds the one `ContentCharge`
+  instance in a static per-request cache (`clearContentChargeCache()`); the
+  module keeps the prior-purchase memo per content and member as an instance
+  property, and drops a content's entry after a committed purchase so service
+  reads stay DB-fresh for everything else. Presentation-only caches stay in
+  the renderer:
   `BbCode\Charge` caches the post price and unlock count
   (`clearRenderCaches()`).
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly

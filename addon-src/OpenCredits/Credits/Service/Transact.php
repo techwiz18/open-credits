@@ -15,7 +15,12 @@ class Transact extends AbstractService
     protected static $balanceCache = [];
     protected static $eventRowsCache = [];
 
-    /** @var ContentCharge|null One charge module per request. */
+    /**
+     * One charge module per request. Process-scoped like the other per-request
+     * statics here, so a long-running worker must clear it between requests.
+     *
+     * @var ContentCharge|null
+     */
     protected static $contentChargeCache = null;
 
     public static function clearEventCache(): void
