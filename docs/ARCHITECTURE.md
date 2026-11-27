@@ -12,13 +12,14 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `addon.json` | Add-on meta. Current: 0.14.0 / 942. Requires XF 2.3.0+, PHP 8.2+ |
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
-| `Service/Transact.php` | Façade for every money path (earn, transfer, redeem, charge, prune, rebuild); supplies the `LedgerWrite` module and keeps the public API integrators call |
+| `Service/Transact.php` | Façade for every money path (earn, transfer, redeem, charge, prune, rebuild); supplies the `LedgerWrite` and `HistoryPrune` modules and keeps the public API integrators call |
 | `Service/LedgerWrite.php` | **The one author of balance changes and ledger rows.** `commit(movement)` owns user-row lock order, currency precision, the overdraw policy, `xf_oc_balance`, the `oc_credits` mirror, and the `xf_oc_transaction` row shape; callers own the transaction and the post-commit effects |
 | `Service/Ledger.php` | Ledger vocabulary: the one trigger-label map (`label()`, award-only `eventTriggers()`), trigger constants, and stored markers (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) shared by history, alerts, and the prune guard |
 | `Service/AccountStanding.php` | **The one account-standing rule**: four verdicts (earn, receive, send, unlock) over one state table, pure so every money path reads the same decision |
 | `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; owns the burn math (`burn()`) and the "pass can run" verdict, so preview and the pass share one formula; burns and orphan purges go through the `LedgerWrite` module supplied by `Transact` |
 | `Service/BackfillRunner.php` | Historical-backfill lifecycle behind `preview()` and `run(eventIds, scope, force, batchSize) → done / incomplete / rebuild_failed / no_events / no_eligible_events / inactive_currencies`; owns the candidate query, the `AwardScope` tally, the batch loop, the resume/completion marker, and the post-run rebuild, so preview and the run share one query; ledger rows go through the `LedgerWrite` module supplied by `Transact` |
-| `Service/ContentCharge.php` | `[charge]` premium-content decision: parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads |
+| `Service/HistoryPrune.php` | **The one history-prune module**: `preview()` and `run()` over one `deletable()` predicate and one current-day cutoff; batches per-member snapshots; `Transact::pruneHistory()` and the admin Tools preview/save both go through it |
+| `Service/ContentCharge.php` | `[charge]` premium-content decision: parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads, orphan unlock-row purge |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
 | `BbCode/Charge.php` | `[charge=X]` renderer: view gates, locked box, author stats |
 | `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect |
@@ -254,7 +255,7 @@ change fires the `oc_credits_adjust` code event with
   its legacy `applyBalanceDelta` until the last caller moves). `DemurrageRunner`
   and `BackfillRunner` mutate balances only through the module.
 * Domain logic that is not an XF service is a plain class under `Service/`
-  (`AwardScope`, `AccountStanding`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `BackfillRunner`, `ContentCharge`), constructed directly or
+  (`AwardScope`, `AccountStanding`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `BackfillRunner`, `HistoryPrune`, `ContentCharge`), constructed directly or
   through a `Transact` factory. You do not need `\XF::app()->service()` for it.
 * Per-request caches belong to the presentation layer (renderer/controller).
   Service reads stay DB-fresh so moderation and cleanup see deletions
@@ -262,6 +263,9 @@ change fires the `oc_credits_adjust` code event with
   time.
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly
   one place: `CreditEvent::decodeIdList()`. Do not add local copies.
+* Forum-node context is asked of `AwardScope::needsNodeContext()` over
+  `Transact::eventRowsForTrigger()`'s cached rows; the listener never queries
+  the event table or string-tests `forum_ids` for it.
 * New triggers must be unique per (trigger, currency) while active — the admin
   save refuses duplicates because `awardByTrigger()` pays every active row.
 * Trigger names, display labels, and the ledger marker strings live in

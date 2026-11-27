@@ -131,6 +131,31 @@ class Transact extends AbstractService
     }
 
     /**
+     * Active event rows for a trigger, with their currency, from the
+     * request-static cache. The award loop and AwardScope's node-context
+     * question read the same rows, so a content save pays for one query.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function eventRowsForTrigger(string $trigger): array
+    {
+        if (!array_key_exists($trigger, self::$eventRowsCache)) {
+            // Event configs are request-static: bulk content saves must not
+            // refetch identical rows per save. Admin event saves run in their
+            // own requests, so no invalidation is needed here.
+            self::$eventRowsCache[$trigger] = $this->db()->fetchAll(
+                'SELECT e.*, c.decimals, c.title AS currency_title,'
+                . ' c.prefix AS currency_prefix, c.suffix AS currency_suffix'
+                . ' FROM xf_oc_event AS e'
+                . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id AND c.active = 1'
+                . ' WHERE e.`trigger` = ? AND e.active = 1 ORDER BY e.event_id',
+                $trigger
+            );
+        }
+        return self::$eventRowsCache[$trigger];
+    }
+
+    /**
      * Awards EVERY active event registered for the trigger (e.g. a thread
      * event in each currency). Returns true if at least one applied.
      *
@@ -150,7 +175,6 @@ class Transact extends AbstractService
         array $userGroupIds = [],
         ?string $dedupeKey = null
     ): bool {
-        $db = $this->db();
         // No earnings for accounts that cannot participate, mirroring the
         // register path (banned/rejected/disabled never earn). Unapproved
         // states (moderated, email_confirm) still earn so the register bonus
@@ -159,20 +183,7 @@ class Transact extends AbstractService
         if ($userId > 0 && !$this->isAwardEligible($userId)) {
             return false;
         }
-        // Event configs are request-static: bulk content saves must not
-        // refetch identical rows per save. Admin event saves run in their
-        // own requests, so no invalidation is needed here.
-        if (!array_key_exists($trigger, self::$eventRowsCache)) {
-            self::$eventRowsCache[$trigger] = $db->fetchAll(
-                'SELECT e.*, c.decimals, c.title AS currency_title,'
-                . ' c.prefix AS currency_prefix, c.suffix AS currency_suffix'
-                . ' FROM xf_oc_event AS e'
-                . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id AND c.active = 1'
-                . ' WHERE e.`trigger` = ? AND e.active = 1 ORDER BY e.event_id',
-                $trigger
-            );
-        }
-        $rows = self::$eventRowsCache[$trigger];
+        $rows = $this->eventRowsForTrigger($trigger);
         if (!$rows) {
             return false;
         }
@@ -1175,87 +1186,23 @@ class Transact extends AbstractService
     }
 
     /**
-     * Summarizes ledger rows at or before $cutoff into per-(member,currency)
-     * snapshot rows and deletes them. Backfill markers, redeem rows, and
-     * reaction dedupe markers are never deleted (completion guards,
-     * one-per-member checks, and re-reaction dedupe depend on them). Batched
-     * by user-id range like rebuilds; totals stay exact because each snapshot
-     * equals the sum of its deleted rows.
+     * One batched prune step, kept for callers and the characterization
+     * tests; the module owns the predicate, cutoff, and batch loop.
      * Returns ['snapshots' => upserted, 'deleted' => rows, 'next' => ?].
      */
     public function pruneHistory(int $cutoff, int $startAfterUserId = 0, int $batchSize = 0): array
     {
-        $empty = ['snapshots' => 0, 'deleted' => 0, 'next' => null];
-        if ($cutoff <= 0 || $cutoff >= \XF::$time) {
-            return $empty;
-        }
-        // Never prune rows from the current earning day. On a 25-hour DST
-        // day a days=1 cutoff can otherwise land after dayStart() and delete
-        // the daily-login / daily-limit guards, allowing a second award.
-        $cutoff = min($cutoff, self::dayStart() - 1);
-        if ($cutoff <= 0) {
-            return $empty;
-        }
-        $db = $this->db();
-        $maxUserId = max(
-            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_user'),
-            (int)$db->fetchOne('SELECT MAX(user_id) FROM xf_oc_transaction')
-        );
-        $endUserId = $batchSize > 0 ? $startAfterUserId + $batchSize : $maxUserId;
-        $pairs = $db->fetchAll(
-            'SELECT user_id, currency_id FROM xf_oc_transaction'
-            . ' WHERE user_id > ? AND user_id <= ? AND log_date <= ?'
-            . ' GROUP BY user_id, currency_id',
-            [$startAfterUserId, $endUserId, $cutoff]
-        );
-        $snapshots = 0;
-        $deleted = 0;
-        // Snapshot precision follows each currency so 0-decimal currencies
-        // never store sub-unit values a display would round misleadingly.
-        $decimalsByCurrency = $db->fetchPairs('SELECT currency_id, decimals FROM xf_oc_currency');
-        $db->beginTransaction();
-        try {
-            foreach ($pairs as $pair) {
-                $uid = (int)$pair['user_id'];
-                $cid = (int)$pair['currency_id'];
-                $decimals = max(0, (int)($decimalsByCurrency[$cid] ?? 2));
-                $existing = (float)$db->fetchOne(
-                    'SELECT COALESCE(balance, 0) FROM xf_oc_snapshot WHERE user_id = ? AND currency_id = ?',
-                    [$uid, $cid]
-                );
-                $sum = (float)$db->fetchOne(
-                    'SELECT COALESCE(SUM(amount), 0) FROM xf_oc_transaction'
-                    . ' WHERE user_id = ? AND currency_id = ? AND log_date <= ?'
-                    . " AND `trigger` != ? AND note != ? AND note NOT LIKE ?",
-                    array_merge([$uid, $cid, $cutoff], Ledger::pruneGuardParams())
-                );
-                if ($sum != 0.0) {
-                    $new = round($existing + $sum, $decimals);
-                    $db->query(
-                        'INSERT INTO xf_oc_snapshot (user_id, currency_id, balance, log_date) VALUES (?, ?, ?, ?)'
-                        . ' ON DUPLICATE KEY UPDATE balance = ?, log_date = ?',
-                        [$uid, $cid, $new, $cutoff, $new, $cutoff]
-                    );
-                    $snapshots++;
-                }
-                // Delete even when the old rows net to zero; otherwise those
-                // rows are never pruned and the retention window never applies.
-                $stmt = $db->query(
-                    'DELETE FROM xf_oc_transaction'
-                    . ' WHERE user_id = ? AND currency_id = ? AND log_date <= ?'
-                    . " AND `trigger` != ? AND note != ? AND note NOT LIKE ?",
-                    array_merge([$uid, $cid, $cutoff], Ledger::pruneGuardParams())
-                );
-                $deleted += (int)$stmt->rowsAffected();
-            }
-            $db->commit();
-        } catch (\Throwable $e) {
-            $db->rollBack();
-            throw $e;
-        }
-        self::clearBalanceCache();
-        $next = ($batchSize > 0 && $endUserId < $maxUserId) ? $endUserId : null;
-        return ['snapshots' => $snapshots, 'deleted' => $deleted, 'next' => $next];
+        return $this->historyPrune()->prune($cutoff, $startAfterUserId, $batchSize);
+    }
+
+    /**
+     * History prune module for the admin Tools page, preview included.
+     */
+    public function historyPrune(): HistoryPrune
+    {
+        return new HistoryPrune($this->db(), function (): int {
+            return self::dayStart();
+        });
     }
 
     /**

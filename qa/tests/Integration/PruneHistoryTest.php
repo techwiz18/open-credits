@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
+use OpenCredits\Credits\Service\HistoryPrune;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\TestCase;
 
@@ -28,8 +29,13 @@ class PruneHistoryTest extends TestCase
     /** @var Transact */
     protected $transact;
 
+    /** @var HistoryPrune */
+    protected $prune;
+
     protected int $userId = 0;
     protected int $currencyId = 0;
+    protected int $throwawayCurrencyId = 0;
+    protected string $throwawayTitle = '';
 
     protected function setUp(): void
     {
@@ -43,10 +49,12 @@ class PruneHistoryTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
+        $this->prune = $this->transact->historyPrune();
 
-        // A real member row: the balance rebuild only counts live members,
+        // Real member row: the balance rebuild only counts live members,
         // so a synthetic id would never rebuild (orphan balances stay gone).
         $this->removeThrowawayUser();
+        $this->removeStaleThrowawayCurrencies();
         $user = \XF::repository('XF:User')->setupBaseUser();
         $user->username = 'octest_prune';
         $user->email = 'octest-prune-' . time() . '@example.invalid';
@@ -64,6 +72,7 @@ class PruneHistoryTest extends TestCase
             return;
         }
         $this->deleteSyntheticRows();
+        $this->removeThrowawayCurrency();
         $this->removeThrowawayUser();
         $this->userId = 0;
         $this->transact->rebuildAllBalancesFully();
@@ -82,7 +91,7 @@ class PruneHistoryTest extends TestCase
         $before = $this->transact->getBalance($this->userId, $this->currencyId);
         $this->assertEqualsWithDelta(42.00, $before, 0.0001, 'Seeded ledger should total 42.00');
 
-        $result = $this->transact->pruneHistory(2, $this->userId - 1, 1);
+        $result = $this->prune->prune(2, $this->userId - 1, 1);
         $this->assertSame(3, $result['deleted'], 'Only the three pre-cutoff rows are pruned');
         $this->assertSame(1, $result['snapshots'], 'One snapshot for the synthetic member');
 
@@ -117,7 +126,7 @@ class PruneHistoryTest extends TestCase
         $before = $this->transact->getBalance($this->userId, $this->currencyId);
         $this->assertEqualsWithDelta(55.00, $before, 0.0001);
 
-        $result = $this->transact->pruneHistory(2, $this->userId - 1, 1);
+        $result = $this->prune->prune(2, $this->userId - 1, 1);
         $this->assertSame(1, $result['deleted'], 'Redeem and backfill rows are excluded');
 
         $kept = (int)$this->db->fetchOne(
@@ -142,7 +151,7 @@ class PruneHistoryTest extends TestCase
         $this->transact->rebuildAllBalancesFully();
         $before = $this->transact->getBalance($this->userId, $this->currencyId);
 
-        $result = $this->transact->pruneHistory(2, $this->userId - 1, 1);
+        $result = $this->prune->prune(2, $this->userId - 1, 1);
         $this->assertSame(1, $result['deleted'], 'Only the normal row is pruned');
 
         $kept = $this->db->fetchAll(
@@ -165,7 +174,7 @@ class PruneHistoryTest extends TestCase
         $this->transact->rebuildAllBalancesFully();
         $this->assertEqualsWithDelta(0.00, $this->transact->getBalance($this->userId, $this->currencyId), 0.0001);
 
-        $result = $this->transact->pruneHistory(2, $this->userId - 1, 1);
+        $result = $this->prune->prune(2, $this->userId - 1, 1);
         $this->assertSame(2, $result['deleted'], 'Net-zero rows are still pruned');
 
         $remaining = (int)$this->db->fetchOne(
@@ -189,7 +198,7 @@ class PruneHistoryTest extends TestCase
         // A cutoff inside the current day would previously delete the row and
         // allow a second daily-login award. Scope the batch to the synthetic
         // user so the test does not touch real ledger rows.
-        $result = $this->transact->pruneHistory(\XF::$time - 1, $this->userId - 1, 1);
+        $result = $this->prune->prune(\XF::$time - 1, $this->userId - 1, 1);
         $this->assertSame(1, $result['deleted'], 'Only the old row is pruned');
 
         $survivors = (int)$this->db->fetchOne(
@@ -202,11 +211,43 @@ class PruneHistoryTest extends TestCase
         $this->assertEqualsWithDelta($before, $this->transact->getBalance($this->userId, $this->currencyId), 0.0001);
     }
 
-    private function seed(string $trigger, float $amount, int $logDate, string $note = ''): void
+    public function testPreviewMatchesWhatTheRunDeletes(): void
+    {
+        // A throwaway currency keeps the global preview deterministic: no
+        // other row can share its title, so the counted rows are ours.
+        $currencyId = $this->createThrowawayCurrency();
+        $old = 1;
+        $this->seed('octest_seed', 10.00, $old, '', $currencyId);
+        $this->seed('octest_seed', -4.00, $old, '', $currencyId);
+        $this->seed('octest_seed', 6.00, $old, '', $currencyId);
+        // Current day: the cutoff guard must keep it, so preview must not
+        // count it either.
+        $this->seed('octest_seed', 9.00, \XF::$time, '', $currencyId);
+
+        $days = 2;
+        $previewed = null;
+        foreach ($this->prune->preview($days) as $row) {
+            if ($row['currency'] === $this->throwawayTitle) {
+                $previewed = $row['rows'];
+            }
+        }
+        $this->assertSame(3, $previewed, 'Preview counts only the prunable rows');
+
+        $result = $this->prune->prune($this->prune->cutoff($days), $this->userId - 1, 1);
+        $this->assertSame($previewed, $result['deleted'], 'The run deletes exactly what preview counted');
+
+        $survivors = (int)$this->db->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = ? AND currency_id = ?',
+            [$this->userId, $currencyId]
+        );
+        $this->assertSame(1, $survivors, 'The current-day row survives the prune');
+    }
+
+    private function seed(string $trigger, float $amount, int $logDate, string $note = '', int $currencyId = 0): void
     {
         $this->db->insert('xf_oc_transaction', [
             'user_id' => $this->userId,
-            'currency_id' => $this->currencyId,
+            'currency_id' => $currencyId > 0 ? $currencyId : $this->currencyId,
             'amount' => number_format($amount, 2, '.', ''),
             'trigger' => $trigger,
             'content_id' => 0,
@@ -214,6 +255,48 @@ class PruneHistoryTest extends TestCase
             'log_date' => $logDate,
             'content_type' => '',
         ]);
+    }
+
+    private function createThrowawayCurrency(): int
+    {
+        $this->throwawayTitle = 'octest_prune_' . bin2hex(random_bytes(4));
+        $this->db->insert('xf_oc_currency', [
+            'title' => $this->throwawayTitle,
+            'prefix' => '',
+            'suffix' => '',
+            'decimals' => 2,
+            'allow_negative' => 1,
+            'active' => 1,
+            'is_primary' => 0,
+            'visible' => 0,
+        ]);
+        $this->throwawayCurrencyId = (int)$this->db->lastInsertId();
+
+        return $this->throwawayCurrencyId;
+    }
+
+    private function removeThrowawayCurrency(): void
+    {
+        if (!$this->throwawayCurrencyId) {
+            return;
+        }
+        $this->db->delete('xf_oc_transaction', 'currency_id = ?', [$this->throwawayCurrencyId]);
+        $this->db->delete('xf_oc_snapshot', 'currency_id = ?', [$this->throwawayCurrencyId]);
+        $this->db->delete('xf_oc_currency', 'currency_id = ?', [$this->throwawayCurrencyId]);
+        $this->throwawayCurrencyId = 0;
+    }
+
+    /** Sweep a currency a previous crashed run left behind. */
+    private function removeStaleThrowawayCurrencies(): void
+    {
+        $ids = $this->db->fetchAll(
+            "SELECT currency_id FROM xf_oc_currency WHERE title LIKE 'octest\\_prune\\_%'"
+        );
+        foreach ($ids as $row) {
+            $this->db->delete('xf_oc_transaction', 'currency_id = ?', [(int)$row['currency_id']]);
+            $this->db->delete('xf_oc_snapshot', 'currency_id = ?', [(int)$row['currency_id']]);
+            $this->db->delete('xf_oc_currency', 'currency_id = ?', [(int)$row['currency_id']]);
+        }
     }
 
     private function deleteSyntheticRows(): void
