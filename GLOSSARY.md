@@ -16,6 +16,10 @@ _Avoid_: award limits, eligibility check
 Per-award gates applied after eligibility passes (daily caps, reaction dedupe keys, faucet and balance-cap clamps).
 _Avoid_: award eligibility, throttling
 
+**Charge access**:
+The one verdict for a `[charge]` block: `denied`, `author`, `staff`, `bypass`, `paid` or `locked`, resolved in that priority order (author beats staff so the stats line renders once). Render and the unlock POST branch on the same verdict.
+_Avoid_: paywall check, exemption list, paid cache
+
 **Movement**:
 One intent to change balances: a currency, a trigger, and one or more legs, each a member and a signed amount. Applied whole or not at all.
 _Avoid_: transaction, entry, delta

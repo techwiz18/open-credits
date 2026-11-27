@@ -37,6 +37,7 @@ class ChargeUnlockTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
+        Transact::clearContentChargeCache();
 
         $this->postId = (int)$this->db->fetchOne(
             "SELECT p.post_id FROM xf_post AS p"
@@ -87,6 +88,7 @@ class ChargeUnlockTest extends TestCase
         );
         \XF::em()->clearEntityCache();
         $this->transact->rebuildAllBalancesFully();
+        Transact::clearContentChargeCache();
     }
 
     public function testUnlockChargesHighestBlockPrice(): void

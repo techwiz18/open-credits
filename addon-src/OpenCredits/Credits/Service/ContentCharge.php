@@ -27,6 +27,15 @@ class ContentCharge
     protected $postCommit;
 
     /**
+     * Per-request prior-purchase answers: [contentType:contentId][member:currency].
+     * Only the hasPaid fact is memoised, never the verdict — permissions can
+     * differ within one request. Purchase clears the content's entry.
+     *
+     * @var array<string, array<string, bool>>
+     */
+    protected $paidMemo = [];
+
+    /**
      * @param mixed $db
      * @param callable(int, int, float): void $applyDelta
      * @param callable(int, int, float, string, int): void $postCommit
@@ -171,6 +180,8 @@ class ContentCharge
             );
             if ($existing) {
                 $db->commit();
+                // Another request may have bought since this memo was read.
+                unset($this->paidMemo[self::memoKey($type, $contentId)]);
                 return 'already_paid';
             }
             // Charges never overdraw, regardless of the currency's allow_negative.
@@ -208,6 +219,8 @@ class ContentCharge
                 'charge_date' => $now,
             ]);
             $db->commit();
+            // A purchase is visible to the next access check in this request.
+            unset($this->paidMemo[self::memoKey($type, $contentId)]);
             ($this->postCommit)($fromUserId, $currencyId, -$amount, $type, $contentId);
             ($this->postCommit)($toUserId, $currencyId, $amount, $type, $contentId);
             return 'ok';
@@ -235,7 +248,7 @@ class ContentCharge
         // state for them, so skip the lookup that cannot change the verdict
         // (and would otherwise throw before the denial).
         $canSee = $canView || $isAuthor || $isStaff || $isBypass;
-        $hasPaid = $canSee && $userId > 0 && $this->hasPaid(
+        $hasPaid = $canSee && $userId > 0 && $this->memoHasPaid(
             $userId,
             (string)$content->getEntityContentType(),
             (int)$content->getEntityId(),
@@ -243,6 +256,30 @@ class ContentCharge
         );
 
         return ChargeAccess::resolve($canView, $authorId > 0, $isAuthor, $isStaff, $isBypass, $hasPaid);
+    }
+
+    /**
+     * Prior-purchase answer for the access verdict, memoised per content and
+     * member so several charge blocks on one post share a single read.
+     */
+    protected function memoHasPaid(int $userId, string $contentType, int $contentId, int $currencyId): bool
+    {
+        $contentKey = self::memoKey($contentType, $contentId);
+        $memberKey = $userId . ':' . $currencyId;
+        if (!array_key_exists($memberKey, $this->paidMemo[$contentKey] ?? [])) {
+            $this->paidMemo[$contentKey][$memberKey] = $this->hasPaid(
+                $userId,
+                $contentType,
+                $contentId,
+                $currencyId
+            );
+        }
+        return $this->paidMemo[$contentKey][$memberKey];
+    }
+
+    protected static function memoKey(string $contentType, int $contentId): string
+    {
+        return substr($contentType, 0, 25) . ':' . $contentId;
     }
 
     /**

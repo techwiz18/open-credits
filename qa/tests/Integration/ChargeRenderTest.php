@@ -48,6 +48,7 @@ class ChargeRenderTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
+        Transact::clearContentChargeCache();
 
         $rows = $this->db->fetchAll('SELECT currency_id, is_primary, active, visible FROM xf_oc_currency');
         foreach ($rows AS $row) {
@@ -122,6 +123,7 @@ class ChargeRenderTest extends TestCase
             );
         }
         Transact::clearPrimaryCache();
+        Transact::clearContentChargeCache();
         \XF::em()->clearEntityCache();
         \XF::setVisitor(null);
         Charge::clearRenderCaches();
@@ -186,6 +188,11 @@ class ChargeRenderTest extends TestCase
 
             $after = $this->render($this->memberId);
             $this->assertStringContainsString('RENDER_SECRET', $after);
+
+            // A fresh request drops the memo and still reads the purchase.
+            Transact::clearContentChargeCache();
+            $fresh = $this->render($this->memberId);
+            $this->assertStringContainsString('RENDER_SECRET', $fresh);
         } finally {
             $this->db->delete('xf_oc_transaction', 'transaction_id > ?', [$txnBefore]);
             $this->transact->rebuildAllBalancesFully();

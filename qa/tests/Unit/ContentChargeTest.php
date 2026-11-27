@@ -51,4 +51,79 @@ class ContentChargeTest extends TestCase
     {
         $this->assertNull(ContentCharge::priceOf([], 2));
     }
+
+    /**
+     * Several [charge] blocks on one post share one prior-purchase read per
+     * member, while a different member or content asks the database again.
+     */
+    public function testAccessReadsPaidOncePerContentAndMember(): void
+    {
+        $db = new class {
+            /** @var int */
+            public $reads = 0;
+
+            public function fetchOne($sql, array $params = [])
+            {
+                $this->reads++;
+                return null;
+            }
+        };
+        $charge = new ContentCharge($db, function (): void {
+        }, function (): void {
+        });
+
+        $content = new class {
+            public $user_id = 2;
+
+            public function getEntityContentType(): string
+            {
+                return 'post';
+            }
+
+            public function getEntityId(): int
+            {
+                return 10;
+            }
+        };
+        $visitor = new class {
+            public $user_id = 1;
+
+            public function hasPermission($group, $permission): bool
+            {
+                return $permission === 'ocView';
+            }
+        };
+
+        $this->assertSame('locked', $charge->access($content, $visitor));
+        $this->assertSame(1, $db->reads, 'First access reads the charge row');
+        $this->assertSame('locked', $charge->access($content, $visitor));
+        $this->assertSame(1, $db->reads, 'A repeat access for the same content and member is memoised');
+
+        $otherVisitor = new class {
+            public $user_id = 3;
+
+            public function hasPermission($group, $permission): bool
+            {
+                return $permission === 'ocView';
+            }
+        };
+        $this->assertSame('locked', $charge->access($content, $otherVisitor));
+        $this->assertSame(2, $db->reads, 'A different member reads the database');
+
+        $otherContent = new class {
+            public $user_id = 2;
+
+            public function getEntityContentType(): string
+            {
+                return 'post';
+            }
+
+            public function getEntityId(): int
+            {
+                return 11;
+            }
+        };
+        $this->assertSame('locked', $charge->access($otherContent, $visitor));
+        $this->assertSame(3, $db->reads, 'A different content reads the database');
+    }
 }

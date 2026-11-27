@@ -17,7 +17,8 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `Service/Ledger.php` | Ledger vocabulary: the one trigger-label map (`label()`, award-only `eventTriggers()`), trigger constants, and stored markers (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) shared by history, alerts, and the prune guard |
 | `Service/AccountStanding.php` | **The one account-standing rule**: four verdicts (earn, receive, send, unlock) over one state table, pure so every money path reads the same decision |
 | `Service/DemurrageRunner.php` | Demurrage pass lifecycle behind `run(batchSize, force, budget) → busy / done / resume`; owns the burn math (`burn()`) and the "pass can run" verdict, so preview and the pass share one formula; burns and orphan purges go through the `LedgerWrite` module supplied by `Transact` |
-| `Service/ContentCharge.php` | `[charge]` premium-content decision: parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads |
+| `Service/ContentCharge.php` | `[charge]` premium-content module: the one access verdict (built on `ChargeAccess`), parser-based post price (highest valid block), idempotent per-(content, member, currency) purchase, paid/unlock-count reads, and the per-request prior-purchase memo |
+| `Service/ChargeAccess.php` | **The one charge-access verdict table**: `denied` → `author` → `staff` → `bypass` → `paid` → `locked`, pure so render and unlock share one answer |
 | `Entity/Currency.php`, `Entity/CreditEvent.php`, `Entity/Transaction.php` | Entity structures for the 3 tables |
 | `BbCode/Charge.php` | `[charge=X]` renderer: view gates, locked box, author stats |
 | `Pub/Controller/Credits.php` | `/credits` wallet, `/credits/member` profile tab, redeem/transfer save; legacy transfer/redeem GETs redirect |
@@ -225,21 +226,30 @@ change fires the `oc_credits_adjust` code event with
   fetch. Templates: `oc_widget_top_holders` (public) and
   `widget_def_options_oc_top_holders` (admin options: count, currency, guests).
 * `[charge=X]…[/charge]` (`BbCode/Charge.php`) shows a locked box in place of
-  the post content until the reader pays X of the primary currency; authors,
-  staff/admins/moderators, and signed-in members holding `ocChargeFree` bypass
-  (guests stay locked even if the guest group is granted it). This is a
-  **credits-gated display, not content protection**: the body remains in the
-  post message and can appear in raw post output, snippets, quotes, and the
-  API. The unlock form posts to `/credits/unlock`, which loads the post,
-  checks `canView()` and the visitor's account state (banned/email-confirm are
-  refused), resolves the same verdict as rendering (`denied` → 403, any allowed
-  verdict → redirect), derives the price from the post's parsed `[charge]`
-  blocks (the **highest** valid block, since one purchase unlocks the post; the
-  client cannot set it), calls `ContentCharge::purchase()`, and redirects back.
-  Render, unlock, and the ledger read the same `ContentCharge::priceForMessage()`
-  decision. One purchase per (post, member) unlocks every block in that post.
-  The author also sees a per-block "Members unlocked: N · total earned"
-  line.
+  the post content until the reader pays X of the primary currency. Access is
+  one verdict from `ContentCharge::access($post, $visitor)`, resolved by the
+  pure `ChargeAccess` table in this priority: `denied` (non-exempt member
+  without `ocView`), `author`, `staff`/admin/moderator, `ocChargeFree`
+  bypass, `paid` (a charge row exists for the member, any currency), then
+  `locked`. Author beats staff so the stats line renders once; guests stay
+  locked even if the guest group is granted the bypass. Render shows the body,
+  the locked box, the author stats line or nothing according to the verdict.
+  This is a **credits-gated display, not content protection**: the body
+  remains in the post message and can appear in raw post output, snippets,
+  quotes, and the API. The unlock form posts to `/credits/unlock`, which loads
+  the post, checks `canView()` and the visitor's account state
+  (banned/email-confirm are refused), reads the same verdict (`denied` → 403,
+  any allowed verdict → redirect), derives the price from the post's parsed
+  `[charge]` blocks (the **highest** valid block, since one purchase unlocks
+  the post; the client cannot set it), calls `ContentCharge::purchase()`, and
+  redirects back. Render, unlock, and the ledger read the same
+  `ContentCharge::priceForMessage()` decision. One purchase per (post, member)
+  unlocks every block in that post. The author also sees a per-block
+  "Members unlocked: N · total earned" line. `Transact::contentCharge()`
+  returns one module per request; it memoises each member's prior-purchase
+  answer per content, and `purchase()` clears that content after its commit so
+  an integrator purchase is visible to the next render. The renderer caches
+  only the post price and unlock count.
 * The `charge` button is added once to the editor toolbar (`moreText` group,
   all viewports) by `Setup::syncEditorButton()` on install/upgrade; existing
   placements are left alone, and admins can move or remove it via the BB code
@@ -254,10 +264,14 @@ change fires the `oc_credits_adjust` code event with
 * Domain logic that is not an XF service is a plain class under `Service/`
   (`AwardScope`, `AccountStanding`, `InflationClamp`, `LedgerWrite`, `DemurrageRunner`, `ContentCharge`), constructed directly or
   through a `Transact` factory. You do not need `\XF::app()->service()` for it.
-* Per-request caches belong to the presentation layer (renderer/controller).
-  Service reads stay DB-fresh so moderation and cleanup see deletions
-  immediately; `BbCode\Charge` caches its renders, `ContentCharge` queries each
-  time.
+* Per-request caches are explicit static caches with a clear method, owned by
+  the module that knows the data. `Transact::contentCharge()` returns one
+  `ContentCharge` per request (`clearContentChargeCache()`); that module
+  memoises each member's prior-purchase answer per content and drops the
+  content after a committed purchase, so service reads stay DB-fresh for
+  everything else. Presentation-only caches stay in the renderer:
+  `BbCode\Charge` caches the post price and unlock count
+  (`clearRenderCaches()`).
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly
   one place: `CreditEvent::decodeIdList()`. Do not add local copies.
 * New triggers must be unique per (trigger, currency) while active — the admin
