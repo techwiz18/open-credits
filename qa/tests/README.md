@@ -136,9 +136,15 @@ Covered today:
 - `LedgerTest` (unit) — the one trigger-label map: every label, the humanised
   unknown-trigger fallback, the awardable subset, and the stored marker strings
   the prune guard relies on.
-- `MemberCreditsTest` — the wallet page (pagination 10 by default with per-page links, currency switcher,
-  retired transfer/redeem redirects) and the per-member profile Credits tab
-  (balances; send form for other members; no history for self; single-currency self tab uses the wallet).
+- `WalletViewTest` (unit) — the wallet view's rules without XenForo: selection
+  fallback order, balance lookup, amount step, show flags, profile-tab mode,
+  per-page choice and per-page URLs.
+- `MemberCreditsTest` — drives `WalletView` directly for currency selection,
+  balance, step, show flags, pager URLs and tab mode; the wallet page (pagination
+  10 by default with per-page links, rendered from the tracked template source),
+  retired transfer/redeem redirects, and the per-member profile Credits tab
+  (balances; send form for other members; no history for self; single-currency
+  self tab uses the wallet).
 
 All clean up in `tearDown()`.
 
