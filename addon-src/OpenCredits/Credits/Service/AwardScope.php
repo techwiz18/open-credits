@@ -6,8 +6,8 @@ use OpenCredits\Credits\Entity\CreditEvent;
 
 /**
  * Single award-eligibility verdict shared by the live award path
- * (Transact::awardByTrigger) and the historical backfill (Tools).
- * Pure: facts in, bool out — no entities, no DB.
+ * (Transact::awardByTrigger) and the historical backfill
+ * (BackfillRunner). Pure: facts in, bool out — no entities, no DB.
  * Award limits (daily caps, dedupe keys, faucet) live elsewhere.
  */
 class AwardScope
@@ -42,7 +42,7 @@ class AwardScope
     /**
      * Tallies eligible content rows per author. Pure: the backfill's verdict
      * path — every counted row passed eligible(), so the live path and the
-     * backfill cannot drift. $rows are raw backfillContentQuery rows.
+     * backfill cannot drift. $rows are raw candidate-query rows.
      *
      * @return array<int,int> author user_id => eligible row count
      */

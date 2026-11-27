@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
-use OpenCredits\Credits\Admin\Controller\Tools;
-use OpenCredits\Credits\Service\Transact;
+use OpenCredits\Credits\Service\BackfillRunner;
 use PHPUnit\Framework\TestCase;
 
 /**
  * DB-backed checks for the historical backfill: event scoping, the first-post
  * rule, event-id completion markers, re-run idempotency, and the per-member
- * double-pay guard.
+ * double-pay guard. Everything drives Service\BackfillRunner; the controller
+ * is only covered by BackfillAdaptersTest.
  *
  * Runs against the licensed dev forum and cleans its own backfill rows and
  * markers in tearDown(); skips without OC_XF_ROOT.
@@ -20,9 +20,6 @@ class BackfillTest extends TestCase
 {
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
-
-    /** @var \XF\App */
-    protected $app;
 
     protected int $eventId = 0;
 
@@ -34,7 +31,6 @@ class BackfillTest extends TestCase
         if (!\XF::$time) {
             \XF::$time = time();
         }
-        $this->app = \XF::app();
         $this->db = \XF::db();
 
         $event = \XF::finder('OpenCredits\Credits:CreditEvent')
@@ -57,16 +53,16 @@ class BackfillTest extends TestCase
         }
     }
 
-    public function testPreviewMatchesActionUsers(): void
+    public function testPreviewMatchesRunUsers(): void
     {
-        $users = $this->backfillUserCount();
+        $users = $this->previewUserCount();
         if ($users === 0) {
             $this->markTestSkipped('No backfillable content for the post event.');
         }
 
-        $this->runAction([$this->eventId]);
+        $this->runner()->run([$this->eventId], 0, false);
 
-        // Preview and action share the verdict seam (backfillEligibleCounts),
+        // Preview and run share the candidate query and the AwardScope tally,
         // so the promised user count must equal the paid distinct users.
         $paid = (int)$this->db->fetchOne(
             "SELECT COUNT(DISTINCT user_id) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
@@ -75,19 +71,21 @@ class BackfillTest extends TestCase
         $this->assertSame($users, $paid);
     }
 
-    public function testActionBackfillsOnceAndSkipsReruns(): void
+    public function testRunBackfillsOnceAndSkipsReruns(): void
     {
-        if ($this->backfillUserCount() === 0) {
+        if ($this->previewUserCount() === 0) {
             $this->markTestSkipped('No backfillable content for the post event.');
         }
 
-        $this->runAction([$this->eventId]);
+        $result = $this->runner()->run([$this->eventId], 0, false);
+        $this->assertSame('done', $result['verdict']);
 
         $rows = (int)$this->db->fetchOne(
             "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
             [$this->eventId]
         );
         $this->assertGreaterThan(0, $rows);
+        $this->assertSame($rows, $result['awarded'], 'The runner reports the rows it wrote.');
 
         $marker = $this->db->fetchRow(
             'SELECT * FROM xf_oc_backfill WHERE event_id = ? AND user_id = 0',
@@ -96,30 +94,34 @@ class BackfillTest extends TestCase
         $this->assertNotEmpty($marker);
         $this->assertGreaterThan(0, (int)$marker['completed_date']);
 
-        // Re-run: the completed marker means no new rows.
-        $this->runAction([$this->eventId]);
-        $again = (int)$this->db->fetchOne(
+        // Re-run: the completed marker means no new rows, and the event is
+        // reported as skipped instead of silently paid again.
+        $again = $this->runner()->run([$this->eventId], 0, false);
+        $this->assertSame('done', $again['verdict']);
+        $this->assertSame([$this->eventId], $again['skipped']);
+        $this->assertSame(0, $again['awarded']);
+        $rowsAgain = (int)$this->db->fetchOne(
             "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
             [$this->eventId]
         );
-        $this->assertSame($rows, $again);
+        $this->assertSame($rows, $rowsAgain);
     }
 
     public function testMemberRunAfterSiteWideIsSkipped(): void
     {
-        if ($this->backfillUserCount() === 0) {
+        if ($this->previewUserCount() === 0) {
             $this->markTestSkipped('No backfillable content for the post event.');
         }
 
-        $this->runAction([$this->eventId]);
+        $this->runner()->run([$this->eventId], 0, false);
         $rows = (int)$this->db->fetchOne(
             "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
             [$this->eventId]
         );
 
         // A completed site-wide run already paid this member.
-        $username = (string)$this->db->fetchOne('SELECT username FROM xf_user ORDER BY user_id LIMIT 1');
-        $this->runAction([$this->eventId], $username);
+        $userId = (int)$this->db->fetchOne('SELECT user_id FROM xf_user ORDER BY user_id LIMIT 1');
+        $this->runner()->run([$this->eventId], $userId, false);
         $again = (int)$this->db->fetchOne(
             "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
             [$this->eventId]
@@ -129,11 +131,11 @@ class BackfillTest extends TestCase
 
     public function testBackfillHistoryIsLabelledAndUnlinked(): void
     {
-        if ($this->backfillUserCount() === 0) {
+        if ($this->previewUserCount() === 0) {
             $this->markTestSkipped('No backfillable content for the post event.');
         }
 
-        $this->runAction([$this->eventId]);
+        $this->runner()->run([$this->eventId], 0, false);
 
         $txns = \XF::finder('OpenCredits\Credits:Transaction')
             ->where('event_id', $this->eventId)
@@ -142,13 +144,13 @@ class BackfillTest extends TestCase
         $this->assertGreaterThan(0, $txns->count());
 
         $request = new \XF\Http\Request(
-            $this->app->inputFilterer(),
+            \XF::app()->inputFilterer(),
             [],
             [],
             [],
             ['REQUEST_METHOD' => 'GET']
         );
-        $controller = $this->app->controller(\OpenCredits\Credits\Pub\Controller\Credits::class, $request);
+        $controller = \XF::app()->controller(\OpenCredits\Credits\Pub\Controller\Credits::class, $request);
         $ref = new \ReflectionMethod($controller, 'buildHistoryEntries');
         $ref->setAccessible(true);
         $entries = $ref->invoke($controller, $txns);
@@ -158,46 +160,20 @@ class BackfillTest extends TestCase
         $this->assertNull($entries[0]['detailUser']);
     }
 
-    protected function backfillUserCount(): int
+    protected function runner(): BackfillRunner
     {
-        $event = \XF::finder('OpenCredits\Credits:CreditEvent')
-            ->where('event_id', $this->eventId)
-            ->fetchOne();
-        if (!$event) {
-            return 0;
-        }
-        $counts = $this->invoke('backfillEligibleCounts', $event, 0, 0, 0);
-        return count($counts);
+        return \XF::app()->service('OpenCredits\Credits:Transact')->backfillRunner();
     }
 
-    protected function runAction(array $eventIds, string $username = ''): void
+    /** The member count the admin preview promises for the post event. */
+    protected function previewUserCount(): int
     {
-        $request = new \XF\Http\Request(
-            $this->app->inputFilterer(),
-            ['event_ids' => $eventIds, 'username' => $username, 'force' => 0],
-            [],
-            [],
-            ['REQUEST_METHOD' => 'POST']
-        );
-        $controller = $this->app->controller(Tools::class, $request);
-        $this->invoke('actionBackfillSave', $controller);
-    }
-
-    /**
-     * @return mixed
-     */
-    protected function invoke(string $method, ...$args)
-    {
-        if (($args[0] ?? null) instanceof Tools) {
-            $controller = array_shift($args);
-        } else {
-            $request = new \XF\Http\Request($this->app->inputFilterer(), [], [], [], ['REQUEST_METHOD' => 'POST']);
-            $controller = $this->app->controller(Tools::class, $request);
+        foreach ($this->runner()->preview() as $row) {
+            if ((int)$row['event_id'] === $this->eventId) {
+                return (int)$row['users'];
+            }
         }
-
-        $ref = new \ReflectionMethod($controller, $method);
-        $ref->setAccessible(true);
-        return $ref->invoke($controller, ...$args);
+        return 0;
     }
 
     protected function cleanup(): void

@@ -857,6 +857,21 @@ class Transact extends AbstractService
     }
 
     /**
+     * Historical-backfill runner. The admin Tools action goes through this
+     * module; the controller only parses the form and maps the verdict.
+     */
+    public function backfillRunner(): BackfillRunner
+    {
+        return new BackfillRunner(
+            $this->db(),
+            $this->ledgerWrite(),
+            function (): int {
+                return $this->rebuildAllBalancesFully();
+            }
+        );
+    }
+
+    /**
      * Demurrage runner for the whole pass. The cron job, admin Tools action,
      * and CLI command all go through this module; the legacy wrappers below
      * keep existing callers and the characterization tests on their entry

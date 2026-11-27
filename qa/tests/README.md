@@ -102,10 +102,15 @@ Covered today:
   (banned/email-confirm) payers cannot unlock via the controller.
 - `ChargeUnlockTest` — a crafted cheap `amount` still charges the post's
   highest valid `[charge]` block.
-- `BackfillTest` — the historical backfill preview/run query applies the
-  event's forum/group scope and skips first posts; the action writes an
-  `event_id` marker, is idempotent, refuses a per-member run after a
+- `BackfillTest` — the historical backfill through `Service/BackfillRunner`:
+  the preview/run query applies the event's forum/group scope and skips first
+  posts; the runner writes an `event_id` marker, is idempotent, reports the
+  already-completed event as skipped, refuses a per-member run after a
   site-wide run, and the history row is labelled/unlinked.
+- `BackfillAdaptersTest` — #24 pins the admin backfill adapter (needs the XF
+  boot; no DB writes): the parsed event ids, member scope and force flag, the
+  5000-row batch budget, and every runner verdict (`done` renders the result
+  block, each failure verdict keeps its operator message).
 - `ChargeCleanupTest` — hard-deleting a post drops its unlock rows; member
   deletion covers both payer and author charge rows.
 - `InflationMathTest` (unit) — pure cap/faucet/demurrage math: partial fills,
