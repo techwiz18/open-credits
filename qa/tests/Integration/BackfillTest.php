@@ -160,6 +160,63 @@ class BackfillTest extends TestCase
         $this->assertNull($entries[0]['detailUser']);
     }
 
+    public function testFailedLegAbortsTheBatchAndStaysResumable(): void
+    {
+        if ($this->previewUserCount() === 0) {
+            $this->markTestSkipped('No backfillable content for the post event.');
+        }
+
+        // Snapshot the event while its currency is active, the way run() does
+        // before a batch starts.
+        $event = $this->db->fetchRow(
+            'SELECT e.event_id, e.currency_id, e.trigger, e.amount, e.forum_ids, e.usergroup_ids,'
+            . ' c.decimals AS currency_decimals'
+            . ' FROM xf_oc_event AS e'
+            . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id'
+            . ' WHERE e.event_id = ?',
+            [$this->eventId]
+        );
+        $this->assertNotEmpty($event);
+        $currencyId = (int)$event['currency_id'];
+
+        $this->db->delete('xf_oc_backfill', 'event_id = ? AND user_id = 0', [$this->eventId]);
+        $this->db->insert('xf_oc_backfill', [
+            'event_id' => $this->eventId,
+            'user_id' => 0,
+            'last_user_id' => 0,
+            'started_date' => \XF::$time,
+            'completed_date' => 0,
+        ]);
+        $backfillId = (int)$this->db->lastInsertId();
+
+        // Deactivated between load and commit: every leg fails closed inside
+        // LedgerWrite, which is what a mid-run deactivation looks like.
+        $this->db->update('xf_oc_currency', ['active' => 0], 'currency_id = ?', [$currencyId]);
+        try {
+            $completed = false;
+            try {
+                $this->batchRunner()->batch($event, 0, 0, 5000, $backfillId);
+                $completed = true;
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString("'currency_inactive'", $e->getMessage());
+            }
+            $this->assertFalse($completed, 'A failed leg must abort the batch, not complete it.');
+
+            $marker = $this->db->fetchRow(
+                'SELECT * FROM xf_oc_backfill WHERE backfill_id = ?',
+                [$backfillId]
+            );
+            $this->assertSame(0, (int)$marker['completed_date'], 'A failed batch stays resumable.');
+            $paid = (int)$this->db->fetchOne(
+                "SELECT COUNT(*) FROM xf_oc_transaction WHERE event_id = ? AND note = 'Historical backfill'",
+                [$this->eventId]
+            );
+            $this->assertSame(0, $paid, 'A rolled-back batch writes no ledger rows.');
+        } finally {
+            $this->db->update('xf_oc_currency', ['active' => 1], 'currency_id = ?', [$currencyId]);
+        }
+    }
+
     public function testConcurrentResumeDoesNotRepayTheAdvancedRange(): void
     {
         if ($this->previewUserCount() === 0) {
