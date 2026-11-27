@@ -131,6 +131,31 @@ class Transact extends AbstractService
     }
 
     /**
+     * Active event rows for a trigger, with their currency, from the
+     * request-static cache. The award loop and AwardScope's node-context
+     * question read the same rows, so a content save pays for one query.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function eventRowsForTrigger(string $trigger): array
+    {
+        if (!array_key_exists($trigger, self::$eventRowsCache)) {
+            // Event configs are request-static: bulk content saves must not
+            // refetch identical rows per save. Admin event saves run in their
+            // own requests, so no invalidation is needed here.
+            self::$eventRowsCache[$trigger] = $this->db()->fetchAll(
+                'SELECT e.*, c.decimals, c.title AS currency_title,'
+                . ' c.prefix AS currency_prefix, c.suffix AS currency_suffix'
+                . ' FROM xf_oc_event AS e'
+                . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id AND c.active = 1'
+                . ' WHERE e.`trigger` = ? AND e.active = 1 ORDER BY e.event_id',
+                $trigger
+            );
+        }
+        return self::$eventRowsCache[$trigger];
+    }
+
+    /**
      * Awards EVERY active event registered for the trigger (e.g. a thread
      * event in each currency). Returns true if at least one applied.
      *
@@ -150,7 +175,6 @@ class Transact extends AbstractService
         array $userGroupIds = [],
         ?string $dedupeKey = null
     ): bool {
-        $db = $this->db();
         // No earnings for accounts that cannot participate, mirroring the
         // register path (banned/rejected/disabled never earn). Unapproved
         // states (moderated, email_confirm) still earn so the register bonus
@@ -159,20 +183,7 @@ class Transact extends AbstractService
         if ($userId > 0 && !$this->isAwardEligible($userId)) {
             return false;
         }
-        // Event configs are request-static: bulk content saves must not
-        // refetch identical rows per save. Admin event saves run in their
-        // own requests, so no invalidation is needed here.
-        if (!array_key_exists($trigger, self::$eventRowsCache)) {
-            self::$eventRowsCache[$trigger] = $db->fetchAll(
-                'SELECT e.*, c.decimals, c.title AS currency_title,'
-                . ' c.prefix AS currency_prefix, c.suffix AS currency_suffix'
-                . ' FROM xf_oc_event AS e'
-                . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = e.currency_id AND c.active = 1'
-                . ' WHERE e.`trigger` = ? AND e.active = 1 ORDER BY e.event_id',
-                $trigger
-            );
-        }
-        $rows = self::$eventRowsCache[$trigger];
+        $rows = $this->eventRowsForTrigger($trigger);
         if (!$rows) {
             return false;
         }
