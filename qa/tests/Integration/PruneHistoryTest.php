@@ -223,6 +223,9 @@ class PruneHistoryTest extends TestCase
         // Current day: the cutoff guard must keep it, so preview must not
         // count it either.
         $this->seed('octest_seed', 9.00, \XF::$time, '', $currencyId);
+        // Guest/system rows are outside the run's member bound: neither
+        // previewed nor pruned.
+        $this->seed('octest_seed', 8.00, $old, '', $currencyId, 0);
 
         $days = 2;
         $previewed = null;
@@ -231,7 +234,7 @@ class PruneHistoryTest extends TestCase
                 $previewed = $row['rows'];
             }
         }
-        $this->assertSame(3, $previewed, 'Preview counts only the prunable rows');
+        $this->assertSame(3, $previewed, 'Preview counts only the prunable member rows');
 
         $result = $this->prune->prune($this->prune->cutoff($days), $this->userId - 1, 1);
         $this->assertSame($previewed, $result['deleted'], 'The run deletes exactly what preview counted');
@@ -241,12 +244,24 @@ class PruneHistoryTest extends TestCase
             [$this->userId, $currencyId]
         );
         $this->assertSame(1, $survivors, 'The current-day row survives the prune');
+
+        $guestSurvivors = (int)$this->db->fetchOne(
+            'SELECT COUNT(*) FROM xf_oc_transaction WHERE user_id = 0 AND currency_id = ?',
+            [$currencyId]
+        );
+        $this->assertSame(1, $guestSurvivors, 'The user_id = 0 row is never pruned');
     }
 
-    private function seed(string $trigger, float $amount, int $logDate, string $note = '', int $currencyId = 0): void
-    {
+    private function seed(
+        string $trigger,
+        float $amount,
+        int $logDate,
+        string $note = '',
+        int $currencyId = 0,
+        ?int $userId = null
+    ): void {
         $this->db->insert('xf_oc_transaction', [
-            'user_id' => $this->userId,
+            'user_id' => $userId ?? $this->userId,
             'currency_id' => $currencyId > 0 ? $currencyId : $this->currencyId,
             'amount' => number_format($amount, 2, '.', ''),
             'trigger' => $trigger,

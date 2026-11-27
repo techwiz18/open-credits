@@ -1186,8 +1186,8 @@ class Transact extends AbstractService
     }
 
     /**
-     * One batched prune step, kept for callers and the characterization
-     * tests; the module owns the predicate, cutoff, and batch loop.
+     * Compatibility delegate to the prune module, for integrators holding this
+     * entry point; the admin path and tests call historyPrune() directly.
      * Returns ['snapshots' => upserted, 'deleted' => rows, 'next' => ?].
      */
     public function pruneHistory(int $cutoff, int $startAfterUserId = 0, int $batchSize = 0): array

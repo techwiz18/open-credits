@@ -47,6 +47,8 @@ class HistoryPrune
 
     /**
      * What run() would delete for a retention window: rows per currency.
+     * Bounded to member rows (`user_id > 0`) like prune(), so the preview can
+     * never count a row the run will not touch.
      *
      * @return array<int, array{currency: string, rows: int}>
      */
@@ -60,7 +62,7 @@ class HistoryPrune
         $rows = $this->db->fetchAll(
             'SELECT c.currency_id, c.title, COUNT(*) AS entry_count FROM xf_oc_transaction AS t'
             . ' INNER JOIN xf_oc_currency AS c ON c.currency_id = t.currency_id'
-            . ' WHERE ' . $deletable
+            . ' WHERE t.user_id > 0 AND ' . $deletable
             . ' GROUP BY c.currency_id, c.title ORDER BY c.currency_id',
             array_merge([$cutoff], $guardParams)
         );
