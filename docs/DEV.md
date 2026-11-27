@@ -108,28 +108,40 @@ project files are still scanned.
 
 ## Worktrees and the dev stack
 
-A linked worktree starts without `src/` (gitignored). For a worktree that needs
-the forum, copy the licensed tree from the primary checkout and reuse the
-installed database:
+A linked worktree starts without `src/` (gitignored). Copy the licensed tree
+from any checkout that has one (`git worktree list`; with a bare repo plus
+worktrees, `src/` exists only inside the worktrees) and reuse the installed
+database:
 
 ```bash
-cp -a ../open-credits/src ./src          # copy, never symlink
-COMPOSE_PROJECT_NAME=open-credits docker compose up -d
+cp -a ../<worktree>/src ./src            # copy, never symlink
+rm -rf src/addon-src src/addon-test      # stale copies shadow the add-on
+COMPOSE_PROJECT_NAME=open-credits ./scripts/dev.sh up
 ```
 
-Do not symlink `src/`: Docker's nested binds (`./src` plus `./addon-src`) make
-PHPStan resolve the add-on twice and report every `OpenCredits\Credits\Entity\*`
-class as unknown. Reusing `COMPOSE_PROJECT_NAME` reuses that project's installed
-`db_data` volume, so no `/install` is needed; use the isolated recipe above when
-another session owns the volume. Run integration against the worktree's bind
-mount with `COMPOSE_PROJECT_NAME=open-credits ./scripts/dev.sh test integration
---filter <Test>`.
+`dev.sh up` persists the project name and ports in `.env`, so later `dev.sh`
+and `check.sh` runs and the pre-commit hook address the same stack. A bare
+`docker compose up -d` leaves the hook looking for a project named after the
+directory and silently skipping the PHP checks.
 
-Without a stack, run the PHP gate in a one-off container against the primary
-checkout's vendor:
+Do not symlink `src/`, and do not keep `src/addon-src` or `src/addon-test`
+copies: the nested Docker binds (`./src` plus `./addon-src`) and PHPStan's
+autoloader then resolve a second, stale add-on. Reusing `COMPOSE_PROJECT_NAME`
+reuses that project's installed `db_data` volume, so no `/install` is needed;
+use the isolated recipe above when another session owns the volume. Run
+integration against the worktree's bind mount with
+`COMPOSE_PROJECT_NAME=open-credits ./scripts/dev.sh test integration --filter
+<Test>`.
+
+PHPStan caches results under `/tmp/phpstan` inside the `web` container. Clear it
+(`docker compose exec -T web rm -rf /tmp/phpstan`) when a report names a symbol
+or file you did not touch.
+
+Without a stack, run the PHP gate in a one-off container against a worktree that
+has `src/.qatmp/vendor`:
 
 ```bash
-PRIMARY=../open-credits
+PRIMARY=../<worktree-with-src>
 docker run --rm -v "$PWD/qa":/qatmp \
   -v "$PWD/addon-src/OpenCredits/Credits":/addon \
   -v "$PRIMARY/src/.qatmp/vendor":/qatmp/vendor:ro \
