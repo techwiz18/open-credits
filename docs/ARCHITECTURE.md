@@ -258,6 +258,9 @@ change fires the `oc_credits_adjust` code event with
   time.
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly
   one place: `CreditEvent::decodeIdList()`. Do not add local copies.
+* Forum-node context is asked of `AwardScope::needsNodeContext()` over
+  `Transact::eventRowsForTrigger()`'s cached rows; the listener never queries
+  the event table or string-tests `forum_ids` for it.
 * New triggers must be unique per (trigger, currency) while active — the admin
   save refuses duplicates because `awardByTrigger()` pays every active row.
 * Trigger names, display labels, and the ledger marker strings live in
