@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Pub\Controller\Credits;
+use OpenCredits\Credits\Service\WalletView;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -61,7 +62,7 @@ class MemberCreditsTest extends TestCase
         $this->seedWalletRows(25);
 
         $page1 = $this->callIndex(1)->getParams();
-        $this->assertTrue($page1['showBalance']);
+        $this->assertTrue($this->walletView()->showFlags(false)['showBalance']);
         $this->assertCount(10, $page1['entries']);
         $this->assertGreaterThanOrEqual(25, (int)$page1['total']);
 
@@ -85,12 +86,147 @@ class MemberCreditsTest extends TestCase
         $this->assertCount(20, $second['entries']);
     }
 
-    public function testWalletCurrencySwitcher(): void
+    public function testWalletViewSelectsTheCurrency(): void
     {
         \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
 
-        $params = $this->callIndex(1, $this->currencyId)->getParams();
-        $this->assertSame($this->currencyId, (int)$params['currency']->currency_id);
+        $view = $this->walletView();
+        $this->assertSame(
+            $this->currencyId,
+            (int)$view->selected($this->currencyId)->currency_id
+        );
+        // Unknown ids fall back to the primary, or fail with fallback off.
+        $this->assertSame(
+            $this->currencyId,
+            (int)$view->selected(999999)->currency_id
+        );
+        $this->assertNull($view->selected(999999, false));
+        $this->assertNotEmpty($view->viewable());
+        $selected = $view->selected();
+        $this->assertNotNull($selected);
+        $this->assertNotNull($view->currency((int)$selected->currency_id));
+
+        // The widget option resolves an explicit id or the primary, never a
+        // silent fallback to another currency.
+        $this->assertSame($this->currencyId, (int)$view->configuredCurrency(0)->currency_id);
+        $this->assertSame(
+            $this->currencyId,
+            (int)$view->configuredCurrency($this->currencyId)->currency_id
+        );
+        $this->assertNull($view->configuredCurrency(999999));
+    }
+
+    public function testWalletViewOwnsBalanceAndAmountStep(): void
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+        $svc = \XF::app()->service('OpenCredits\Credits:Transact');
+        $svc->adjust($this->memberId, $this->currencyId, 10.00, self::SEED_TRIGGER, 0, 'test');
+
+        $view = $this->walletView();
+        $decimals = (int)\XF::em()->find('OpenCredits\Credits:Currency', $this->currencyId)->decimals;
+
+        $this->assertSame(10.0, $view->balanceFor($this->memberId, $this->currencyId));
+        $this->assertSame(0.0, $view->balanceFor($this->memberId, 999999));
+        $this->assertSame(WalletView::amountStep($decimals), $view->step($decimals));
+    }
+
+    public function testWalletViewOwnsPagerUrls(): void
+    {
+        $view = $this->walletView();
+
+        $standalone = $view->pager(false, $this->memberId, $this->currencyId, 20);
+        $this->assertSame('credits', $standalone['pagerLink']);
+        $this->assertSame(
+            ['currency_id' => $this->currencyId, 'per_page' => 20],
+            $standalone['pagerParams']
+        );
+        $this->assertStringContainsString('per_page=20', $standalone['perPageUrls'][20]);
+        $this->assertStringContainsString('currency_id=' . $this->currencyId, $standalone['perPageUrls'][20]);
+
+        $embedded = $view->pager(true, $this->memberId, $this->currencyId, 10);
+        $this->assertSame('credits/member', $embedded['pagerLink']);
+        $this->assertSame(
+            ['user_id' => $this->memberId, 'currency_id' => $this->currencyId, 'per_page' => 10],
+            $embedded['pagerParams']
+        );
+        $this->assertStringContainsString('user_id=' . $this->memberId, $embedded['perPageUrls'][50]);
+        $this->assertStringContainsString('per_page=50', $embedded['perPageUrls'][50]);
+    }
+
+    public function testWalletViewOwnsTabMode(): void
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+
+        $options = \XF::app()->options();
+        $originalMode = $options->ocProfileTabMode;
+        $restore = $this->ensureTwoVisibleCurrencies();
+        try {
+            $this->assertSame('member', $this->walletView()->tabMode(false));
+
+            $options->ocProfileTabMode = 'auto';
+            $this->assertSame('member', $this->walletView()->tabMode(true));
+
+            $options->ocProfileTabMode = 'wallet';
+            $this->assertSame('wallet', $this->walletView()->tabMode(true));
+
+            $options->ocProfileTabMode = 'member';
+            $this->assertSame('member', $this->walletView()->tabMode(true));
+        } finally {
+            $options->ocProfileTabMode = $originalMode;
+            $this->restoreCurrency($restore);
+        }
+    }
+
+    public function testWalletPageRendersFromTheView(): void
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+        $this->seedWalletRows(25);
+
+        $reply = $this->callIndex(1, $this->currencyId);
+        $this->assertInstanceOf(\XF\Mvc\Reply\View::class, $reply);
+        $this->assertSame('credits_index', $reply->getTemplateName());
+
+        $html = $this->renderTrackedTemplate('credits_index', $reply->getParams());
+
+        $this->assertStringContainsString('oc-credits-per-page', $html);
+        $this->assertStringContainsString('per_page=50', $html);
+        $this->assertStringContainsString('currency_id=' . $this->currencyId, $html);
+        // The standalone wallet sends no profile-tab fields.
+        $this->assertStringNotContainsString('oc_in_tab', $html);
+        $this->assertStringNotContainsString('oc_return_user_id', $html);
+    }
+
+    public function testProfileTabWalletRendersTabFieldsFromTheView(): void
+    {
+        \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+
+        $options = \XF::app()->options();
+        $originalRedeem = $options->ocShowWalletRedeem;
+        $originalTransfer = $options->ocShowTransfer;
+        $options->ocShowWalletRedeem = true;
+        $options->ocShowTransfer = true;
+        $others = $this->useSingleCurrency();
+
+        try {
+            $reply = $this->callMember($this->memberId);
+            $this->assertInstanceOf(\XF\Mvc\Reply\View::class, $reply);
+            $this->assertSame('credits_index', $reply->getTemplateName());
+
+            $html = $this->renderTrackedTemplate('credits_index', $reply->getParams());
+
+            $this->assertStringContainsString('name="oc_in_tab" value="1"', $html);
+            $this->assertStringContainsString(
+                'name="oc_return_user_id" value="' . $this->memberId . '"',
+                $html
+            );
+            // Embedded pager links stay on the member route.
+            $this->assertStringContainsString('credits/member', $html);
+            $this->assertStringContainsString('user_id=' . $this->memberId, $html);
+        } finally {
+            $options->ocShowWalletRedeem = $originalRedeem;
+            $options->ocShowTransfer = $originalTransfer;
+            $this->restoreCurrencies($others);
+        }
     }
 
     public function testRetiredTransferPageRedirectsToWallet(): void
@@ -136,22 +272,30 @@ class MemberCreditsTest extends TestCase
 
         $restore = $this->ensureTwoVisibleCurrencies();
         try {
+            $this->assertSame('member', $this->walletView()->tabMode(true));
+
             $params = $this->callMember($this->memberId)->getParams();
             $this->assertTrue($params['isSelf']);
             $this->assertSame('', $params['lockedTo']);
             $this->assertArrayNotHasKey('entries', $params);
             $this->assertArrayNotHasKey('page', $params);
         } finally {
-            if ($restore) {
-                $this->db->update(
-                    'xf_oc_currency',
-                    ['active' => (int)$restore['active'], 'visible' => (int)$restore['visible']],
-                    'currency_id = ?',
-                    [(int)$restore['currency_id']]
-                );
-                \XF::em()->clearEntityCache();
-            }
+            $this->restoreCurrency($restore);
         }
+    }
+
+    protected function restoreCurrency(array $restore): void
+    {
+        if (!$restore) {
+            return;
+        }
+        $this->db->update(
+            'xf_oc_currency',
+            ['active' => (int)$restore['active'], 'visible' => (int)$restore['visible']],
+            'currency_id = ?',
+            [(int)$restore['currency_id']]
+        );
+        \XF::em()->clearEntityCache();
     }
 
     protected function ensureTwoVisibleCurrencies(): array
@@ -335,6 +479,35 @@ class MemberCreditsTest extends TestCase
 
     public function testSelfTabUsesWalletWithOneCurrency(): void
     {
+        $others = $this->useSingleCurrency();
+
+        try {
+            \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+
+            $view = $this->walletView();
+            $this->assertSame('wallet', $view->tabMode(true));
+            $this->assertFalse($view->showFlags(true)['showBalance']);
+
+            $self = $this->callMember($this->memberId);
+            $this->assertInstanceOf(\XF\Mvc\Reply\View::class, $self);
+            $this->assertSame('credits_index', $self->getTemplateName());
+
+            // Other members keep the per-member card.
+            $this->assertSame('member', $view->tabMode(false));
+            $other = $this->callMember($this->otherId);
+            $this->assertSame('credits_member', $other->getTemplateName());
+        } finally {
+            $this->restoreCurrencies($others);
+        }
+    }
+
+    /**
+     * Deactivate every currency but the test's primary one.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function useSingleCurrency(): array
+    {
         $others = $this->db->fetchAll(
             'SELECT currency_id, active, visible FROM xf_oc_currency WHERE currency_id <> ?',
             [$this->currencyId]
@@ -342,28 +515,54 @@ class MemberCreditsTest extends TestCase
         $this->db->update('xf_oc_currency', ['active' => 0], 'currency_id <> ?', [$this->currencyId]);
         \XF::em()->clearEntityCache();
 
-        try {
-            \XF::setVisitor(\XF::em()->find('XF:User', $this->memberId));
+        return $others;
+    }
 
-            $self = $this->callMember($this->memberId);
-            $this->assertInstanceOf(\XF\Mvc\Reply\View::class, $self);
-            $this->assertSame('credits_index', $self->getTemplateName());
-            $this->assertFalse($self->getParams()['showBalance']);
-
-            // Other members keep the per-member card.
-            $other = $this->callMember($this->otherId);
-            $this->assertSame('credits_member', $other->getTemplateName());
-        } finally {
-            foreach ($others as $row) {
-                $this->db->update(
-                    'xf_oc_currency',
-                    ['active' => (int)$row['active'], 'visible' => (int)$row['visible']],
-                    'currency_id = ?',
-                    [(int)$row['currency_id']]
-                );
-            }
-            \XF::em()->clearEntityCache();
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     */
+    protected function restoreCurrencies(array $rows): void
+    {
+        foreach ($rows AS $row) {
+            $this->db->update(
+                'xf_oc_currency',
+                ['active' => (int)$row['active'], 'visible' => (int)$row['visible']],
+                'currency_id = ?',
+                [(int)$row['currency_id']]
+            );
         }
+        \XF::em()->clearEntityCache();
+    }
+
+    protected function walletView(): WalletView
+    {
+        return new WalletView(\XF::app());
+    }
+
+    /**
+     * Renders the tracked `_output` template source, so a stale compiled copy
+     * cannot hide a template regression.
+     *
+     * @param array<string, mixed> $params
+     */
+    protected function renderTrackedTemplate(string $title, array $params): string
+    {
+        $addonRoot = getenv('OC_ADDON_SRC') ?: __DIR__ . '/../../../addon-src/OpenCredits/Credits';
+        $template = $addonRoot . '/_output/templates/public/' . $title . '.html';
+        if (!is_file($template)) {
+            $template = \XF::getAddOnDirectory() . '/OpenCredits/Credits/_output/templates/public/' . $title . '.html';
+        }
+
+        $source = file_get_contents($template);
+        if ($source === false) {
+            $this->fail('Could not read the tracked ' . $title . ' template source.');
+        }
+
+        $compiled = \XF::app()->templateCompiler()->compile($source, \XF::app()->language());
+        /** @var array{code: callable} $data */
+        $data = eval($compiled);
+
+        return $data['code'](\XF::app()->templater(), $params);
     }
 
     protected function callIndex(int $page, int $currencyId = 0, ?int $perPage = null): \XF\Mvc\Reply\AbstractReply

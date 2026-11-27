@@ -18,6 +18,25 @@ namespace XF\Mvc\Entity {
             public const FLOAT = 'float';
             public const JSON_ARRAY = 'json-array';
             public const TO_ONE = 'to_one';
+
+            // Mirrors the runtime's column magic so phpstan honours entity
+            // @property annotations instead of reporting every column.
+            /** @return mixed */
+            public function __get($name)
+            {
+                return null;
+            }
+
+            /** @param mixed $value */
+            public function __set($name, $value)
+            {
+            }
+
+            /** @return mixed */
+            public function __isset($name)
+            {
+                return false;
+            }
         }
     }
     if (!class_exists('XF\Mvc\Entity\Structure', false)) {
