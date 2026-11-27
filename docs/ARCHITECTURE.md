@@ -13,7 +13,8 @@ The licensed XenForo runtime unpacks under `src/`, with the XF tree at
 | `Setup.php` | Install/upgrade/uninstall steps. Owns schema + seed data |
 | `Listener.php` | All code-event listener callbacks (no business logic) |
 | `Service/Transact.php` | Façade for every money path (earn, transfer, redeem, charge, prune, rebuild); supplies the `LedgerWrite` and `HistoryPrune` modules and keeps the public API integrators call |
-| `Service/LedgerWrite.php` | **The one author of balance changes and ledger rows.** `commit(movement)` owns user-row lock order, currency precision, the overdraw policy, `xf_oc_balance`, the `oc_credits` mirror, and the `xf_oc_transaction` row shape; callers own the transaction and the post-commit effects |
+| `Service/LedgerWrite.php` | **The one author of balance changes and ledger rows.** `commit(movement)` owns user-row lock order, currency precision, the overdraw policy, `xf_oc_balance`, the `oc_credits` mirror, and the `xf_oc_transaction` row shape; callers own the transaction and the post-commit event, and every commit drops the request cache |
+| `Service/RequestCache.php` | **The one request-scoped memo**: balance rows, active event rows, the primary currency id, the charge price/unlock-count state and the per-request `ContentCharge` instance. Writes call `invalidate()`; tests call `reset()` |
 | `Service/Ledger.php` | Ledger vocabulary: the one trigger-label map (`label()`, award-only `eventTriggers()`), trigger constants, and stored markers (`NOTE_BACKFILL`, `NOTE_REACTION_PREFIX`) shared by history, alerts, and the prune guard |
 | `Service/AccountStanding.php` | **The one account-standing rule**: four verdicts (earn, receive, send, unlock) over one state table, pure so every money path reads the same decision |
 | `Service/WalletView.php` | **The one wallet view**: viewable currencies, selection order (requested → primary → lowest id), the viewer's balance, show flags, pager/switch/form URLs, amount step, and wallet-vs-member-tab mode. The controller, `XF/Entity/User` getters, the widget and both wallet templates read it |
@@ -255,10 +256,11 @@ change fires the `oc_credits_adjust` code event with
   `ContentCharge::priceForMessage()` decision. One purchase per (post, member)
   unlocks every block in that post. The author also sees a per-block
   "Members unlocked: N · total earned" line. `Transact::contentCharge()`
-  returns one module per request; it memoises each member's prior-purchase
-  answer per content, and `purchase()` clears that content after its commit so
-  an integrator purchase is visible to the next render. The renderer caches
-  only the post price and unlock count.
+  returns one module per request from the request cache; it memoises each
+  member's prior-purchase answer per content, and a committed purchase
+  invalidates the cache so an integrator purchase is visible to the next
+  render. The renderer reads the post price and unlock count through the same
+  cache.
 * The `charge` button is added once to the editor toolbar (`moreText` group,
   all viewports) by `Setup::syncEditorButton()` on install/upgrade; existing
   placements are left alone, and admins can move or remove it via the BB code
@@ -280,15 +282,21 @@ change fires the `oc_credits_adjust` code event with
 * Presentation decisions for the wallet live in `Service/WalletView`, not in
   the controller, entity getters, widget or templates. Add a view rule there so
   the wallet, profile pane and leaderboard cannot drift.
-* Per-request caches are explicit static caches with a clear method, owned by
-  the module that knows the data. `Transact` holds the one `ContentCharge`
-  instance in a static per-request cache (`clearContentChargeCache()`); the
-  module keeps the prior-purchase memo per content and member as an instance
-  property, and drops a content's entry after a committed purchase so service
-  reads stay DB-fresh for everything else. Presentation-only caches stay in
-  the renderer:
-  `BbCode\Charge` caches the post price and unlock count
-  (`clearRenderCaches()`).
+* Per-request caches live in one object, `Service/RequestCache`, reached two
+  ways: the instance injected into a class that owns writes (e.g. `LedgerWrite`)
+  and `RequestCache::instance()` via `Transact::requestCache()` for read paths.
+  It holds balance rows, event rows, the primary currency id, the charge
+  price/unlock-count state and the one `ContentCharge` instance. Production
+  writes call `invalidate()` from `LedgerWrite::commit()`/`purgeBalance()`, the
+  legacy adjust/transfer/redeem post-commit paths, the balance rebuild,
+  `HistoryPrune::run()`, the admin currency switch, and the charge purchase
+  post-commit, so a new write path cannot serve a stale read. `Listener::visitorSetup()`
+  calls `RequestCache::reset()` at the request boundary; tests call it between
+  cases. There is no per-section clear method left to call. `ContentCharge` keeps
+  its prior-purchase memo as an instance property inside the cache, and a
+  purchase invalidates the cache so the next access check is DB-fresh.
+  `BbCode\Charge` reads its post price and unlock count through the same cache
+  instead of keeping statics of its own.
 * Id-list parsing (JSON columns, comma-separated form input) lives in exactly
   one place: `CreditEvent::decodeIdList()`. Do not add local copies.
 * Forum-node context is asked of `AwardScope::needsNodeContext()` over

@@ -11,23 +11,6 @@ use XF\Service\AbstractService;
  */
 class Transact extends AbstractService
 {
-    protected static $primaryCurrencyId = null;
-    protected static $balanceCache = [];
-    protected static $eventRowsCache = [];
-
-    /**
-     * One charge module per request. Process-scoped like the other per-request
-     * statics here, so a long-running worker must clear it between requests.
-     *
-     * @var ContentCharge|null
-     */
-    protected static $contentChargeCache = null;
-
-    public static function clearEventCache(): void
-    {
-        self::$eventRowsCache = [];
-    }
-
     /**
      * Balances for a user across currencies, cached per request.
      * Each row: currency_id, title, prefix, suffix, decimals, is_primary, balance.
@@ -37,9 +20,8 @@ class Transact extends AbstractService
         if ($userId <= 0) {
             return [];
         }
-        $key = $userId . ':' . ($visibleOnly ? 'v' : 'a');
-        if (!isset(self::$balanceCache[$key])) {
-            self::$balanceCache[$key] = $this->db()->fetchAll(
+        return $this->requestCache()->balances($userId, $visibleOnly, function () use ($userId, $visibleOnly): array {
+            return $this->db()->fetchAll(
                 'SELECT c.currency_id, c.title, c.prefix, c.suffix, c.decimals, c.is_primary,'
                 . ' COALESCE(b.balance, 0) AS balance'
                 . ' FROM xf_oc_currency AS c'
@@ -48,8 +30,12 @@ class Transact extends AbstractService
                 . ' ORDER BY c.currency_id',
                 $userId
             );
-        }
-        return self::$balanceCache[$key];
+        });
+    }
+
+    public function requestCache(): RequestCache
+    {
+        return RequestCache::instance();
     }
 
     /**
@@ -61,11 +47,11 @@ class Transact extends AbstractService
      */
     public function preloadBalances(array $userIds, bool $visibleOnly = true): void
     {
-        $key = $visibleOnly ? 'v' : 'a';
+        $cache = $this->requestCache();
         $missing = [];
         foreach ($userIds as $id) {
             $id = (int)$id;
-            if ($id > 0 && !isset(self::$balanceCache[$id . ':' . $key])) {
+            if ($id > 0 && !$cache->hasBalances($id, $visibleOnly)) {
                 $missing[$id] = $id;
             }
         }
@@ -105,27 +91,13 @@ class Transact extends AbstractService
                     'balance' => $balances[$id][$cid] ?? '0.00',
                 ];
             }
-            self::$balanceCache[$id . ':' . $key] = $rows;
+            $cache->storeBalances($id, $visibleOnly, $rows);
         }
-    }
-
-    public static function clearBalanceCache(?int $userId = null): void
-    {
-        if ($userId === null) {
-            self::$balanceCache = [];
-        } else {
-            unset(self::$balanceCache[$userId . ':v'], self::$balanceCache[$userId . ':a']);
-        }
-    }
-
-    public static function clearPrimaryCache(): void
-    {
-        self::$primaryCurrencyId = null;
     }
 
     public function primaryCurrencyId(): int
     {
-        if (self::$primaryCurrencyId === null) {
+        return $this->requestCache()->primaryCurrencyId(function (): int {
             try {
                 $id = (int)$this->db()->fetchOne(
                     'SELECT currency_id FROM xf_oc_currency WHERE is_primary = 1 LIMIT 1'
@@ -133,25 +105,24 @@ class Transact extends AbstractService
             } catch (\Throwable $e) {
                 $id = 0;
             }
-            self::$primaryCurrencyId = $id > 0 ? $id : 1;
-        }
-        return self::$primaryCurrencyId;
+            return $id > 0 ? $id : 1;
+        });
     }
 
     /**
      * Active event rows for a trigger, with their currency, from the
-     * request-static cache. The award loop and AwardScope's node-context
+     * request cache. The award loop and AwardScope's node-context
      * question read the same rows, so a content save pays for one query.
      *
      * @return array<int,array<string,mixed>>
      */
     public function eventRowsForTrigger(string $trigger): array
     {
-        if (!array_key_exists($trigger, self::$eventRowsCache)) {
+        return $this->requestCache()->eventRows($trigger, function () use ($trigger): array {
             // Event configs are request-static: bulk content saves must not
             // refetch identical rows per save. Admin event saves run in their
             // own requests, so no invalidation is needed here.
-            self::$eventRowsCache[$trigger] = $this->db()->fetchAll(
+            return $this->db()->fetchAll(
                 'SELECT e.*, c.decimals, c.title AS currency_title,'
                 . ' c.prefix AS currency_prefix, c.suffix AS currency_suffix'
                 . ' FROM xf_oc_event AS e'
@@ -159,8 +130,7 @@ class Transact extends AbstractService
                 . ' WHERE e.`trigger` = ? AND e.active = 1 ORDER BY e.event_id',
                 $trigger
             );
-        }
-        return self::$eventRowsCache[$trigger];
+        });
     }
 
     /**
@@ -449,7 +419,7 @@ class Transact extends AbstractService
             }
             $db->commit();
             $credited = $amount;
-            self::clearBalanceCache($userId);
+            $this->requestCache()->invalidate();
             $this->fireAdjustEvent([$userId, $currencyId, $amount, $trigger, $contentId]);
             return true;
         } catch (\Throwable $e) {
@@ -594,8 +564,7 @@ class Transact extends AbstractService
                 'content_id' => $fromUserId, 'note' => '', 'log_date' => $now,
             ]);
             $db->commit();
-            self::clearBalanceCache($fromUserId);
-            self::clearBalanceCache($toUserId);
+            $this->requestCache()->invalidate();
             $this->fireAdjustEvent([$fromUserId, $currencyId, -$amount, Ledger::TRIGGER_TRANSFER, $toUserId]);
             $this->fireAdjustEvent([$toUserId, $currencyId, $amount, Ledger::TRIGGER_TRANSFER, $fromUserId]);
             $sender = $this->app->em()->find('XF:User', $fromUserId);
@@ -628,32 +597,18 @@ class Transact extends AbstractService
      */
     public function contentCharge(): ContentCharge
     {
-        if (self::$contentChargeCache === null) {
-            $db = $this->db();
-
-            self::$contentChargeCache = new ContentCharge(
-                $db,
+        return $this->requestCache()->contentCharge(function (): ContentCharge {
+            return new ContentCharge(
+                $this->db(),
                 function (int $userId, int $currencyId, float $amount): void {
                     $this->applyBalanceDelta($userId, $currencyId, $amount);
                 },
                 function (int $userId, int $currencyId, float $amount, string $contentType, int $contentId): void {
-                    self::clearBalanceCache($userId);
+                    $this->requestCache()->invalidate();
                     $this->fireAdjustEvent([$userId, $currencyId, $amount, Ledger::TRIGGER_CHARGE, $contentId]);
                 }
             );
-        }
-
-        return self::$contentChargeCache;
-    }
-
-    /**
-     * Drops the per-request charge module (and its paid memo). The container
-     * builds a new Transact per service() call, so the instance lives in a
-     * static to keep one module per request.
-     */
-    public static function clearContentChargeCache(): void
-    {
-        self::$contentChargeCache = null;
+        });
     }
 
     /**
@@ -857,7 +812,7 @@ class Transact extends AbstractService
                 (int)$row['code_id']
             );
             $db->commit();
-            self::clearBalanceCache($userId);
+            $this->requestCache()->invalidate();
             $this->fireAdjustEvent([$userId, $currencyId, $amount, Ledger::TRIGGER_REDEEM, (int)$row['code_id']]);
             $granted = ['amount' => $amount, 'currency_id' => $currencyId];
             return 'ok';
@@ -869,13 +824,13 @@ class Transact extends AbstractService
 
     /**
      * The ledger write module. Callers keep their own transaction, side
-     * tables, cache clearing and post-commit event.
+     * tables and post-commit event; the module drops the request cache.
      */
     public function ledgerWrite(): LedgerWrite
     {
         return new LedgerWrite($this->db(), function (): int {
             return $this->primaryCurrencyId();
-        });
+        }, $this->requestCache());
     }
 
     /**
@@ -912,7 +867,6 @@ class Transact extends AbstractService
             $currencyId,
             $this->ledgerWrite(),
             function (int $userId, float $amount) use ($currencyId): void {
-                self::clearBalanceCache($userId);
                 $this->fireAdjustEvent([$userId, $currencyId, -$amount, Ledger::TRIGGER_DEMURRAGE, 0]);
             }
         );
@@ -1166,7 +1120,7 @@ class Transact extends AbstractService
         $primaryId = $this->primaryCurrencyId();
         $amounts = [];
         $decimals = 2;
-        foreach (self::$eventRowsCache[Ledger::TRIGGER_DAILY_LOGIN] ?? [] as $row) {
+        foreach ($this->eventRowsForTrigger(Ledger::TRIGGER_DAILY_LOGIN) as $row) {
             if ((int)($row['currency_id'] ?? 0) === $primaryId) {
                 $amounts[] = (float)($row['amount'] ?? 0);
                 $decimals = (int)($row['decimals'] ?? $decimals);
@@ -1198,13 +1152,7 @@ class Transact extends AbstractService
      */
     protected function hasActiveEvents(string $trigger): bool
     {
-        if (array_key_exists($trigger, self::$eventRowsCache)) {
-            return (bool)self::$eventRowsCache[$trigger];
-        }
-        return (bool)$this->db()->fetchOne(
-            'SELECT event_id FROM xf_oc_event WHERE `trigger` = ? AND active = 1 LIMIT 1',
-            [$trigger]
-        );
+        return (bool)$this->eventRowsForTrigger($trigger);
     }
 
     /**
@@ -1265,7 +1213,7 @@ class Transact extends AbstractService
                 $db->rollBack();
                 throw $e;
             }
-            self::clearBalanceCache();
+            $this->requestCache()->invalidate();
             return ['rows' => $rows, 'next' => null];
         }
 
@@ -1301,7 +1249,7 @@ class Transact extends AbstractService
             $db->rollBack();
             throw $e;
         }
-        self::clearBalanceCache();
+        $this->requestCache()->invalidate();
         return ['rows' => $rows, 'next' => $endUserId >= $maxUserId ? null : $endUserId];
     }
 

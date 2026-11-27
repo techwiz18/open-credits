@@ -6,6 +6,7 @@ namespace OpenCredits\Credits\BbCode;
 
 use OpenCredits\Credits\Service\ChargeAccess;
 use OpenCredits\Credits\Service\ContentCharge;
+use OpenCredits\Credits\Service\RequestCache;
 use XF\BbCode\Renderer\Html;
 
 /**
@@ -20,12 +21,6 @@ use XF\BbCode\Renderer\Html;
  */
 class Charge
 {
-    /** @var array<string, int> */
-    protected static $unlockCounts = [];
-
-    /** @var array<string, float|null> */
-    protected static $maxAmounts = [];
-
     /**
      * Charge prices found in a message, using XenForo's own parser/AST so the
      * result matches what actually renders: `[code]`/`[plain]` contents are
@@ -46,16 +41,6 @@ class Charge
     public static function maxAmount(string $message, int $decimals): ?float
     {
         return ContentCharge::priceForMessage($message, $decimals);
-    }
-
-    /**
-     * Drop the price and unlock-count caches. Neither is member-scoped, and
-     * paid state is never cached, so a purchase needs no clear.
-     */
-    public static function clearRenderCaches(): void
-    {
-        self::$maxAmounts = [];
-        self::$unlockCounts = [];
     }
 
     public static function render(array $children, $option, array $tag, array $options, Html $renderer)
@@ -139,13 +124,12 @@ class Charge
     {
         $key = $entity->getEntityContentType() . ':' . $entity->getEntityId() . ':' . $decimals
             . ':' . md5((string)$entity->message);
-        if (!array_key_exists($key, self::$maxAmounts)) {
-            self::$maxAmounts[$key] = ContentCharge::priceForMessage(
+        $amount = RequestCache::instance()->price($key, function () use ($entity, $decimals): ?float {
+            return ContentCharge::priceForMessage(
                 (string)$entity->message,
                 $decimals
             );
-        }
-        $amount = self::$maxAmounts[$key];
+        });
         if ($amount === null) {
             $amount = ContentCharge::priceOf([$option], $decimals);
         }
@@ -180,15 +164,14 @@ class Charge
         $currency
     ): string {
         $key = $contentType . ':' . $contentId . ':' . $currencyId . ':' . sprintf('%.2f', $amount);
-        if (!isset(self::$unlockCounts[$key])) {
-            self::$unlockCounts[$key] = self::charge()->unlockCount(
+        $count = RequestCache::instance()->unlockCount($key, function () use ($contentType, $contentId, $currencyId, $amount): int {
+            return self::charge()->unlockCount(
                 $contentType,
                 $contentId,
                 $currencyId,
                 $amount
             );
-        }
-        $count = self::$unlockCounts[$key];
+        });
         if ($count <= 0) {
             return '';
         }

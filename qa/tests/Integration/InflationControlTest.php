@@ -6,8 +6,8 @@ namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Entity\Code;
 use OpenCredits\Credits\Service\DemurrageRunner;
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
-use PHPUnit\Framework\TestCase;
 
 /**
  * #8 inflation control against the licensed dev forum.
@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
  * real forum money supply is never capped, burned, or transferred. The
  * original primary is restored and the real mirrors rebuilt in tearDown().
  */
-class InflationControlTest extends TestCase
+class InflationControlTest extends IntegrationTestCase
 {
     protected const TRIGGER = 'octest_inflation';
     protected const TITLE = 'OC Inflation Test';
@@ -38,6 +38,7 @@ class InflationControlTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -102,10 +103,6 @@ class InflationControlTest extends TestCase
         $options->ocInflationDemurrageRate = 0;
         $options->ocInflationDemurrageDays = 7;
         $options->ocSendEarnAlerts = 0;
-
-        Transact::clearPrimaryCache();
-        Transact::clearBalanceCache();
-        Transact::clearEventCache();
     }
 
     protected function tearDown(): void
@@ -122,9 +119,6 @@ class InflationControlTest extends TestCase
             $this->db->update('xf_oc_currency', ['is_primary' => 1], 'currency_id = ?', [$this->originalPrimary]);
         }
         $this->cleanup();
-        Transact::clearPrimaryCache();
-        Transact::clearBalanceCache();
-        Transact::clearEventCache();
         \XF::setVisitor(null);
     }
 
@@ -185,12 +179,12 @@ class InflationControlTest extends TestCase
             }
         }
 
-        Transact::clearPrimaryCache();
+        RequestCache::reset();
         if ($ids) {
             // Restore the real members' mirrors from their real ledger.
             $this->transact->rebuildAllBalancesFully();
         }
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 
     public function testEarningsFillToBalanceCap(): void
@@ -478,7 +472,7 @@ class InflationControlTest extends TestCase
             'active' => 1,
             'send_alert' => 0,
         ]);
-        Transact::clearEventCache();
+        RequestCache::reset();
 
         // Two identical active events: the faucet counts credited coins once.
         $this->assertTrue($this->transact->awardByTrigger(self::TRIGGER, $this->memberId));
@@ -510,7 +504,7 @@ class InflationControlTest extends TestCase
             '`trigger` = ? AND currency_id = ?',
             [self::TRIGGER, $this->currencyId]
         );
-        Transact::clearEventCache();
+        RequestCache::reset();
         $this->assertFalse($this->transact->awardByTrigger(self::TRIGGER, $this->memberId));
 
         $this->db->update(
@@ -519,7 +513,7 @@ class InflationControlTest extends TestCase
             '`trigger` = ? AND currency_id = ?',
             [self::TRIGGER, $this->currencyId]
         );
-        Transact::clearEventCache();
+        RequestCache::reset();
         $this->assertTrue($this->transact->awardByTrigger(self::TRIGGER, $this->memberId));
         $this->assertEqualsWithDelta(
             20.0,
@@ -599,7 +593,7 @@ class InflationControlTest extends TestCase
         if (!empty($others)) {
             $in = implode(',', array_map('intval', $others));
             $this->db->query("UPDATE xf_oc_event SET active = 1 WHERE event_id IN ({$in})");
-            Transact::clearEventCache();
+            RequestCache::reset();
         }
         foreach ($stashed as $row) {
             $this->db->insert('xf_oc_transaction', $row);
@@ -610,7 +604,7 @@ class InflationControlTest extends TestCase
     {
         [$others, $stashed] = $this->seedDailyLoginScenario();
         try {
-            Transact::clearEventCache();
+            RequestCache::reset();
             \XF::app()->options()->ocInflationBalanceCap = 5;
             $this->transact->adjust($this->memberId, $this->currencyId, 5.0, 'admin_adjust');
 
@@ -656,7 +650,7 @@ class InflationControlTest extends TestCase
     {
         [$others, $stashed] = $this->seedDailyLoginScenario();
         try {
-            Transact::clearEventCache();
+            RequestCache::reset();
             \XF::app()->options()->ocInflationFaucetDaily = 8;
             // Exhaust the faucet through another trigger first.
             $this->assertTrue($this->transact->awardByTrigger(self::TRIGGER, $this->memberId));
@@ -1139,7 +1133,7 @@ class InflationControlTest extends TestCase
         $zero = $this->createTestCurrency(self::TITLE . ' Zero', false, 0);
         $this->db->update('xf_oc_currency', ['is_primary' => 0], 'currency_id = ?', [$this->currencyId]);
         $this->db->update('xf_oc_currency', ['is_primary' => 1], 'currency_id = ?', [$zero]);
-        Transact::clearPrimaryCache();
+        RequestCache::reset();
         \XF::app()->options()->ocInflationBalanceCap = 5;
 
         // A legacy sub-unit balance the 0-decimal currency can no longer mint.

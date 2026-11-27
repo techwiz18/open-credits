@@ -6,13 +6,12 @@ namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Pub\Controller\Credits;
 use OpenCredits\Credits\Service\Transact;
-use PHPUnit\Framework\TestCase;
 
 /**
  * One purchase unlocks the whole post, so the unlock endpoint must charge the
  * highest valid [charge] block even when the form submits the cheapest one.
  */
-class ChargeUnlockTest extends TestCase
+class ChargeUnlockTest extends IntegrationTestCase
 {
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
@@ -28,6 +27,7 @@ class ChargeUnlockTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -37,7 +37,6 @@ class ChargeUnlockTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
-        Transact::clearContentChargeCache();
 
         $this->postId = (int)$this->db->fetchOne(
             "SELECT p.post_id FROM xf_post AS p"
@@ -88,7 +87,6 @@ class ChargeUnlockTest extends TestCase
         );
         \XF::em()->clearEntityCache();
         $this->transact->rebuildAllBalancesFully();
-        Transact::clearContentChargeCache();
     }
 
     public function testUnlockChargesHighestBlockPrice(): void

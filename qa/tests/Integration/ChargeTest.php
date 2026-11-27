@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Service\Transact;
-use PHPUnit\Framework\TestCase;
 
 /**
  * DB-backed proof for the [charge] BBCode service (#5): a charge moves the
@@ -16,7 +15,7 @@ use PHPUnit\Framework\TestCase;
  * OC_XF_ROOT. Uses two real members (the service locks xf_user rows) and a
  * synthetic content id, then removes every row it wrote and rebuilds.
  */
-class ChargeTest extends TestCase
+class ChargeTest extends IntegrationTestCase
 {
     protected const CONTENT_ID = 900000001;
     protected const CONTENT_TYPE = 'post';
@@ -34,6 +33,7 @@ class ChargeTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -180,6 +180,5 @@ class ChargeTest extends TestCase
             'content_id = ? AND `trigger` IN (?, ?)',
             [self::CONTENT_ID, 'charge', self::SEED_TRIGGER]
         );
-        Transact::clearBalanceCache();
     }
 }

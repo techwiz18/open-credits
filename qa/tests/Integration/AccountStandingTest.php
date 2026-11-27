@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace OpenCredits\Credits\Tests\Integration;
 
 use OpenCredits\Credits\Entity\Code;
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Account standing at the money seams. The unit table pins the verdicts; this
@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
  *
  * Runs against the licensed dev forum with two throwaway members.
  */
-class AccountStandingTest extends TestCase
+class AccountStandingTest extends IntegrationTestCase
 {
     /** @var \XF\Db\AbstractAdapter */
     protected $db;
@@ -35,6 +35,7 @@ class AccountStandingTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -94,8 +95,6 @@ class AccountStandingTest extends TestCase
         foreach ($this->originalOptions as $key => $value) {
             $options->{$key} = $value;
         }
-        Transact::clearEventCache();
-        Transact::clearBalanceCache();
     }
 
     public function testUnconfirmedAndAwaitingApprovalCannotSend(): void
@@ -199,7 +198,7 @@ class AccountStandingTest extends TestCase
         $this->db->delete('xf_oc_transaction', 'user_id = ?', [$userId]);
         $this->db->delete('xf_oc_balance', 'user_id = ?', [$userId]);
         $this->db->delete('xf_oc_faucet', 'user_id = ?', [$userId]);
-        Transact::clearBalanceCache();
+        RequestCache::reset();
 
         return $userId;
     }
@@ -246,6 +245,6 @@ class AccountStandingTest extends TestCase
                 $existing->delete();
             }
         }
-        Transact::clearBalanceCache();
+        RequestCache::reset();
     }
 }

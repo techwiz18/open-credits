@@ -5,6 +5,7 @@ namespace OpenCredits\Credits;
 use OpenCredits\Credits\Service\AccountStanding;
 use OpenCredits\Credits\Service\AwardScope;
 use OpenCredits\Credits\Service\Ledger;
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use XF\Mvc\Entity\Entity;
 use XF\Mvc\Entity\Manager as EntityManager;
@@ -153,6 +154,9 @@ class Listener
 
     public static function visitorSetup(\XF\Entity\User &$user = null)
     {
+        // Request boundary: visitor_setup runs once per request before any
+        // controller or credit read, so nothing leaks between requests.
+        RequestCache::reset();
         if (!$user || $user->user_id <= 0
             || !AccountStanding::canEarn((string)$user->get('user_state'), !empty($user->is_banned))
         ) {

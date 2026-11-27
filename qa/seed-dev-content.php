@@ -145,7 +145,7 @@ function clean(): void
             echo empty($errors) ? "{$username} deleted\n" : "{$username} errors: " . json_encode($errors) . "\n";
         }
     }
-    \OpenCredits\Credits\Service\Transact::clearPrimaryCache();
+    \OpenCredits\Credits\Service\RequestCache::reset();
     $app->service('OpenCredits\Credits:Transact')->rebuildAllBalancesFully();
     echo "rebuilt\n";
 }

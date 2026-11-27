@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace OpenCredits\Credits\Tests\Integration;
 
-use OpenCredits\Credits\BbCode\Charge;
+use OpenCredits\Credits\Service\RequestCache;
 use OpenCredits\Credits\Service\Transact;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Renderer checks for the [charge] soft gate: guest/member/paid/author/admin
@@ -17,7 +16,7 @@ use PHPUnit\Framework\TestCase;
  * xf_oc_charge rows, and restores currency flags in tearDown(). Dev-only;
  * skips without OC_XF_ROOT.
  */
-class ChargeRenderTest extends TestCase
+class ChargeRenderTest extends IntegrationTestCase
 {
     protected const MESSAGE = '[charge=5]RENDER_SECRET[/charge]';
 
@@ -39,6 +38,7 @@ class ChargeRenderTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         if (!class_exists('XF', false) || !\XF::app()) {
             $this->markTestSkipped('Set OC_XF_ROOT to a licensed XenForo install to run integration tests.');
         }
@@ -48,7 +48,6 @@ class ChargeRenderTest extends TestCase
         $this->db = \XF::db();
         $this->transact = \XF::app()->service('OpenCredits\Credits:Transact');
         $this->currencyId = $this->transact->primaryCurrencyId();
-        Transact::clearContentChargeCache();
 
         $rows = $this->db->fetchAll('SELECT currency_id, is_primary, active, visible FROM xf_oc_currency');
         foreach ($rows AS $row) {
@@ -122,11 +121,9 @@ class ChargeRenderTest extends TestCase
                 [$currencyId]
             );
         }
-        Transact::clearPrimaryCache();
-        Transact::clearContentChargeCache();
         \XF::em()->clearEntityCache();
         \XF::setVisitor(null);
-        Charge::clearRenderCaches();
+        RequestCache::reset();
     }
 
     public function testGuestSeesLockedBoxWithoutBody(): void
@@ -190,7 +187,7 @@ class ChargeRenderTest extends TestCase
             $this->assertStringContainsString('RENDER_SECRET', $after);
 
             // A fresh request drops the memo and still reads the purchase.
-            Transact::clearContentChargeCache();
+            RequestCache::reset();
             $fresh = $this->render($this->memberId);
             $this->assertStringContainsString('RENDER_SECRET', $fresh);
         } finally {
@@ -262,7 +259,7 @@ class ChargeRenderTest extends TestCase
         $this->db->update('xf_oc_currency', ['active' => 1, 'visible' => 1], 'currency_id = ?', [$zeroDecimal]);
         $this->db->update('xf_oc_currency', ['is_primary' => 0], 'currency_id = ?', [$this->currencyId]);
         $this->db->update('xf_oc_currency', ['is_primary' => 1], 'currency_id = ?', [$zeroDecimal]);
-        Transact::clearPrimaryCache();
+        RequestCache::reset();
         \XF::em()->clearEntityCache();
 
         $message = '[charge=1.5]RENDER_SECRET[/charge]';

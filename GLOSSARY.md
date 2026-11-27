@@ -32,6 +32,10 @@ _Avoid_: cleanup, purge
 One intent to change balances: a currency, a trigger, and one or more legs, each a member and a signed amount. Applied whole or not at all.
 _Avoid_: transaction, entry, delta
 
+**Request cache**:
+The one memo that survives for a request: balance rows, active event rows, the primary currency id, and the charge price, unlock-count and prior-purchase state. A committed write invalidates the whole memo, so no caller clears a section by hand.
+_Avoid_: static cache, balance cache, render cache
+
 **Wallet view**:
 The currency selection, visibility and amount step one member sees on the wallet page and the profile tab, resolved once so every surface agrees.
 _Avoid_: wallet page state, view model, viewable currencies
