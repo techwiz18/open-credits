@@ -55,6 +55,58 @@ class AwardScopeTest extends TestCase
         );
     }
 
+    public function testNeedsNodeContextEmptyScope(): void
+    {
+        $this->assertFalse(AwardScope::needsNodeContext([]));
+        $this->assertFalse(AwardScope::needsNodeContext([
+            ['forum_ids' => null],
+            ['forum_ids' => ''],
+            ['forum_ids' => '[]'],
+            ['forum_ids' => []],
+            [],
+        ]));
+    }
+
+    public function testNeedsNodeContextReadsPopulatedScope(): void
+    {
+        $this->assertTrue(AwardScope::needsNodeContext([['forum_ids' => '[3,4]']]));
+        $this->assertTrue(AwardScope::needsNodeContext([['forum_ids' => '3,4']]));
+        $this->assertTrue(AwardScope::needsNodeContext([
+            ['forum_ids' => null],
+            ['forum_ids' => '[5]'],
+        ]));
+    }
+
+    public function testNeedsNodeContextTreatsUnparseableScopeAsUnscoped(): void
+    {
+        // Values the lenient decoder cannot turn into positive ids read as
+        // unscoped, so the listener must not resolve a node for them either.
+        foreach (['garbage', '"3"', '0', '-3', 'null'] as $malformed) {
+            $row = ['forum_ids' => $malformed];
+            $this->assertFalse(
+                AwardScope::needsNodeContext([$row]),
+                'forum_ids=' . var_export($malformed, true) . ' must read as unscoped'
+            );
+            $this->assertTrue(
+                AwardScope::eligible($row, 0, [], true, false, true),
+                'forum_ids=' . var_export($malformed, true) . ' must admit any node'
+            );
+        }
+    }
+
+    public function testNeedsNodeContextAgreesWithEligibilityOnMalformedJson(): void
+    {
+        // Non-JSON falls back to a comma list, so a truncated array or an
+        // object still yields the ids it can read. Asking for a node and
+        // requiring a matching node are then the same question.
+        foreach (['[1,2' => 2, '{"a":1}' => 1] as $malformed => $nodeId) {
+            $row = ['forum_ids' => $malformed];
+            $this->assertTrue(AwardScope::needsNodeContext([$row]), $malformed);
+            $this->assertTrue(AwardScope::eligible($row, $nodeId, [], true, false, true), $malformed);
+            $this->assertFalse(AwardScope::eligible($row, 0, [], true, false, true), $malformed);
+        }
+    }
+
     public function testCountEligibleTalliesOnlyQualifyingRows(): void
     {
         $event = ['forum_ids' => '1', 'usergroup_ids' => null];
