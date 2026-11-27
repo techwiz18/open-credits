@@ -76,6 +76,25 @@ class AwardScope
     }
 
     /**
+     * Whether any of the given event rows scopes awards to forum nodes, so
+     * the caller knows it must resolve a node id. Read through scopeFor(),
+     * the same seam eligible() uses — there is no second reading of the
+     * column. A value that decodes to no positive ids means unscoped,
+     * exactly as eligibility treats it.
+     *
+     * @param array<int,array<string,mixed>> $eventRows
+     */
+    public static function needsNodeContext(array $eventRows): bool
+    {
+        foreach ($eventRows as $eventRow) {
+            if (self::scopeFor($eventRow)['forumIds']) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Decoded scope sets; empty means unscoped. Shared by the predicate and
      * the backfill SQL so both read the same forum/group restrictions.
      *
