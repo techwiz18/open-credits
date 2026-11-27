@@ -24,10 +24,6 @@ qatmp() {
   docker_qatmp_shell "${line:?qatmp: no command given}"
 }
 
-qa_unit() {
-  qatmp env OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpunit "$@"
-}
-
 qa_integration() {
   qatmp env OC_XF_ROOT=/var/www/html ./vendor/bin/phpunit -c phpunit-integration.xml \
     --display-skipped --fail-on-skipped "$@"
@@ -45,20 +41,7 @@ seed_fixtures() {
   qatmp env OC_XF_ROOT=/var/www/html php seed-dev-content.php "$1"
 }
 
-qa_stan() {
-  qatmp env OC_ADDON_SRC=/var/www/html/src/addons/OpenCredits/Credits ./vendor/bin/phpstan \
-    analyse --no-progress /var/www/html/src/addons/OpenCredits/Credits/Service tests/Unit "$@"
-}
-
-# Single implementation of the non-integration CI steps, shared by `check`
-# (pre-commit) and `all` so the two targets cannot drift.
-qa_check_steps() {
-  qa_lint
-  addon_lint
-  qa_unit
-  qa_stan
-}
-
+# Syncs qa/ into the mounted copy; dev dependencies are installed on first use.
 sync_qatmp() {
   mkdir -p src
   if [ ! -f src/.qatmp/vendor/autoload.php ]; then
@@ -70,19 +53,6 @@ sync_qatmp() {
     cp qa/seed-dev-content.php qa/phpunit.xml qa/phpunit-integration.xml \
       qa/phpstan.neon qa/composer.json qa/composer.lock src/.qatmp/
   fi
-}
-
-# Lints the synced qa tree and the bind-mounted addon tree (the same files
-# public CI lints), so a syntax error fails before commit, not after push.
-qa_lint() {
-  docker_qatmp_shell 'find . -path ./vendor -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null' \
-    && echo "qa lint OK"
-}
-
-addon_lint() {
-  docker compose exec -T web bash -c \
-    'find /var/www/html/src/addons/OpenCredits/Credits -path "*/_releases" -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null' \
-    && echo "addon lint OK"
 }
 
 case "$cmd" in
@@ -199,26 +169,25 @@ PHP
     sync_qatmp
     case "$kind" in
       lint)
-        qa_lint
-        addon_lint
+        ./scripts/check.sh --docker lint
         ;;
       unit)
-        qa_unit "$@"
+        ./scripts/check.sh --docker unit "$@"
         ;;
       integration)
         qa_integration "$@" || integration_failed
         ;;
       stan)
-        qa_stan "$@"
+        ./scripts/check.sh --docker stan "$@"
         ;;
       check)
-        qa_check_steps
+        ./scripts/check.sh --docker check
         ;;
       seed|clean)
         seed_fixtures "$kind"
         ;;
       all)
-        qa_check_steps
+        ./scripts/check.sh --docker check
         # The content-dependent tests need their fixtures, and the run leaves
         # them consumed; seeding here keeps `test all` green twice in a row.
         seed_fixtures seed
