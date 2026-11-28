@@ -73,10 +73,10 @@ tree 0.14.1 ships. The items listed above as free to land in 1.x landed in
 0.14.x anyway — #24, #26, #28, #29, #30 and #31 — which changes nothing about
 the decision: none of them was a gate, and shipping them early is schedule, not
 scope. Three remain open and stay free to land in 1.x: completing the
-`LedgerWrite` cutover (transfer, charge, redeem and adjust still write through
-`Transact::applyBalanceDelta`, so ADR 0001's allowlist comment stays truthful),
-resumable rebuilds (the CLI still loops its ranges in one request), and an
-update-check `update_url` (`build.json` still declares none).
+`LedgerWrite` cutover (`Transact::applyBalanceDelta()` is still reached by
+member earning and admin adjust through `adjust()`, and by transfer, charge and
+redeem), resumable rebuilds (the CLI still loops its ranges in one request), and
+an update-check `update_url` (`build.json` still declares none).
 
 Version identity is now the only pre-1.0 change left, and it stays the sole
 content of the `1.0.0` commit. `0.14.1` keeps a sequential `version_id` (943) so
