@@ -5,6 +5,20 @@
 A free (MIT) credits system for XenForo 2.3+: reward activity, show balances,
 let members transfer credits and redeem codes, gate trophies on wealth.
 
+## Screenshots
+
+| Member wallet | Premium content |
+|---|---|
+| [![Credits wallet with balance, redeem, transfer and history](docs/screenshots/01-credits-wallet.png)](docs/screenshots/01-credits-wallet.png) | [![Locked premium post with an unlock button](docs/screenshots/02-premium-content.png)](docs/screenshots/02-premium-content.png) |
+| **Profile credits tab** | **Leaderboard widget** |
+| [![Profile credits tab showing both currencies and a send form](docs/screenshots/03-member-credits-tab.png)](docs/screenshots/03-member-credits-tab.png) | [![Top credit holders widget on the forum home](docs/screenshots/04-credit-leaderboard.png)](docs/screenshots/04-credit-leaderboard.png) |
+| **Earning events (AdminCP)** | **Redeem codes (AdminCP)** |
+| [![Earning events with per-trigger amounts and limits](docs/screenshots/05-admin-earning-events.png)](docs/screenshots/05-admin-earning-events.png) | [![Redeem codes with use caps and expiry](docs/screenshots/06-admin-redeem-codes.png)](docs/screenshots/06-admin-redeem-codes.png) |
+| **Currencies (AdminCP)** | **Inflation control (AdminCP)** |
+| [![Currency list with a primary and a secondary currency](docs/screenshots/07-admin-currencies.png)](docs/screenshots/07-admin-currencies.png) | [![Inflation toggle with balance cap, daily faucet cap, demurrage rate and period](docs/screenshots/09-admin-inflation-options.png)](docs/screenshots/09-admin-inflation-options.png) |
+| **Demurrage preview (AdminCP)** | **Economy tools (AdminCP)** |
+| [![Demurrage pass preview showing rate, next due date, affected accounts and credits burned](docs/screenshots/10-admin-demurrage-preview.png)](docs/screenshots/10-admin-demurrage-preview.png) | [![Rebuild, backfill, adjust, prune and demurrage tools](docs/screenshots/08-admin-tools.png)](docs/screenshots/08-admin-tools.png) |
+
 ## What members get
 
 * **Earn credits** for posting threads/replies, receiving reactions, registering,
