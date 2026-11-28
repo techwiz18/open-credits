@@ -65,6 +65,30 @@ therefore re-opened #28: `Service/HistoryPrune` is now the one module for
 preview, run and cutoff, and `Transact::pruneHistory()` is a compatibility
 delegate for integrators.
 
+## Amendment (2026-11-27, after the #28 note): 0.14.1 closes the blocking set
+
+The blocking set is complete. The precision guard shipped in 0.14.0, and #25
+(one charge-access verdict) and #27 (a preview that shares the burn) are in the
+tree 0.14.1 ships. The items listed above as free to land in 1.x landed in
+0.14.x anyway — #24, #26, #28, #29, #30 and #31 — which changes nothing about
+the decision: none of them was a gate, and shipping them early is schedule, not
+scope. Three remain open and stay free to land in 1.x: completing the
+`LedgerWrite` cutover (`Transact::applyBalanceDelta()` is still reached by
+member earning and admin adjust through `adjust()`, and by transfer, charge and
+redeem), resumable rebuilds (the CLI still loops its ranges in one request), and
+an update-check `update_url` (`build.json` still declares none).
+
+Version identity is now the only pre-1.0 change left, and it stays the sole
+content of the `1.0.0` commit. `0.14.1` keeps a sequential `version_id` (943) so
+that the encoded convention is adopted, and its upgrade path tested, in exactly
+one commit that can be re-tagged if the migration is wrong. `1.0.0` then encodes
+as `1000070`; from that release on every id — and every `upgrade<id>Step<n>`
+method name — uses the encoded form, because a later sequential id would sort
+below `1000070` and never run.
+
+`1.0` is therefore shippable on this ADR's own terms: the blocking set is merged
+and the usual release gates are green.
+
 ## Breaking changes and deprecation after 1.0
 
 Breaking changes happen only at a major release. A removal must be marked

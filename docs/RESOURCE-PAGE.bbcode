@@ -56,6 +56,14 @@ To upgrade later: upload the newer zip and click [B]Upgrade[/B] on the add-on.
 
 [B]Changelog[/B]
 
+[B]0.14.1[/B] — [URL=https://github.com/techwiz18/open-credits/releases/tag/v0.14.1]full release notes[/URL]
+[LIST]
+[*] [B]Premium posts[/B] — one access verdict now answers both the locked box and the unlock request: the author exemption follows the post owner, the buying member pays, guests holding the bypass permission no longer see the body, and an author or staff member without content-view permission gets the unlock prompt instead of an error.
+[*] [B]Demurrage[/B] — the AdminCP preview now prints exactly what the pass will burn, including while a pass is mid-run, and neither the page nor the CLI will start a pass while the primary currency is inactive.
+[*] [B]Backfill & pruning[/B] — a backfill that fails partway now reports incomplete and can be resumed after the currency is reactivated, instead of reporting success with members unpaid, and two concurrent resumes can no longer pay the same range twice. A failed orphan purge after a history prune is logged instead of replacing the result page with an error.
+[*] [B]Wallet[/B] — saving a transfer with a missing currency falls back to the primary currency again, and a purchase or balance change is visible to the next read in the same request.
+[/LIST]
+
 [B]0.14.0[/B] — [URL=https://github.com/techwiz18/open-credits/releases/tag/v0.14.0]full release notes[/URL]
 [LIST]
 [*] [B]Account standing[/B] — one rule for who may earn, send, receive, and unlock. Accounts awaiting email confirmation or approval keep earning and receiving but can no longer send credits or unlock premium content; banned, rejected, and disabled accounts can do none of the four. Moderated members now get an explicit refusal instead of a generic error.
